@@ -1,0 +1,7 @@
+noaa:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "noaa.duckdb"
+      schema: main
