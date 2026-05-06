@@ -18,5 +18,10 @@ sources:
         description: ""
 
         columns:
+          - name: <primary_key_column>
+            description: ""
+            data_tests:
+              - unique
+              - not_null
           - name: <column_name>
             description: ""

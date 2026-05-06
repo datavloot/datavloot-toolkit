@@ -93,7 +93,7 @@ models:
     columns:
       - name: vessel_id
         description: "Unique vessel identifier."
-        tests:
+        data_tests:
           - not_null
           - unique
 
@@ -115,7 +115,7 @@ Generates a complete staging SELECT for a source table. Introspects the live rel
 so it always includes all columns, even if `sources.yml` is not fully documented.
 
 ```
-optimist.stage_source(source_name, table_name, exclude_columns=[])
+optimist.stage_source(source_name, table_name, exclude_columns=[], deduplicate_by=[], order_by='_loaded_at desc', incremental_column=none)
 ```
 
 | Argument | Type | Required | Description |
@@ -123,11 +123,52 @@ optimist.stage_source(source_name, table_name, exclude_columns=[])
 | `source_name` | string | yes | Source name as declared in `sources.yml` |
 | `table_name` | string | yes | Table name as declared in `sources.yml` |
 | `exclude_columns` | list | no | Column names to omit (case-insensitive). Audit columns are always excluded automatically. |
+| `deduplicate_by` | list | no | Columns to partition by when deduplicating. Keeps one row per unique combination. |
+| `order_by` | string | no | Row to keep within each partition. Defaults to `_loaded_at desc`. Prefer a source timestamp when available. |
+| `incremental_column` | string | no | Timestamp column used to filter new rows on incremental runs. Has no effect on full-refresh runs. Pair with `{{ config(unique_key=...) }}` in the model file. |
 
 **Excluding columns** — useful for PII or columns handled differently downstream:
 
 ```sql
 {{ optimist.stage_source('harbor', 'crew', exclude_columns=['passport_number', 'date_of_birth']) }}
+```
+
+**Incremental loading** — for large tables where processing all rows on every run is too slow.
+Only rows newer than the current max of `incremental_column` in the target table are loaded.
+Pair with `unique_key` so dbt upserts rather than appends:
+
+```sql
+{{ config(unique_key='vessel_id') }}
+{{ optimist.stage_source('harbor', 'vessels', incremental_column='updated_at') }}
+```
+
+On full-refresh runs (`dbt run --full-refresh`) the filter is skipped and all rows are loaded.
+
+**Deduplicating** — use when the source emits multiple versions of the same record (CDC feeds,
+append-only logs with updates). Keep the most recently updated row per natural key:
+
+```sql
+{{ optimist.stage_source('harbor', 'vessels', deduplicate_by=['vessel_id'], order_by='updated_at desc') }}
+```
+
+This generates an additional `ranked` and `deduped` CTE between `staged` and `final`:
+
+```sql
+ranked as (
+    select
+        *,
+        row_number() over (
+            partition by vessel_id
+            order by updated_at desc
+        ) as _row_num
+    from staged
+),
+
+deduped as (
+    select * exclude (_row_num)
+    from ranked
+    where _row_num = 1
+),
 ```
 
 ---
@@ -163,7 +204,7 @@ from {{ source('harbor', 'vessels') }}
 
 ## Config templates
 
-Blank templates are provided in the package and can be copied into your project:
+Blank templates are provided in the scaffold:
 
-- `models/source/_sources.yml` — source definition template
-- `models/source/_schema.yml` — staged model documentation template
+- `scaffold/models/source/_sources.yml` — source definition template
+- `scaffold/models/source/_schema.yml` — staged model documentation template

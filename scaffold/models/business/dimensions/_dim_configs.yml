@@ -1,0 +1,40 @@
+version: 2
+
+# Dimension configs — one entry per dimension model.
+#
+# Each model's meta block is read automatically by optimist.build_dimension()
+# at compile time, so the model SQL file only needs to contain the data source
+# (a CTE, or nothing at all for ref-based dims) plus a bare macro call:
+#
+#   {{ optimist.build_dimension() }}
+#
+# dim_date and dim_time are provided by the toolkit — no entry needed here.
+# Reference them in facts with ref('dim_date') and ref('dim_time').
+#
+# Full config reference: dbt_packages/optimist/models/business/_dim_config_template.yml
+# Docs: dbt_packages/optimist/docs/business-layer.md
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  # Add your dimensions below.
+
+  # - name: dim_<entity>
+  #   description: ""
+  #
+  #   columns:
+  #     - name: dim_<entity>_key
+  #       description: "Surrogate key; MD5 hash of <natural_key_column>."
+  #     - name: <natural_key_column>
+  #       description: ""
+  #     - name: <attribute_column>
+  #       description: ""
+  #
+  #   meta:
+  #     source_model: stg_<source>__<table>
+  #     surrogate_key:
+  #       columns: [<natural_key_column>]
+  #       alias: dim_<entity>_key
+  #     columns:
+  #       - <natural_key_column>
+  #       - <attribute_column>

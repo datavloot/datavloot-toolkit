@@ -1,0 +1,96 @@
+version: 2
+
+# Fact configs — one entry per fact model.
+#
+# Each model's meta block is read automatically by optimist.build_fact()
+# at compile time. The model SQL file contains the detection CTEs and ends
+# with a bare macro call — the macro continues the CTE chain from source_cte.
+#
+# Full config reference: dbt_packages/optimist/models/business/_fct_config_template.yml
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  - name: fct_port_event
+    description: >
+      One row per vessel arrival or departure at a port near Guam.
+      Events are derived from AIS position broadcasts: an arrival is detected when a vessel
+      crosses within 1.5 nautical miles of a port, and a departure when it crosses back out.
+      Grain: one event per vessel per port per crossing (arrival OR departure).
+
+    columns:
+      - name: fct_port_event_key
+        description: "Surrogate key; MD5 hash of mmsi + port_index_number + event_time."
+        data_tests:
+          - not_null
+          - unique
+      - name: dim_vessel_key
+        description: "FK to dim_vessel."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_vessel')
+              field: dim_vessel_key
+      - name: dim_port_key
+        description: "FK to dim_port."
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_port')
+              field: dim_port_key
+      - name: event_date_key
+        description: "FK to dim_date — date of the arrival or departure."
+        data_tests:
+          - not_null
+      - name: event_time_key
+        description: "FK to dim_time — time of day (minute precision) of the arrival or departure."
+        data_tests:
+          - not_null
+      - name: mmsi
+        description: "Vessel identifier — matches mmsi in dim_vessel."
+      - name: port_index_number
+        description: "Port identifier — matches port_index_number in dim_port."
+      - name: event_time
+        description: "UTC timestamp of the first broadcast that triggered the arrival or departure transition."
+        data_tests:
+          - not_null
+      - name: is_departure
+        description: "True if this event is a departure; false if it is an arrival."
+        data_tests:
+          - not_null
+      - name: sog
+        description: "Speed Over Ground in knots at the moment of the event broadcast."
+      - name: status
+        description: "AIS navigational status code at the moment of the event broadcast."
+
+    meta:
+      source_cte: port_events
+      surrogate_key:
+        columns: [mmsi, port_index_number, event_time]
+        alias: fct_port_event_key
+      dimensions:
+        - dim: dim_vessel
+          fk: mmsi
+          key: dim_vessel_key
+        - dim: dim_port
+          fk: port_index_number
+          dim_fk: port_index_number
+          key: dim_port_key
+        - dim: dim_date
+          fk: event_time
+          dim_fk: date_day
+          fk_cast: date
+          key: dim_date_key
+          alias: event_date_key
+        - dim: dim_time
+          fk: event_time_minute
+          dim_fk: time_of_day
+          key: dim_time_key
+          alias: event_time_key
+      columns:
+        - mmsi
+        - port_index_number
+        - event_time
+        - is_departure
+        - sog
+        - status

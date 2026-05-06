@@ -15,7 +15,7 @@ models:
 
       - name: <column_name>
         description: ""
-        tests:
+        data_tests:
           - not_null
           - unique         # remove if not a unique key
 
