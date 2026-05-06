@@ -35,6 +35,24 @@ Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaf
 
 ---
 
+## Example project
+
+The [`noaa/`](noaa/) directory is a complete consuming project built on this toolkit. It uses
+publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.gov/) near Guam
+(2025) combined with global port reference data. It demonstrates the full workflow:
+
+- Loading a large raw dataset (3.2 M rows) into DuckDB as a source instead of a seed
+- Staging with audit columns and deduplication
+- Deriving arrival and departure events from raw position broadcasts using window functions
+- Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
+- Configuring data quality tests at every layer
+
+The noaa project was set up using the optmist-toolkit, purely by giving claude the claude.md instructions and positioning oneself as a captain with no data engineering skills. In conversation.md, the conversation used to build the project can be followed in marp-presentation form.
+
+See [noaa/README.md](noaa/README.md). 
+
+---
+
 ## Documentation
 
 - [Getting started](docs/getting-started.md) — installation and project structure
