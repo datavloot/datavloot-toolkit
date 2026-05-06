@@ -52,4 +52,3 @@ Config templates for the `source/` layer are provided in the package at
 | `generate_surrogate_key` | MD5 surrogate key over a list of columns | [Business layer](business-layer.md) |
 | `dim_date` | Shared date dimension (2015–2035, configurable) | [Business layer](business-layer.md) |
 | `dim_time` | Shared time dimension (minute granularity) | [Business layer](business-layer.md) |
-| `generate_schema_name` | Schema naming without target prefix | — |

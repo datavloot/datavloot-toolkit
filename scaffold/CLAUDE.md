@@ -35,6 +35,9 @@ Follow this order strictly. Each step depends on the previous.
 Edit `models/source/_sources.yml`. Add one source block per source system, with one table
 entry per raw table the captain wants to use.
 
+Ask the captain: how recently should each source have received data? Configure `freshness`
+and `loaded_at_field` accordingly (see Step 7 — Data quality).
+
 Full template and freshness config options: `models/source/_sources.yml`
 
 ### Step 2 — Stage sources
@@ -79,6 +82,8 @@ key column(s) and add a `unique` test on that column in `_schema.yml`:
     - unique     # enforces the deduplication guarantee
 ```
 
+After creating each staging model, ask the captain about data quality expectations — see **Step 7**.
+
 Reference: `dbt_packages/optimist/docs/source-layer.md`
 
 ### Step 3 — Add seed data (optional)
@@ -107,6 +112,8 @@ For each entity the captain cares about (person, product, location, vessel, etc.
 `dim_date` and `dim_time` ship with the toolkit — reference them with `ref('dim_date')` and
 `ref('dim_time')` without creating new models.
 
+After creating each dimension, ask the captain about data quality expectations — see **Step 7**.
+
 Config template: `models/business/dimensions/_dim_configs.yml` (see header comments)
 Full reference: `dbt_packages/optimist/models/business/_dim_config_template.yml`
 Docs: `dbt_packages/optimist/docs/business-layer.md`
@@ -121,6 +128,8 @@ For each event or transaction the captain wants to measure:
    {{ optimist.build_fact() }}
    ```
 
+After creating each fact, ask the captain about data quality expectations — see **Step 7**.
+
 Config template: `models/business/facts/_fct_configs.yml` (see header comments)
 Full reference: `dbt_packages/optimist/models/business/_fct_config_template.yml`
 Docs: `dbt_packages/optimist/docs/business-layer.md`
@@ -130,6 +139,92 @@ Docs: `dbt_packages/optimist/docs/business-layer.md`
 Add `columns` entries with descriptions to every model in the relevant `_configs.yml` or
 `_schema.yml`. Follow the pattern used in `dim_date` and `dim_time` inside
 `dbt_packages/optimist/models/business/dimensions/_dim_configs.yml`.
+
+### Step 7 — Data quality tests
+
+After creating **each model**, ask the captain the following questions and configure tests
+based on their answers. Do not skip this step — undocumented expectations become silent failures.
+
+#### Questions to ask
+
+| Topic | Question |
+|---|---|
+| Nulls | Which columns must always have a value? |
+| Uniqueness | Which column (or combination) uniquely identifies a row? |
+| Accepted values | Are there columns with a fixed set of valid values? (e.g. status, category, type) |
+| Dates in the future | Are there date or timestamp columns that can never be ahead of today? |
+| Dates in the past | Are there date columns that should never be before a certain cutoff? |
+| Numeric ranges | Are there numeric columns with expected bounds? (e.g. amounts > 0, percentages 0–100) |
+| Referential integrity | Should any FK column always resolve to a row in another model? |
+| Freshness *(sources only)* | How long after an expected load is a missing update considered a warning? An error? |
+
+#### Generic tests — in `_schema.yml`, `_dim_configs.yml`, or `_fct_configs.yml`
+
+```yaml
+columns:
+  - name: order_id
+    data_tests:
+      - not_null
+      - unique
+
+  - name: status
+    data_tests:
+      - not_null
+      - accepted_values:
+          values: ['pending', 'confirmed', 'cancelled']
+
+  - name: dim_customer_key
+    data_tests:
+      - not_null
+      - relationships:
+          to: ref('dim_customer')
+          field: dim_customer_key
+```
+
+#### Singular tests — for custom logic, one SQL file per test in `tests/`
+
+A singular test fails if it returns any rows. Name the file to make the assertion obvious.
+
+```sql
+-- tests/assert_fct_order_order_date_not_in_future.sql
+select *
+from {{ ref('fct_order') }}
+where order_date > current_date
+```
+
+```sql
+-- tests/assert_fct_order_amount_positive.sql
+select *
+from {{ ref('fct_order') }}
+where amount <= 0
+```
+
+```sql
+-- tests/assert_dim_date_no_gaps.sql
+-- Fails if any consecutive pair of dates is more than 1 day apart.
+select date_day
+from {{ ref('dim_date') }}
+where date_day - lag(date_day) over (order by date_day) > interval '1 day'
+```
+
+#### Source freshness — in `models/source/_sources.yml`
+
+```yaml
+sources:
+  - name: harbor
+    loaded_at_field: ingested_at      # column dbt checks to evaluate freshness
+    freshness:
+      warn_after:  {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    tables:
+      - name: vessels
+        # Override freshness per table if this table updates less frequently:
+        # freshness:
+        #   warn_after:  {count: 7, period: day}
+        #   error_after: {count: 14, period: day}
+```
+
+Run `dbt source freshness` to check all configured sources.
 
 ---
 
@@ -158,16 +253,18 @@ seeds/
 └── <seed_name>.csv                   # one file per seed
 models/
 ├── source/
-│   ├── _sources.yml                  # raw source definitions — edit here
-│   ├── _schema.yml                   # staging model docs — edit here
+│   ├── _sources.yml                  # raw source definitions + freshness — edit here
+│   ├── _schema.yml                   # staging model docs and tests — edit here
 │   └── stg_<source>__<table>.sql     # one file per source table
 └── business/
     ├── dimensions/
-    │   ├── _dim_configs.yml          # all dimension configs — edit here
+    │   ├── _dim_configs.yml          # all dimension configs and tests — edit here
     │   └── dim_<entity>.sql          # one file per dimension
     └── facts/
-        ├── _fct_configs.yml          # all fact configs — edit here
+        ├── _fct_configs.yml          # all fact configs and tests — edit here
         └── fct_<event>.sql           # one file per fact
+tests/
+└── assert_<model>_<description>.sql  # one file per custom singular test
 ```
 
 ---

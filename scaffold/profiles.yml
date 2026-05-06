@@ -1,0 +1,7 @@
+<project_name>:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      schema: main
