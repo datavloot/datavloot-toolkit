@@ -1,0 +1,30 @@
+[project]
+name = "optimist-toolkit"
+version = "0.1.0"
+description = "Open-source data platform toolkit — Dagster + dbt + DuckDB + Elementary"
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+    "dagster",
+    "dagster-dbt",
+    "dagster-duckdb",
+    "dbt-core",
+    "dbt-duckdb",
+    "ducklake",
+    "python-dotenv",
+    "elementary-data[duckdb]",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "pytest",
+]
+
+[build-system]
+requires = ["hatchling>=1.19.0"]
+build-backend = "hatchling.build"
+
+[tool.dagster]
+module_name = "optimist_platform.definitions"
+code_location_name = "optimist-toolkit"

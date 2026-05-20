@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# dbt
+dbt/optimist/target/
+dbt/optimist/dbt_packages/
+dbt/optimist/logs/
+
+# Dagster
+.dagster/
+
+# Data — keep directory, ignore generated files
+data/*.duckdb
+data/*.parquet
+data/*.csv
+
+# Environment
+.env
