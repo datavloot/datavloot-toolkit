@@ -2,11 +2,10 @@ version: 2
 
 sources:
   - name: noaa
-    description: "AIS vessel position broadcasts sourced from NOAA Marine Cadastre, loaded into the raw schema via scripts/load_ais.py."
+    description: "AIS vessel position broadcasts sourced from NOAA Marine Cadastre, loaded into the raw schema via the noaa_guam_2025_raw Dagster asset."
     schema: raw
 
     # No freshness config — this is a static historical dataset loaded once.
-    # If the source were a live feed, configure loaded_at_field and freshness here.
 
     tables:
       - name: guam_2025
@@ -54,7 +53,7 @@ sources:
             description: "Vessel beam (width) in metres as entered by the operator."
 
           - name: draft
-            description: "How deep the hull sits in the water in metres (2015 onward). Pre-2015 data reports tenths of a metre."
+            description: "How deep the hull sits in the water in metres."
 
           - name: cargo
             description: "Cargo type code."

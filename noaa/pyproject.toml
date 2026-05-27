@@ -6,8 +6,10 @@ requires-python = ">=3.10,<3.15"
 dependencies = [
     "dagster",
     "dagster-dbt",
+    "dagster-dlt",
     "dbt-core",
     "dbt-duckdb",
+    "dlt[duckdb]",
     "duckdb",
 ]
 

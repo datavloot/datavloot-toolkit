@@ -58,6 +58,12 @@ models:
         description: "True if this event is a departure; false if it is an arrival."
         data_tests:
           - not_null
+      - name: dim_sea_state_key
+        description: "FK to dim_sea_state — sea conditions at the time of the event. Null when no weather data is available for that hour."
+        data_tests:
+          - relationships:
+              to: ref('dim_sea_state')
+              field: dim_sea_state_key
       - name: sog
         description: "Speed Over Ground in knots at the moment of the event broadcast."
       - name: status
@@ -87,6 +93,10 @@ models:
           dim_fk: time_of_day
           key: dim_time_key
           alias: event_time_key
+        - dim: dim_sea_state
+          fk: sea_state_code
+          dim_fk: sea_state_code
+          key: dim_sea_state_key
       columns:
         - mmsi
         - port_index_number

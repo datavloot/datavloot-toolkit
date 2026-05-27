@@ -1,4 +1,5 @@
--- Arrival/departure events derived from AIS position broadcasts.
+-- Arrival/departure events derived from AIS position broadcasts,
+-- enriched with marine weather conditions at the time of each event.
 --
 -- Detection logic:
 --   1. Parse lon/lat out of the geometry string (WKT POINT format).
@@ -8,6 +9,11 @@
 --      1.5 nautical miles of the port as "at port".
 --   4. A state change from NOT-at-port → at-port = arrival.
 --      A state change from at-port → NOT-at-port = departure.
+--
+-- Weather enrichment:
+--   5. Join Open-Meteo hourly conditions at the truncated event hour.
+--   6. Range-join sea_state_categories on wind speed to resolve sea_state_code
+--      (thresholds defined once in the seed; no duplication here).
 
 with broadcasts as (
 
@@ -16,7 +22,6 @@ with broadcasts as (
         base_date_time,
         sog,
         status,
-        -- Extract longitude and latitude from "POINT (lon lat)" WKT string
         cast(regexp_extract(geometry, 'POINT \(([0-9.\-]+) [0-9.\-]+\)', 1) as double) as longitude,
         cast(regexp_extract(geometry, 'POINT \([0-9.\-]+ ([0-9.\-]+)\)', 1) as double) as latitude
     from {{ ref('stg_noaa__guam_2025') }}
@@ -25,7 +30,6 @@ with broadcasts as (
 
 guam_ports as (
 
-    -- Only ports near Guam; reduces the cross-join before the distance calc
     select
         port_index_number,
         latitude  as port_lat,
@@ -44,7 +48,6 @@ proximity as (
         b.sog,
         b.status,
         p.port_index_number,
-        -- Haversine distance in nautical miles (1 NM = 1852 m; Earth radius = 6371 km)
         2 * 3440.065 * asin(sqrt(
             power(sin(radians((p.port_lat - b.latitude)  / 2)), 2) +
             cos(radians(b.latitude)) * cos(radians(p.port_lat)) *
@@ -84,30 +87,56 @@ transitions as (
                 partition by mmsi, port_index_number
                 order by base_date_time
             ),
-            false   -- treat the very first broadcast as "was not at port"
+            false
         ) as prev_is_at_port
     from classified
+
+),
+
+port_events_base as (
+
+    select
+        mmsi,
+        base_date_time                                      as event_time,
+        date_trunc('hour', base_date_time)                  as event_hour,
+        cast(date_trunc('minute', base_date_time) as time)  as event_time_minute,
+        port_index_number,
+        sog,
+        status,
+        (prev_is_at_port = true and is_at_port = false)     as is_departure
+    from transitions
+    where
+        (prev_is_at_port = false and is_at_port = true)
+        or (prev_is_at_port = true  and is_at_port = false)
+
+),
+
+weather as (
+
+    select
+        cast(timestamp as timestamp) as weather_hour,
+        wind_speed_10m_kn
+    from {{ ref('stg_open_meteo__guam_marine_hourly') }}
 
 ),
 
 port_events as (
 
     select
-        mmsi,
-        base_date_time                              as event_time,
-        -- Truncate to minute for dim_time join (dim_time has no seconds)
-        cast(date_trunc('minute', base_date_time) as time) as event_time_minute,
-        port_index_number,
-        sog,
-        status,
-        -- departure = was at port, now leaving; arrival = was outside, now inside
-        (prev_is_at_port = true and is_at_port = false) as is_departure
-    from transitions
-    where
-        -- arrival: was outside port zone, now inside
-        (prev_is_at_port = false and is_at_port = true)
-        -- departure: was inside port zone, now outside
-        or (prev_is_at_port = true  and is_at_port = false)
+        e.mmsi,
+        e.event_time,
+        e.event_time_minute,
+        e.port_index_number,
+        e.sog,
+        e.status,
+        e.is_departure,
+        s.sea_state_code
+    from port_events_base e
+    left join weather w
+        on e.event_hour = w.weather_hour
+    left join {{ ref('sea_state_categories') }} s
+        on  w.wind_speed_10m_kn >= s.min_wind_speed_kn
+        and w.wind_speed_10m_kn <  s.max_wind_speed_kn
 
 )
 

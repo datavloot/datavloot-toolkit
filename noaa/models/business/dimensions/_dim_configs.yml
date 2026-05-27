@@ -13,6 +13,55 @@ version: 2
 
 models:
 
+  - name: dim_sea_state
+    description: "Six sea state categories derived from Beaufort scale wind speed thresholds. Used to classify conditions at the time of each port event."
+
+    columns:
+      - name: dim_sea_state_key
+        description: "Surrogate key; MD5 hash of sea_state_code."
+        data_tests:
+          - not_null
+          - unique
+      - name: sea_state_code
+        description: "Short uppercase identifier (e.g. CALM, ROUGH, STORM)."
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: ['CALM', 'LIGHT', 'MODERATE', 'ROUGH', 'VERY_ROUGH', 'STORM']
+      - name: label
+        description: "Human-readable label."
+        data_tests:
+          - not_null
+      - name: beaufort_range
+        description: "Approximate Beaufort scale numbers covered by this category."
+      - name: min_wind_speed_kn
+        description: "Lower wind speed bound in knots (inclusive)."
+      - name: max_wind_speed_kn
+        description: "Upper wind speed bound in knots (exclusive, except STORM)."
+      - name: min_wave_height_m
+        description: "Typical lower wave height bound in metres."
+      - name: max_wave_height_m
+        description: "Typical upper wave height bound in metres."
+      - name: description
+        description: "Plain-English description of sea conditions and operational impact."
+
+    meta:
+      source_seed: sea_state_categories
+      surrogate_key:
+        columns: [sea_state_code]
+        alias: dim_sea_state_key
+      columns:
+        - sea_state_code
+        - label
+        - beaufort_range
+        - min_wind_speed_kn
+        - max_wind_speed_kn
+        - min_wave_height_m
+        - max_wave_height_m
+        - description
+
+
   - name: dim_vessel
     description: "One row per unique vessel (MMSI) observed in the Guam 2025 AIS data. Vessel attributes are operator-entered and may be incomplete or inconsistent."
 
