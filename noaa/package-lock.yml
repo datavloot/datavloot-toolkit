@@ -1,0 +1,12 @@
+packages:
+  - git: git@gitlab.com:mycelium4483613/optimist-toolkit.git
+    name: optimist
+    revision: da4d6f9c0efe6619003fa9c0250aa834ddd64a92
+    subdirectory: dbt/optimist
+  - name: dbt_utils
+    package: dbt-labs/dbt_utils
+    version: 1.3.3
+  - name: elementary
+    package: elementary-data/elementary
+    version: 0.16.4
+sha1_hash: 69099bb8328b35b7bf45a507f5a817341b5db33a

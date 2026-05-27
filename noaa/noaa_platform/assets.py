@@ -10,7 +10,7 @@ from dagster_dlt import DagsterDltResource, dlt_assets
 
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
 DB_PATH = PROJECT_DIR / "noaa.duckdb"
-CSV_PATH = PROJECT_DIR / "seeds" / "guam_2025.csv"
+CSV_PATH = PROJECT_DIR / "data" / "guam_2025.csv"
 
 noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR)
 noaa_dbt_project.prepare_if_dev()

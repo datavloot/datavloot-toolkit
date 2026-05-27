@@ -15,6 +15,16 @@
 --   6. Range-join sea_state_categories on wind speed to resolve sea_state_code
 --      (thresholds defined once in the seed; no duplication here).
 
+-- depends_on: {{ ref('dim_vessel') }}
+-- depends_on: {{ ref('dim_port') }}
+-- depends_on: {{ ref('dim_date') }}
+-- depends_on: {{ ref('dim_time') }}
+-- depends_on: {{ ref('dim_sea_state') }}
+
+{%- set source_config -%}
+source_cte: port_events
+{%- endset -%}
+
 with
 
 -- imports
@@ -170,4 +180,4 @@ port_events as (
 
 )
 
-{{ optimist.build_fact() }}
+{{ optimist.build_fact(fromyaml(source_config)) }}

@@ -22,6 +22,9 @@ dev = [
 requires = ["hatchling>=1.19.0"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["noaa_platform"]
+
 [tool.dagster]
 module_name = "noaa_platform.definitions"
 code_location_name = "noaa"

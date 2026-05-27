@@ -1,15 +1,10 @@
 version: 2
 
-# Fact configs — one entry per fact model.
+# Fact docs, tests, and build config — one entry per fact model.
 #
-# Each model's meta block is read automatically by optimist.build_fact()
-# at compile time, so the model SQL file only needs to contain the data source
-# (a CTE, or nothing at all for ref-based facts) plus a bare macro call:
-#
-#   {{ optimist.build_fact() }}
-#
-# Full config reference: dbt_packages/optimist/models/business/_fct_config_template.yml
-# Docs: dbt_packages/optimist/docs/business-layer.md
+# Source is declared inline in each model's SQL file (so dbt discovers
+# the ref() dependency at parse time). Everything else lives here under
+# config.meta and is read by build_fact() at compile time.
 # ─────────────────────────────────────────────────────────────────────────────
 
 models:
@@ -29,21 +24,21 @@ models:
   #     - name: <measure_column>
   #       description: ""
   #
-  #   meta:
-  #     source_model: stg_<source>__<table>
-  #     surrogate_key:
-  #       columns: [<grain_column>]
-  #       alias: fct_<event>_key
-  #     dimensions:
-  #       - dim: dim_<entity>
-  #         fk: <fk_column>
-  #         key: dim_<entity>_key
-  #       - dim: dim_date
-  #         fk: <timestamp_column>
-  #         dim_fk: date_day
-  #         fk_cast: date
-  #         key: dim_date_key
-  #         alias: <event>_date_key
-  #     columns:
-  #       - <grain_column>
-  #       - <measure_column>
+  #   config:
+  #     meta:
+  #       surrogate_key:
+  #         columns: [<grain_column>]
+  #         alias: fct_<event>_key
+  #       dimensions:
+  #         - dim: dim_<entity>
+  #           fk: <fk_column>
+  #           key: dim_<entity>_key
+  #         - dim: dim_date
+  #           fk: <timestamp_column>
+  #           dim_fk: date_day
+  #           fk_cast: date
+  #           key: dim_date_key
+  #           alias: <event>_date_key
+  #       columns:
+  #         - <grain_column>
+  #         - <measure_column>

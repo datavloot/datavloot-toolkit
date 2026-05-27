@@ -1,4 +1,4 @@
 packages:
-  - git: "https://gitlab.com/mycelium4483613/optimist-toolkit.git"
+  - git: "git@gitlab.com:mycelium4483613/optimist-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA for reproducible builds

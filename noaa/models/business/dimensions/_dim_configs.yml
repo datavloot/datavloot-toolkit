@@ -1,14 +1,12 @@
 version: 2
 
-# Dimension configs — one entry per dimension model.
+# Dimension docs and tests — one entry per dimension model.
 #
-# Each model's meta block is read automatically by optimist.build_dimension()
-# at compile time, so the model SQL file only needs to contain a bare macro call:
-#
-#   {{ optimist.build_dimension() }}
-#
-# dim_date and dim_time are provided by the toolkit — no entry needed here.
-# Full config reference: dbt_packages/optimist/models/business/_dim_config_template.yml
+# Source is declared inline in each model's SQL file (so dbt discovers
+# the ref() dependency at parse time). Everything else lives here under
+# config.meta and is read by build_dimension() at compile time.
+# dim_date and dim_time are provided by the toolkit — their entries are
+# in dbt_packages/optimist/models/business/dimensions/_dim_configs.yml.
 # ─────────────────────────────────────────────────────────────────────────────
 
 models:
@@ -46,20 +44,20 @@ models:
       - name: description
         description: "Plain-English description of sea conditions and operational impact."
 
-    meta:
-      source_seed: sea_state_categories
-      surrogate_key:
-        columns: [sea_state_code]
-        alias: dim_sea_state_key
-      columns:
-        - sea_state_code
-        - label
-        - beaufort_range
-        - min_wind_speed_kn
-        - max_wind_speed_kn
-        - min_wave_height_m
-        - max_wave_height_m
-        - description
+    config:
+      meta:
+        surrogate_key:
+          columns: [sea_state_code]
+          alias: dim_sea_state_key
+        columns:
+          - sea_state_code
+          - label
+          - beaufort_range
+          - min_wind_speed_kn
+          - max_wind_speed_kn
+          - min_wave_height_m
+          - max_wave_height_m
+          - description
 
 
   - name: dim_vessel
@@ -95,25 +93,25 @@ models:
       - name: transceiver
         description: "AIS transceiver class (A or B)."
 
-    meta:
-      source_model: stg_noaa__guam_2025
-      surrogate_key:
-        columns: [mmsi]
-        alias: dim_vessel_key
-      deduplicate:
-        partition_by: [mmsi]
-        order_by: base_date_time desc   # keep the most recent broadcast's vessel attributes
-      columns:
-        - mmsi
-        - vessel_name
-        - imo
-        - call_sign
-        - vessel_type
-        - length
-        - width
-        - draft
-        - cargo
-        - transceiver
+    config:
+      meta:
+        surrogate_key:
+          columns: [mmsi]
+          alias: dim_vessel_key
+        deduplicate:
+          partition_by: [mmsi]
+          order_by: base_date_time desc
+        columns:
+          - mmsi
+          - vessel_name
+          - imo
+          - call_sign
+          - vessel_type
+          - length
+          - width
+          - draft
+          - cargo
+          - transceiver
 
 
   - name: dim_port
@@ -157,20 +155,20 @@ models:
         data_tests:
           - not_null
 
-    meta:
-      source_seed: ports
-      surrogate_key:
-        columns: [port_index_number]
-        alias: dim_port_key
-      columns:
-        - port_index_number
-        - region_name
-        - port_name
-        - alternate_port_name
-        - un_locode
-        - country_code
-        - water_body
-        - harbor_size
-        - harbor_type
-        - latitude
-        - longitude
+    config:
+      meta:
+        surrogate_key:
+          columns: [port_index_number]
+          alias: dim_port_key
+        columns:
+          - port_index_number
+          - region_name
+          - port_name
+          - alternate_port_name
+          - un_locode
+          - country_code
+          - water_body
+          - harbor_size
+          - harbor_type
+          - latitude
+          - longitude
