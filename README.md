@@ -7,6 +7,7 @@ Built on battle-tested open-source tools with no monthly fees, no vendor lock-in
 | Component | Tool | Role |
 |---|---|---|
 | Orchestration | [Dagster](https://dagster.io) | Schedule and monitor your data pipelines |
+| Ingestion | [dlt](https://dlthub.com) | Load data from APIs, databases, and files into DuckDB |
 | Transformation | [dbt](https://getdbt.com) | Transform, test, and document your data |
 | Storage | [DuckDB](https://duckdb.org) + [DuckLake](https://ducklake.select) | Local lakehouse with two-layer architecture |
 | Data quality | [Elementary](https://elementary-data.com) | Monitors, alerts, and reports on data quality |
@@ -211,6 +212,7 @@ dbt deps
 ## Documentation
 
 - [Getting started with the dbt package](docs/getting-started.md)
+- [Ingestion layer — loading data with dlt](docs/ingestion.md)
 - [Source layer — auto-staging and audit columns](docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](docs/business-layer.md)
 
