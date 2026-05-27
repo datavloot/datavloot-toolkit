@@ -29,8 +29,7 @@ reference data. The output answers questions like:
 ## Project structure
 
 ```
-scripts/
-└── load_ais.py         # one-time script to load AIS data into DuckDB
+noaa_platform/          # Dagster platform layer (assets, definitions)
 seeds/
 ├── ports.csv           # global port reference data (3,804 rows)
 └── _seeds.yml          # seed descriptions and tests
@@ -50,53 +49,54 @@ models/
 tests/
 ├── assert_fct_port_event_not_in_future.sql
 └── assert_stg_noaa_sog_in_range.sql
+pyproject.toml          # Python package config; points Dagster at noaa_platform.definitions
 ```
 
 ---
 
 ## Getting started
 
-### 1. Install dbt-duckdb
+All commands run from inside the `noaa/` directory.
+
+### 1. Install dependencies
 
 ```bash
-pip install dbt-duckdb
+pip install -e ".[dev]"
 ```
 
-### 2. Load the AIS source data into DuckDB
-
-The AIS dataset (3.2M rows) is too large for a dbt seed — it is loaded once into a
-persistent DuckDB file and then referenced as a source.
-
-```bash
-cd /path/to/noaa
-python3 scripts/load_ais.py
-```
-
-This creates `noaa.duckdb` and loads `seeds/guam_2025.csv` into `raw.guam_2025`.
-
-### 3. Install the optimist-toolkit package
+### 2. Install the optimist-toolkit dbt package
 
 ```bash
 dbt deps
 ```
 
-### 4. Load seed data (ports reference table)
+### 3. Get the AIS data
+
+Download the Guam 2025 AIS zone file from [marinecadastre.gov/ais](https://marinecadastre.gov/ais/)
+and save it as `seeds/guam_2025.csv`.
+
+### 4. Generate the dbt manifest
+
+Dagster needs a compiled manifest before it can start:
 
 ```bash
-dbt seed
+dbt parse
 ```
 
-### 5. Build all models
+### 5. Start Dagster
 
 ```bash
-dbt run
+dagster dev
 ```
 
-### 6. Run tests
+Open [http://localhost:3000](http://localhost:3000). In the Asset Catalog:
 
-```bash
-dbt test
-```
+| Asset | What it does |
+|---|---|
+| `noaa/guam_2025` | Loads `seeds/guam_2025.csv` → `noaa.duckdb` `raw.guam_2025` |
+| source / business dbt assets | `dbt build` — seeds ports, builds dims and fact, runs tests |
+
+Materialise `noaa/guam_2025` first, then materialise all remaining assets.
 
 ---
 

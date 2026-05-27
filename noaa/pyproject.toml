@@ -1,0 +1,25 @@
+[project]
+name = "noaa"
+version = "0.1.0"
+description = "NOAA AIS example project — Dagster + dbt + DuckDB, built on optimist-toolkit"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+    "dagster",
+    "dagster-dbt",
+    "dbt-core",
+    "dbt-duckdb",
+    "duckdb",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["hatchling>=1.19.0"]
+build-backend = "hatchling.build"
+
+[tool.dagster]
+module_name = "noaa_platform.definitions"
+code_location_name = "noaa"
