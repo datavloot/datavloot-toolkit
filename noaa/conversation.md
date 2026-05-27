@@ -111,8 +111,6 @@ outside → inside = **arrival** · inside → outside = **departure**
 ## Project structure
 
 ```
-scripts/
-└── load_ais.py             ← one-time AIS data load into DuckDB
 seeds/
 └── ports.csv               ← 3,804 ports (11 clean columns)
 models/
@@ -309,23 +307,14 @@ raw.guam_2025 (DuckDB)                               ▼
 ## Running the project
 
 ```bash
-# 1. Install dbt + DuckDB adapter
-pip install dbt-duckdb
+# 1. Install dependencies
+pip install -e ".[dev]"
 
-# 2. Load the AIS source data (once only — 3.2M rows → noaa.duckdb)
-python3 scripts/load_ais.py
-
-# 3. Install the optimist-toolkit package
+# 2. Install the optimist-toolkit package
 dbt deps
 
-# 4. Load the ports seed
-dbt seed
-
-# 5. Build all models
-dbt run
-
-# 6. Run all tests
-dbt test
+# 3. Start Dagster (ingests data, seeds, builds models, runs tests)
+dagster dev
 ```
 
 ---
