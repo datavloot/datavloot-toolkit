@@ -99,9 +99,6 @@ models:
             dim_fk: sea_state_code
             key: dim_sea_state_key
         columns:
-          - mmsi
-          - port_index_number
-          - event_time
           - is_departure
           - sog
           - status

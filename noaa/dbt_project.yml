@@ -8,10 +8,6 @@ macro-paths: ["macros"]
 test-paths: ["tests"]
 analysis-paths: ["analyses"]
 
-dispatch:
-  - macro_namespace: elementary
-    search_order: ['noaa', 'elementary']
-
 clean-targets:
   - "target"
   - "dbt_packages"
