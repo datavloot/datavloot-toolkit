@@ -21,9 +21,9 @@
 -- depends_on: {{ ref('dim_time') }}
 -- depends_on: {{ ref('dim_sea_state') }}
 
-{%- set source_config -%}
+{% set source_config %}
 source_cte: port_events
-{%- endset -%}
+{% endset %}
 
 with
 

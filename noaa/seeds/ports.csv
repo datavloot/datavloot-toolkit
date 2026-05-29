@@ -2473,7 +2473,7 @@ port_index_number,region_name,port_name,alternate_port_name,un_locode,country_co
 19030.0,Canada West Coast -- 18080,Port Clements, ,CA PCS,Canada,Alaska-Canada coastal waters; North Pacific Ocean,Very Small,Coastal (Natural),53.683332999999998,-132.183333000000005
 2980.0,Canada Lake Ontario -- 2820,Oshawa, ,CA OSH,Canada,Lake Ontario; Great Lakes,Small,Coastal (Breakwater),43.866667000000000,-78.816666999999995
 20690.0,Norway -- 20620,Vadso, ,NO VDS,Norway,Barents Sea; Arctic Ocean,Small,Coastal (Breakwater),70.072222221999994,29.741388889000000
-35600.0,England South Coast -- 35220,Portsmouth Harbour, ,"GB ME""""",United Kingdom,English Channel; North Atlantic Ocean,Medium,Coastal (Tide Gates),50.799999999999997,-1.100000000000000
+35600.0,England South Coast -- 35220,Portsmouth Harbour, ,GB PME,United Kingdom,English Channel; North Atlantic Ocean,Medium,Coastal (Tide Gates),50.799999999999997,-1.100000000000000
 18942.0,Canada West Coast -- 18080,Porpoise Harbor, , ,Canada,Alaska-Canada coastal waters; North Pacific Ocean,Very Small,Coastal (Natural),54.216667000000001,-130.283332999999999
 3330.0,Canada Lake Erie -- 3240,Pelee I North Wharf, ,CA DLM,Canada,Lake Erie; Great Lakes,Very Small,Coastal (Natural),41.816667000000002,-82.666667000000004
 20220.0,Alaska Continued -- 20185,Pilot Point, ,US PIP,United States,Bristol Bay; Bering Sea; North Pacific Ocean,Very Small,Coastal (Natural),57.566667000000002,-157.599999999999994
@@ -3099,7 +3099,6 @@ port_index_number,region_name,port_name,alternate_port_name,un_locode,country_co
 900.0, ,Uummannaq,Umanak,GLUMD,Greenland,Baffin Bay; Arctic Ocean, , ,70.666666667000001,-52.116666666999997
 360.0,Iceland  East Coast -- 360,Vopnafjordur, ,ISVPN,Iceland,Norwegian Sea; North Atlantic Ocean, , ,65.750000000000000,-14.816666667000000
 350.0,Iceland  North Coast -- 200,Thorshofn, ,IS THO,Iceland,Greenland Sea; Arctic Ocean, ,Coastal (Breakwater),66.200000000000003,-15.333333333000001
-400.0,Iceland  East Coast -- 360,Seydisfjordur, ,ISSEY,Iceland,Norwegian Sea; North Atlantic Ocean, , ,65.266666666999996,-14.000000000000000
 65.0,Iceland  South Coast -- 490,Grindavik, ,ISGRI,Iceland,North Atlantic Ocean, , ,63.833333332999999,-22.433333333000000
 120.0, ,Grundarfjordur, ,ISGRF,Iceland,North Atlantic Ocean, , ,64.933333332999993,-23.250000000000000
 635.0,Greenland  West Coast -- 545,Faeringehavn, ,GLFHN,Greenland,Labrador Sea; North Atlantic Ocean, , ,63.683333333000000,-51.516666667000003
