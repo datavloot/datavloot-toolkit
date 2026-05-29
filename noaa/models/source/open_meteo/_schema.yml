@@ -1,8 +1,8 @@
 version: 2
 
 models:
-  - name: stg_open_meteo__guam_marine_hourly
-    description: "Staged hourly marine conditions near Guam. Passes through all Open-Meteo columns, strips dlt internal columns, and adds audit columns. Ephemeral — inlined into downstream models at compile time."
+  - name: stg_open_meteo__guam_atmo_hourly
+    description: "Staged hourly atmospheric wind conditions near Guam. Strips dlt internal columns and adds audit columns. Ephemeral — inlined into downstream models at compile time."
 
     columns:
       - name: timestamp
@@ -10,27 +10,6 @@ models:
         data_tests:
           - not_null
           - unique
-
-      - name: wave_height_m
-        description: "Significant wave height in metres."
-
-      - name: wave_direction_deg
-        description: "Mean wave direction in degrees."
-
-      - name: wave_period_s
-        description: "Mean wave period in seconds."
-
-      - name: wind_wave_height_m
-        description: "Wind-generated wave height in metres."
-
-      - name: swell_wave_height_m
-        description: "Swell wave height in metres."
-
-      - name: swell_wave_direction_deg
-        description: "Swell wave direction in degrees."
-
-      - name: swell_wave_period_s
-        description: "Swell wave period in seconds."
 
       - name: wind_speed_10m_kn
         description: "Wind speed at 10 m in knots."

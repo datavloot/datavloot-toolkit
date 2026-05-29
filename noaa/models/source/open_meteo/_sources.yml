@@ -2,14 +2,14 @@ version: 2
 
 sources:
   - name: open_meteo
-    description: "Hourly marine and wind conditions near Guam from Open-Meteo, loaded incrementally by the open_meteo_assets Dagster asset via dlt."
+    description: "Hourly atmospheric wind conditions near Guam from Open-Meteo ERA5 archive, loaded incrementally by the open_meteo_assets Dagster asset via dlt."
     schema: source    # dlt dataset_name
 
     # No freshness config — dlt manages its own incremental cursor state.
 
     tables:
-      - name: guam_marine_hourly
-        description: "One row per hour near Guam (13.44°N 144.79°E). Wave height, swell, and wind from Open-Meteo's marine forecast model. Backfilled from 2025-01-01, updated daily."
+      - name: guam_atmo_hourly
+        description: "One row per hour near Guam (13.44°N 144.79°E). Atmospheric wind from Open-Meteo ERA5 archive model. Backfilled from 2025-01-01, updated daily."
 
         columns:
           - name: timestamp
@@ -17,27 +17,6 @@ sources:
             data_tests:
               - not_null
               - unique
-
-          - name: wave_height_m
-            description: "Significant wave height in metres."
-
-          - name: wave_direction_deg
-            description: "Mean wave direction in degrees (0 = north, 90 = east)."
-
-          - name: wave_period_s
-            description: "Mean wave period in seconds."
-
-          - name: wind_wave_height_m
-            description: "Wind-generated wave height in metres."
-
-          - name: swell_wave_height_m
-            description: "Swell wave height in metres."
-
-          - name: swell_wave_direction_deg
-            description: "Swell wave direction in degrees."
-
-          - name: swell_wave_period_s
-            description: "Swell wave period in seconds."
 
           - name: wind_speed_10m_kn
             description: "Wind speed at 10 m above sea level in knots."

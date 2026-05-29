@@ -42,7 +42,7 @@ ports_raw as (
 
 weather_raw as (
 
-    select * from {{ ref('stg_open_meteo__guam_marine_hourly') }}
+    select * from {{ ref('stg_open_meteo__guam_atmo_hourly') }}
 
 ),
 
