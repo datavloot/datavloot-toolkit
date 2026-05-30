@@ -13,7 +13,7 @@ dbt/optimist/logs/
 .dagster/
 
 # Data — keep directory, ignore generated files
-data/*.duckdb
+*.duckdb
 data/*.parquet
 data/*.csv
 
