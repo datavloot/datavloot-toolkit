@@ -4,7 +4,7 @@ version: 2
 #
 # Build config (source, surrogate_key, columns) lives inline in each model's
 # SQL file, passed directly to optimist.build_dimension(). See Step 4 in
-# dbt_packages/optimist/CLAUDE.md for the full workflow.
+# dbt_packages/optimist/data-instructions.md for the full workflow.
 #
 # This file is for column descriptions and data_tests only.
 # dim_date and dim_time are provided by the toolkit — no entry needed here.

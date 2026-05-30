@@ -85,7 +85,7 @@ This toolkit is designed to be used in conversation with an AI assistant — no 
 
 Think of it as a **captain and crew** relationship: you are the captain who knows your business and your data sources. The AI is the crew that handles the technical implementation. You describe what you need, the AI builds it using the toolkit conventions, and you review and approve.
 
-A dedicated agent guide lives at [CLAUDE.md](CLAUDE.md) and in every scaffold project at `scaffold/CLAUDE.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
+A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and in every scaffold project at `scaffold/data-instructions.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
 
 The [`noaa/`](noaa/) example project was built entirely this way — a captain with no data engineering skills directed an AI crew through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is included at [noaa/conversation.md](noaa/conversation.md).
 
@@ -97,7 +97,7 @@ Copy the `scaffold/` directory as the foundation for any new project using this 
 
 ```
 scaffold/
-├── CLAUDE.md                          # AI agent workflow guide (captain/crew model)
+├── data-instructions.md                          # AI agent workflow guide (captain/crew model)
 ├── packages.yml                       # points to this toolkit
 ├── dbt_project.yml                    # project config with sensible defaults
 ├── profiles.yml                       # DuckDB + DuckLake connection config
@@ -114,7 +114,7 @@ scaffold/
         └── facts/_fct_configs.yml
 ```
 
-Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaffold/CLAUDE.md`.
+Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaffold/data-instructions.md`.
 
 ---
 

@@ -44,7 +44,7 @@ It is designed to be used by **AI agents** (crew) following instructions from a 
 
 ## Step 0 — Pre-departure
 
-*Before writing a single file, the CLAUDE.md requires the crew to ask four questions*
+*Before writing a single file, the data-instructions.md requires the crew to ask four questions*
 
 ---
 
