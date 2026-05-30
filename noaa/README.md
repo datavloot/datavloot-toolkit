@@ -119,7 +119,7 @@ Dagster persists run history, asset metadata, and test results in `noaa_platform
 
 ## Querying the results
 
-The warehouse is a single DuckDB file at `noaa/noaa.duckdb`. All business-layer tables land in the `main_business` schema.
+The warehouse is a single DuckDB file at `noaa/noaa.duckdb`. All business-layer tables land in the `noaa_business` schema.
 
 ### Install the DuckDB CLI
 
@@ -143,13 +143,13 @@ duckdb noaa.duckdb
 SHOW ALL TABLES;
 
 -- Total port events
-SELECT COUNT(*) FROM main_business.fct_port_event;
+SELECT COUNT(*) FROM noaa_business.fct_port_event;
 
 -- Arrivals per month (is_departure = false means arrival)
 SELECT
     DATE_TRUNC('month', event_time) AS month,
     COUNT(*) AS arrivals
-FROM main_business.fct_port_event
+FROM noaa_business.fct_port_event
 WHERE NOT is_departure
 GROUP BY 1
 ORDER BY 1;
@@ -158,7 +158,7 @@ ORDER BY 1;
 SELECT
     HOUR(event_time) AS hour_of_day,
     COUNT(*) AS departures
-FROM main_business.fct_port_event
+FROM noaa_business.fct_port_event
 WHERE is_departure
 GROUP BY 1
 ORDER BY 2 DESC;
@@ -167,8 +167,8 @@ ORDER BY 2 DESC;
 SELECT
     v.vessel_type,
     COUNT(*) AS port_events
-FROM main_business.fct_port_event f
-LEFT JOIN main_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
+FROM noaa_business.fct_port_event f
+LEFT JOIN noaa_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
 GROUP BY 1
 ORDER BY 2 DESC
 LIMIT 10;

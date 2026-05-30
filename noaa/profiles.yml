@@ -4,4 +4,4 @@ noaa:
     dev:
       type: duckdb
       path: "noaa.duckdb"
-      schema: main
+      schema: noaa
