@@ -1,6 +1,7 @@
-# noaa
+# Workflow and conventions — optimist-toolkit
 
-A dbt project built on [optimist-toolkit](https://gitlab.com/mycelium4483613/optimist-toolkit).
+Single source of truth for all consuming projects. Referenced from each project's own `data-instructions.md`
+via `dbt_packages/optimist/data-instructions.md` after `dbt deps`.
 
 ---
 
@@ -51,8 +52,16 @@ For each raw table, create a staging model.
 
 Then add a model entry to `models/source/_schema.yml` with column descriptions and `data_tests`.
 
-**Incremental loading** — source models default to `incremental` materialization, meaning only new
-rows are processed on each run. For this to work correctly, every staging model needs two things:
+**Materialization** — configure by folder in `dbt_project.yml`, not in individual model files.
+The default is `incremental`; alternatives for sources without a reliable update timestamp:
+
+- `ephemeral` — the staging model is inlined as a CTE at compile time; use when an external
+  tool (dlt, Fivetran) manages incrementality and you don't need the staging model to be
+  independently queryable.
+- `view` — always-fresh database view; use when dbt queries the source directly and you want
+  data to be current on every run without incremental filtering.
+
+**Incremental loading** — when using `incremental` materialization, every staging model needs:
 
 1. A `unique_key` config so dbt upserts instead of appending:
    ```sql
@@ -60,10 +69,6 @@ rows are processed on each run. For this to work correctly, every staging model 
    {{ optimist.stage_source('<source>', '<table>', incremental_column='<updated_at_col>') }}
    ```
 2. Ask the captain: which column marks when a row was last updated? (e.g. `updated_at`, `modified_at`, `ingested_at`)
-
-If no reliable timestamp exists in the source, ask the captain whether to use `view` materialization
-for this model instead (always fresh, no incremental filter needed), by adding
-`{{ config(materialized='view') }}` before the macro call.
 
 **Deduplication** — ask the captain: does this source emit multiple versions of the same record
 (e.g. a CDC feed or append-only log with updates)? If yes, add `deduplicate_by` with the natural
@@ -95,7 +100,7 @@ doesn't exist in any source system, add it as a seed before building dimensions.
 2. Add an entry to `seeds/_seeds.yml` with descriptions and `data_tests`
 3. Run `dbt seed` to load it into the warehouse
 
-Seeds can then be used as a dimension source via `source_seed: <seed_name>` in `_dim_configs.yml`.
+Seeds can then be used as a dimension source via `source_seed: <seed_name>` in the inline config block of a dimension SQL file.
 
 Guidance on when seeds are appropriate: `seeds/how_to.md`
 
@@ -103,10 +108,33 @@ Guidance on when seeds are appropriate: `seeds/how_to.md`
 
 For each entity the captain cares about (person, product, location, vessel, etc.):
 
-1. Add a config block to `models/business/dimensions/_dim_configs.yml`
-2. Create `models/business/dimensions/dim_<entity>.sql`:
+1. Create `models/business/dimensions/dim_<entity>.sql` declaring only the source inline
+   (so dbt can discover the `ref()` dependency at parse time):
    ```sql
-   {{ optimist.build_dimension() }}
+   {%- set dim_source -%}
+   source_model: stg_<source>__<table>
+   {%- endset -%}
+
+   {{ optimist.build_dimension(fromyaml(dim_source)) }}
+   ```
+2. Add an entry to `models/business/dimensions/_dim_configs.yml` with column descriptions,
+   `data_tests`, and a `config.meta` block with the build config:
+   ```yaml
+   - name: dim_<entity>
+     description: ""
+     columns:
+       - name: dim_<entity>_key
+         description: "Surrogate key; MD5 hash of <natural_key>."
+       - name: <natural_key>
+         description: ""
+     config:
+       meta:
+         surrogate_key:
+           columns: [<natural_key>]
+           alias: dim_<entity>_key
+         columns:
+           - <natural_key>
+           - <attribute_column>
    ```
 
 `dim_date` and `dim_time` ship with the toolkit — reference them with `ref('dim_date')` and
@@ -114,25 +142,60 @@ For each entity the captain cares about (person, product, location, vessel, etc.
 
 After creating each dimension, ask the captain about data quality expectations — see **Step 7**.
 
-Config template: `models/business/dimensions/_dim_configs.yml` (see header comments)
-Full reference: `dbt_packages/optimist/models/business/_dim_config_template.yml`
-Docs: `dbt_packages/optimist/docs/business-layer.md`
+Full config reference: `dbt_packages/optimist/macros/business/build_dimension.sql` (docstring)
 
 ### Step 5 — Build facts
 
 For each event or transaction the captain wants to measure:
 
-1. Add a config block to `models/business/facts/_fct_configs.yml`
-2. Create `models/business/facts/fct_<event>.sql`:
+1. Create `models/business/facts/fct_<event>.sql` with the CTE chain. Declare the source inline
+   (so dbt discovers the source dependency at parse time), and add `-- depends_on:` hints for
+   each dimension so dbt can build the correct DAG:
    ```sql
-   {{ optimist.build_fact() }}
+   -- depends_on: {{ ref('dim_<entity>') }}
+   -- depends_on: {{ ref('dim_date') }}
+
+   {% set fct_source %}
+   source_cte: <final_cte_name>
+   {% endset %}
+
+   with
+   ...
+   <final_cte_name> as (...)
+
+   {{ optimist.build_fact(fromyaml(fct_source)) }}
+   ```
+2. Add an entry to `models/business/facts/_fct_configs.yml` with column descriptions,
+   `data_tests`, and a `config.meta` block with the build config:
+   ```yaml
+   - name: fct_<event>
+     description: ""
+     columns:
+       - name: fct_<event>_key
+         description: "Surrogate key; MD5 hash of <grain_columns>."
+     config:
+       meta:
+         surrogate_key:
+           columns: [<grain_column>]
+           alias: fct_<event>_key
+         dimensions:
+           - dim: dim_<entity>
+             fk: <fk_column>
+             key: dim_<entity>_key
+           - dim: dim_date
+             fk: <timestamp_column>
+             dim_fk: date_day
+             fk_cast: date
+             key: dim_date_key
+             alias: <event>_date_key
+         columns:
+           - <grain_column>
+           - <measure_column>
    ```
 
 After creating each fact, ask the captain about data quality expectations — see **Step 7**.
 
-Config template: `models/business/facts/_fct_configs.yml` (see header comments)
-Full reference: `dbt_packages/optimist/models/business/_fct_config_template.yml`
-Docs: `dbt_packages/optimist/docs/business-layer.md`
+Full config reference: `dbt_packages/optimist/macros/business/build_fact.sql` (docstring)
 
 ### Step 6 — Document
 
@@ -228,6 +291,69 @@ Run `dbt source freshness` to check all configured sources.
 
 ---
 
+## Modelling conventions
+
+### Kimball dimensional modelling
+
+Facts contain **measures** (quantitative values) and **foreign keys** to dimensions. All descriptive
+context belongs in dimension tables. Do not add attribute columns to a fact unless they are a
+genuine measure or a degenerate dimension.
+
+**Degenerate dimensions** are natural-key or categorical columns kept on the fact because they do
+not warrant their own dimension table (e.g. a transaction number, a sparse status code). Always add
+a comment on the column explaining why no dimension table was built:
+
+```sql
+-- degenerate dimension: status codes are sparse and operator-entered;
+-- a full dim_status table would add noise without analytical value.
+status,
+```
+
+### CTE structure in fact SQL
+
+All upstream model references (`ref(...)`) must appear as named import CTEs at the top of the
+file, before any transformation logic. Transformation CTEs reference only other CTEs — never
+`ref()` directly inside a transformation CTE.
+
+```sql
+with
+
+-- imports
+orders_raw as (
+    select * from {{ ref('stg_orders') }}
+),
+
+customers_raw as (
+    select * from {{ ref('dim_customer') }}
+),
+
+-- transform
+orders as (
+    select
+        order_id,
+        customer_id,
+        cast(order_ts as timestamp) as order_time
+    from orders_raw
+),
+
+...
+```
+
+### Single source of truth for lookup thresholds
+
+Classification thresholds (e.g. wind speed bands, price tiers) are defined once in a seed.
+Facts use a range join (`>= min AND < max`) to resolve the category. Do not duplicate thresholds
+in a CASE statement inside the fact SQL.
+
+```sql
+-- in the fact: range-join on the seed, not a CASE statement
+left join sea_state_categories s
+    on  w.wind_speed_10m_kn >= s.min_wind_speed_kn
+    and w.wind_speed_10m_kn <  s.max_wind_speed_kn
+```
+
+---
+
 ## Naming conventions
 
 | Layer | Pattern | Example |
@@ -266,6 +392,10 @@ models/
 tests/
 └── assert_<model>_<description>.sql  # one file per custom singular test
 ```
+
+If multiple source systems have different materialization requirements, split `models/source/`
+into subfolders (e.g. `source/ais/`, `source/open_meteo/`) and configure each folder separately
+in `dbt_project.yml`.
 
 ---
 

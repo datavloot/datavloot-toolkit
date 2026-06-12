@@ -52,3 +52,79 @@ Config templates for the `source/` layer are provided in the package at
 | `generate_surrogate_key` | MD5 surrogate key over a list of columns | [Business layer](business-layer.md) |
 | `dim_date` | Shared date dimension (2015–2035, configurable) | [Business layer](business-layer.md) |
 | `dim_time` | Shared time dimension (minute granularity) | [Business layer](business-layer.md) |
+
+---
+
+## Running the pipeline
+
+The toolkit uses [Dagster](https://dagster.io) to orchestrate assets.
+
+Activate the project virtual environment first so `dbt` and `dagster` are on your PATH:
+
+```bash
+source .venv/bin/activate
+```
+
+Then generate a compiled dbt manifest (Dagster needs this to discover your models) and start the server:
+
+```bash
+dbt parse
+dagster dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). The **Asset Catalog** lists every asset in
+your pipeline — ingestion assets (dlt pipelines or plain Dagster assets) alongside all dbt source
+and business models.
+
+Materialise assets in dependency order: raw ingestion first, then dbt. To re-run only the dbt
+transformation layer without re-loading source data, select the dbt assets and click
+**Materialize selected**.
+
+The **Runs** tab shows logs for every execution. dbt test failures and Elementary data quality
+alerts surface here as asset check failures alongside the asset metadata.
+
+---
+
+## Querying results
+
+All business-layer tables land in the `main_business` schema of your DuckDB database file.
+
+### Install the DuckDB CLI
+
+```bash
+curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+unzip /tmp/duckdb.zip -d ~/.local/bin/
+chmod +x ~/.local/bin/duckdb
+```
+
+### Open the database
+
+```bash
+duckdb path/to/your.duckdb
+```
+
+### Useful shell commands
+
+```sql
+-- List all tables across all schemas
+SHOW ALL TABLES;
+
+-- Inspect a table's columns
+DESCRIBE main_business.dim_<entity>;
+
+-- Count rows in a fact table
+SELECT COUNT(*) FROM main_business.fct_<event>;
+```
+
+Type `.quit` to exit.
+
+### Schema layout
+
+| Schema | Contents |
+|---|---|
+| `main` | Raw tables loaded by ingestion assets |
+| `main_business` | Dimension and fact tables built by dbt |
+| `main_elementary` | Elementary data quality metadata |
+
+The default profile uses a relative path for the database file — run the `duckdb` command from
+your project directory, or supply the full path.

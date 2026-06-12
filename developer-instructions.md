@@ -23,7 +23,7 @@ scaffold/               # starting point for a new consuming project
 
 ## If you are building models in a consuming project
 
-You are in the wrong repo. The `scaffold/` directory is a copy-paste template for a new consuming project. Copy it, run `dbt deps`, then follow the `CLAUDE.md` in that project.
+You are in the wrong repo. The `scaffold/` directory is a copy-paste template for a new consuming project. Copy it, run `dbt deps`, then follow the `data-instructions.md` in that project.
 
 ---
 
@@ -34,7 +34,7 @@ The captain will tell you which of these applies:
 - **Adding a macro** — create the `.sql` file under `macros/source/` or `macros/business/`, then document it in `docs/`
 - **Editing a config template** — `_dim_config_template.yml` and `_fct_config_template.yml` are in `dbt/optimist/models/business/`; source templates are in `dbt/optimist/models/source/`
 - **Editing built-in dimensions** — configs in `dbt/optimist/models/business/dimensions/_dim_configs.yml`, SQL alongside
-- **Updating the scaffold** — keep `scaffold/CLAUDE.md` in sync with any workflow changes; it is the agent guide for all consuming projects
+- **Updating the agent guide** — workflow changes go in `dbt/optimist/data-instructions.md`; it is the single source of truth for all consuming projects. `scaffold/data-instructions.md` contains only project identity and a reference to the package doc — do not duplicate conventions there
 
 ---
 
@@ -44,3 +44,4 @@ The captain will tell you which of these applies:
 - All business-layer config lives in YAML `meta` blocks — no logic in SQL files
 - Source-layer models follow the double-underscore pattern: `stg_<source>__<table>`
 - Column documentation (dbt docs) lives at the model level; macro selection config lives inside `meta`
+- Modelling conventions (Kimball, materialization, CTE structure) live in `dbt/optimist/data-instructions.md` and ship with the package — consuming projects reference `dbt_packages/optimist/data-instructions.md`

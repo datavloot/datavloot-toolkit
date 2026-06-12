@@ -29,83 +29,165 @@ reference data. The output answers questions like:
 ## Project structure
 
 ```
-scripts/
-└── load_ais.py         # one-time script to load AIS data into DuckDB
+data/
+└── guam_2025.csv             # AIS position broadcasts — download separately (see Getting started)
+noaa_platform/                # Dagster platform layer (assets, definitions)
 seeds/
-├── ports.csv           # global port reference data (3,804 rows)
-└── _seeds.yml          # seed descriptions and tests
+├── ports.csv                 # global port reference data (3,804 rows)
+├── sea_state_categories.csv  # Beaufort wind scale thresholds
+└── _seeds.yml                # seed descriptions and tests
 models/
 ├── source/
-│   ├── _sources.yml    # AIS source definition (raw.guam_2025)
-│   ├── _schema.yml     # staging model docs and tests
-│   └── stg_noaa__guam_2025.sql
+│   ├── ais/
+│   │   ├── _sources.yml      # AIS source definition (raw.guam_2025)
+│   │   ├── _schema.yml       # staging model docs and tests
+│   │   └── stg_noaa__guam_2025.sql
+│   └── open_meteo/
+│       ├── _sources.yml      # Open-Meteo source definition
+│       ├── _schema.yml
+│       └── stg_open_meteo__guam_atmo_hourly.sql
 └── business/
     ├── dimensions/
-    │   ├── _dim_configs.yml   # dim_vessel, dim_port
+    │   ├── _dim_configs.yml  # dim_vessel, dim_port, dim_sea_state
     │   ├── dim_vessel.sql
-    │   └── dim_port.sql
+    │   ├── dim_port.sql
+    │   └── dim_sea_state.sql
     └── facts/
-        ├── _fct_configs.yml   # fct_port_event
+        ├── _fct_configs.yml  # fct_port_event
         └── fct_port_event.sql
 tests/
 ├── assert_fct_port_event_not_in_future.sql
 └── assert_stg_noaa_sog_in_range.sql
+pyproject.toml                # Python package config; points Dagster at noaa_platform.definitions
 ```
 
 ---
 
 ## Getting started
 
-### 1. Install dbt-duckdb
+All commands run from inside the `noaa/` directory.
+
+### 1. Install dependencies and activate the environment
 
 ```bash
-pip install dbt-duckdb
+uv sync
+source .venv/bin/activate
 ```
 
-### 2. Load the AIS source data into DuckDB
+All subsequent commands (`dbt`, `dagster`, `duckdb`) run in the activated environment — no prefix needed.
 
-The AIS dataset (3.2M rows) is too large for a dbt seed — it is loaded once into a
-persistent DuckDB file and then referenced as a source.
-
-```bash
-cd /path/to/noaa
-python3 scripts/load_ais.py
-```
-
-This creates `noaa.duckdb` and loads `seeds/guam_2025.csv` into `raw.guam_2025`.
-
-### 3. Install the optimist-toolkit package
+### 2. Install the optimist-toolkit dbt package
 
 ```bash
 dbt deps
 ```
 
-### 4. Load seed data (ports reference table)
+### 3. Get the AIS data
+
+Download the Guam 2025 AIS zone file from [marinecadastre.gov/ais](https://marinecadastre.gov/ais/)
+and save it as `data/guam_2025.csv`.
+
+### 4. Generate the dbt manifest
+
+Dagster needs a compiled manifest before it can start:
 
 ```bash
-dbt seed
+dbt parse
 ```
 
-### 5. Build all models
+### 5. Start Dagster
 
 ```bash
-dbt run
+dagster dev
 ```
 
-### 6. Run tests
+Open [http://localhost:3000](http://localhost:3000).
+
+In the **Asset Catalog**, materialise assets in this order:
+
+| Step | Asset | What it does |
+|---|---|---|
+| 1 | `noaa/guam_2025` | Loads `data/guam_2025.csv` → `noaa.duckdb` `raw.guam_2025` |
+| 2 | `open_meteo/guam_atmo_hourly` | Fetches hourly wind data from Open-Meteo archive API → `noaa.duckdb` |
+| 3 | All remaining assets | Runs `dbt build` — seeds ports, stages sources, builds dims and fact, runs tests |
+
+To re-run only the dbt models without re-loading raw data, select the dbt assets and click **Materialize selected**.
+
+Dagster persists run history, asset metadata, and test results in `noaa_platform/` — check the **Runs** tab for logs if a build fails.
+
+---
+
+## Querying the results
+
+The warehouse is a single DuckDB file at `noaa/noaa.duckdb`. All business-layer tables land in the `noaa_business` schema.
+
+### Install the DuckDB CLI
 
 ```bash
-dbt test
+# Download the standalone CLI binary (Linux x86-64)
+curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+unzip /tmp/duckdb.zip -d ~/.local/bin/
+chmod +x ~/.local/bin/duckdb
 ```
+
+### Open the database
+
+```bash
+duckdb noaa.duckdb
+```
+
+### Useful queries
+
+```sql
+-- List all tables
+SHOW ALL TABLES;
+
+-- Total port events
+SELECT COUNT(*) FROM noaa_business.fct_port_event;
+
+-- Arrivals per month (is_departure = false means arrival)
+SELECT
+    DATE_TRUNC('month', event_time) AS month,
+    COUNT(*) AS arrivals
+FROM noaa_business.fct_port_event
+WHERE NOT is_departure
+GROUP BY 1
+ORDER BY 1;
+
+-- Busiest hour of day for departures
+SELECT
+    HOUR(event_time) AS hour_of_day,
+    COUNT(*) AS departures
+FROM noaa_business.fct_port_event
+WHERE is_departure
+GROUP BY 1
+ORDER BY 2 DESC;
+
+-- Vessel types with most port events
+SELECT
+    v.vessel_type,
+    COUNT(*) AS port_events
+FROM noaa_business.fct_port_event f
+LEFT JOIN noaa_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 10;
+```
+
+Type `.quit` to exit the DuckDB shell.
 
 ---
 
 ## Data lineage
 
 ```
-seeds/ports.csv          →  dim_port
-raw.guam_2025 (DuckDB)   →  stg_noaa__guam_2025  →  dim_vessel
-                                                  →  fct_port_event  →  dim_vessel (FK)
-                                                                     →  dim_port   (FK)
-                                                                     →  dim_date   (FK)
+seeds/ports.csv                    →  dim_port
+seeds/sea_state_categories.csv     →  dim_sea_state
+raw.guam_2025 (DuckDB)             →  stg_noaa__guam_2025         →  dim_vessel
+Open-Meteo archive API (dlt)       →  stg_open_meteo__guam_atmo_hourly  ↘
+                                                                      fct_port_event  →  dim_vessel    (FK)
+                                                                                      →  dim_port      (FK)
+                                                                                      →  dim_date      (FK)
+                                                                                      →  dim_time      (FK)
+                                                                                      →  dim_sea_state (FK)
 ```

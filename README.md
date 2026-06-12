@@ -7,6 +7,7 @@ Built on battle-tested open-source tools with no monthly fees, no vendor lock-in
 | Component | Tool | Role |
 |---|---|---|
 | Orchestration | [Dagster](https://dagster.io) | Schedule and monitor your data pipelines |
+| Ingestion | [dlt](https://dlthub.com) | Load data from APIs, databases, and files into DuckDB |
 | Transformation | [dbt](https://getdbt.com) | Transform, test, and document your data |
 | Storage | [DuckDB](https://duckdb.org) + [DuckLake](https://ducklake.select) | Local lakehouse with two-layer architecture |
 | Data quality | [Elementary](https://elementary-data.com) | Monitors, alerts, and reports on data quality |
@@ -84,7 +85,7 @@ This toolkit is designed to be used in conversation with an AI assistant — no 
 
 Think of it as a **captain and crew** relationship: you are the captain who knows your business and your data sources. The AI is the crew that handles the technical implementation. You describe what you need, the AI builds it using the toolkit conventions, and you review and approve.
 
-A dedicated agent guide lives at [CLAUDE.md](CLAUDE.md) and in every scaffold project at `scaffold/CLAUDE.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
+A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and in every scaffold project at `scaffold/data-instructions.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
 
 The [`noaa/`](noaa/) example project was built entirely this way — a captain with no data engineering skills directed an AI crew through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is included at [noaa/conversation.md](noaa/conversation.md).
 
@@ -96,7 +97,7 @@ Copy the `scaffold/` directory as the foundation for any new project using this 
 
 ```
 scaffold/
-├── CLAUDE.md                          # AI agent workflow guide (captain/crew model)
+├── data-instructions.md                          # AI agent workflow guide (captain/crew model)
 ├── packages.yml                       # points to this toolkit
 ├── dbt_project.yml                    # project config with sensible defaults
 ├── profiles.yml                       # DuckDB + DuckLake connection config
@@ -113,7 +114,7 @@ scaffold/
         └── facts/_fct_configs.yml
 ```
 
-Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaffold/CLAUDE.md`.
+Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaffold/data-instructions.md`.
 
 ---
 
@@ -211,6 +212,7 @@ dbt deps
 ## Documentation
 
 - [Getting started with the dbt package](docs/getting-started.md)
+- [Ingestion layer — loading data with dlt](docs/ingestion.md)
 - [Source layer — auto-staging and audit columns](docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](docs/business-layer.md)
 
