@@ -7,15 +7,11 @@ dependencies = [
     "dagster",
     "dagster-dbt",
     "dagster-dlt",
+    "dagster-webserver",
     "dbt-core",
     "dbt-duckdb",
     "dlt[duckdb]",
     "duckdb",
-]
-
-[project.optional-dependencies]
-dev = [
-    "dagster-webserver",
 ]
 
 [build-system]

@@ -1,4 +1,4 @@
 packages:
-  - git: "git@gitlab.com:datavloot/optimist-toolkit.git"
+  - git: "https://gitlab.com/datavloot/optimist-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA for reproducible builds
