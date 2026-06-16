@@ -65,14 +65,26 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 ## Getting started
 
-All commands run from inside the `noaa/` directory.
+All commands run from inside the `noaa/` directory. You'll need **Python 3.10–3.14** and **git**.
 
 ### 1. Install dependencies and activate the environment
 
+**With uv** (recommended — [install uv](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it):
+
 ```bash
 uv sync
-source .venv/bin/activate
+source .venv/bin/activate   # macOS / Linux
+.venv\Scripts\activate      # Windows
 ```
+
+**With pip** (no extra tools needed):
+
+```bash
+pip install .
+```
+
+> If using pip without an active virtual environment, create one first:
+> `python -m venv .venv` then activate it as shown above.
 
 All subsequent commands (`dbt`, `dagster`, `duckdb`) run in the activated environment — no prefix needed.
 

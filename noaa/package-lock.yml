@@ -1,12 +1,12 @@
 packages:
-  - git: git@gitlab.com:datavloot/optimist-toolkit.git
+  - git: https://gitlab.com/datavloot/optimist-toolkit.git
     name: optimist
-    revision: 4d06b4ee8d8b4e5dfaa5c4b88474f8b831cb4c78
+    revision: dfe31feac4f051df8f760227e213cdd1f418b5c8
     subdirectory: dbt/optimist
   - name: dbt_utils
     package: dbt-labs/dbt_utils
     version: 1.3.3
   - name: elementary
     package: elementary-data/elementary
-    version: 0.16.4
-sha1_hash: 567581d8d75303903130ac6c7300b1412badd804
+    version: 0.24.0
+sha1_hash: fd50a9cdcaf30e4762c697fced58ff1c1ee8e99e

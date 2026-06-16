@@ -561,7 +561,7 @@ wheels = [
 
 [[package]]
 name = "dlt"
-version = "1.27.0"
+version = "1.28.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -591,9 +591,9 @@ dependencies = [
     { name = "tzdata" },
     { name = "win-precise-time", marker = "python_full_version < '3.13' and os_name == 'nt'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/bb/80/4cc5a1af42e2b9aa3b4a7a8285f1f28fd889a2270bf7c76f812295bbec5b/dlt-1.27.0.tar.gz", hash = "sha256:cec18a34386150ac1620b2f1b5aa160f08e171ec0609af5da573792277f5218c", size = 1069777, upload-time = "2026-05-18T21:07:19.941Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/e9/45803a93a15e901ecb29c9ecbb63e346166b6c485df123f0fa9ff482b042/dlt-1.28.0.tar.gz", hash = "sha256:8fad65ca4c2a7c74b0b78d87ebed3f974cf9ed635e6f662bf4e8dec4be14f53f", size = 1085533, upload-time = "2026-06-15T16:14:52.893Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/76/23/26e6dcc639bd74025e6b54bb5af140a0a7582047e6b848d072cb947b271a/dlt-1.27.0-py3-none-any.whl", hash = "sha256:69ac35c56f9b319ab3ae5378df2bc199bf746073df287fdd17994f44efd27ad0", size = 1347146, upload-time = "2026-05-18T21:07:23.631Z" },
+    { url = "https://files.pythonhosted.org/packages/22/73/522146bd24ca8e610b70b7ca939a2d4cbf6a9c6a124cd12063a7e290fd05/dlt-1.28.0-py3-none-any.whl", hash = "sha256:47673d39557d6a80fb02552e8ff00176a23019e7082a28e3469ac76b8c924430", size = 1363253, upload-time = "2026-06-15T16:14:55.413Z" },
 ]
 
 [package.optional-dependencies]
@@ -1450,15 +1450,11 @@ dependencies = [
     { name = "dagster" },
     { name = "dagster-dbt" },
     { name = "dagster-dlt" },
+    { name = "dagster-webserver" },
     { name = "dbt-core" },
     { name = "dbt-duckdb" },
     { name = "dlt", extra = ["duckdb"] },
     { name = "duckdb" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "dagster-webserver" },
 ]
 
 [package.metadata]
@@ -1466,13 +1462,12 @@ requires-dist = [
     { name = "dagster" },
     { name = "dagster-dbt" },
     { name = "dagster-dlt" },
-    { name = "dagster-webserver", marker = "extra == 'dev'" },
+    { name = "dagster-webserver" },
     { name = "dbt-core" },
     { name = "dbt-duckdb" },
     { name = "dlt", extras = ["duckdb"] },
     { name = "duckdb" },
 ]
-provides-extras = ["dev"]
 
 [[package]]
 name = "orderly-set"
