@@ -129,6 +129,20 @@ Dagster persists run history, asset metadata, and test results in `noaa_platform
 
 ---
 
+## Exploring the data
+
+### Interactive notebook (recommended)
+
+`explore_noaa.py` is a [Marimo](https://marimo.io) reactive notebook that connects directly to `noaa.duckdb` and provides charts and tables for all the key questions this project answers.
+
+```bash
+marimo edit explore_noaa.py
+```
+
+Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore_noaa.py` instead.
+
+---
+
 ## Querying the results
 
 The warehouse is a single DuckDB file at `noaa/noaa.duckdb`. All business-layer tables land in the `noaa_business` schema.

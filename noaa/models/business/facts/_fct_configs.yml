@@ -99,6 +99,7 @@ models:
             dim_fk: sea_state_code
             key: dim_sea_state_key
         columns:
+          - event_time
           - is_departure
           - sog
           - status

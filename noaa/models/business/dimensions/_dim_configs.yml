@@ -26,7 +26,8 @@ models:
           - not_null
           - unique
           - accepted_values:
-              values: ['CALM', 'LIGHT', 'MODERATE', 'ROUGH', 'VERY_ROUGH', 'STORM']
+              arguments:
+                values: ['CALM', 'LIGHT', 'MODERATE', 'ROUGH', 'VERY_ROUGH', 'STORM']
       - name: label
         description: "Human-readable label."
         data_tests:

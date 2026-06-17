@@ -5,21 +5,24 @@ description = "Open-source data platform toolkit — Dagster + dlt + dbt + DuckD
 readme = "README.md"
 requires-python = ">=3.10,<3.15"
 dependencies = [
+    "altair",
     "dagster",
     "dagster-dbt",
     "dagster-dlt",
     "dagster-duckdb",
+    "dagster-webserver",
     "dbt-core",
     "dbt-duckdb",
     "dlt[duckdb]",
     "ducklake",
-    "python-dotenv",
     "elementary-data[duckdb]",
+    "marimo",
+    "pandas",
+    "python-dotenv",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "dagster-webserver",
     "pytest",
 ]
 

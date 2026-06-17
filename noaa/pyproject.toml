@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "NOAA AIS example project — Dagster + dbt + DuckDB, built on optimist-toolkit"
 requires-python = ">=3.10,<3.15"
 dependencies = [
+    "altair>=6.2.1",
     "dagster",
     "dagster-dbt",
     "dagster-dlt",
@@ -12,6 +13,8 @@ dependencies = [
     "dbt-duckdb",
     "dlt[duckdb]",
     "duckdb",
+    "marimo>=0.23.9",
+    "pandas>=2.3.3",
 ]
 
 [build-system]
