@@ -11,6 +11,7 @@ Built on battle-tested open-source tools with no monthly fees, no vendor lock-in
 | Transformation | [dbt](https://getdbt.com) | Transform, test, and document your data |
 | Storage | [DuckDB](https://duckdb.org) + [DuckLake](https://ducklake.select) | Local lakehouse with two-layer architecture |
 | Data quality | [Elementary](https://elementary-data.com) | Monitors, alerts, and reports on data quality |
+| Exploration | [Marimo](https://marimo.io) | Reactive notebooks for querying and visualising results |
 
 ---
 
@@ -138,7 +139,9 @@ See [noaa/README.md](noaa/README.md).
 
 ### 1. Ingest raw data
 
-Write a Dagster asset in `optimist_platform/assets.py` that loads your source data into `lakehouse.source`. See [assets.py](optimist_platform/assets.py) for the DuckDB connection pattern.
+For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa/noaa_platform/assets.py`](noaa/noaa_platform/assets.py) for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
+
+For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](optimist_platform/assets.py) for the DuckDB connection pattern.
 
 ### 2. Define your sources in dbt
 
@@ -171,6 +174,49 @@ Copy the templates from `dbt/optimist/models/source/` and fill in your source ta
     measures       = ['duration_hours', 'cargo_tonnes']
 ) }}
 ```
+
+---
+
+## Running your pipeline
+
+Once your assets and models are in place, materialise them in Dagster in dependency order:
+
+| Step | What to materialise | What it does |
+|---|---|---|
+| 1 | Ingestion assets | Loads raw data into DuckDB via dlt or a plain Dagster asset |
+| 2 | All dbt assets | Runs `dbt build` — seeds, staging, dimensions, facts, and tests |
+
+Open the **Asset Catalog** at [http://localhost:3000](http://localhost:3000), select the assets, and click **Materialize selected**. Check the **Runs** tab for logs if anything fails.
+
+To re-run only the dbt layer without re-loading raw data, select the dbt assets and materialise those alone.
+
+---
+
+## Exploring the data
+
+Each project includes `explore.py`, a [Marimo](https://marimo.io) reactive notebook that connects directly to your DuckDB database and lets you query and visualise results in the browser — no SQL terminal needed.
+
+```bash
+marimo edit explore.py
+```
+
+Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore.py` instead.
+
+The scaffold provides a template notebook with placeholder cells to fill in for your own schema. See [`noaa/explore_noaa.py`](noaa/explore_noaa.py) for a fully worked example.
+
+---
+
+## Scheduling and automation
+
+By default, assets are materialised manually in the Dagster UI. To run pipelines automatically, Dagster provides three mechanisms:
+
+| Approach | Use when |
+|---|---|
+| [Schedules](https://docs.dagster.io/guides/automate/schedules) | You want assets to run on a fixed cron interval (e.g. nightly at 02:00) |
+| [Sensors](https://docs.dagster.io/guides/automate/sensors) | You want to react to an event — a new file, an API update, a threshold breach |
+| [Declarative automation](https://docs.dagster.io/guides/automate/declarative-automation) | You want Dagster to decide when to materialise based on asset freshness and upstream changes |
+
+Schedules and sensors are defined in `definitions.py` alongside the existing assets. See the [Dagster automation docs](https://docs.dagster.io/guides/automate) for full examples, and `dbt_packages/optimist/data-instructions.md` for guidance on choosing the right approach for your sources.
 
 ---
 
@@ -234,12 +280,17 @@ dbt deps
 
 ## Stack versions
 
-| Package | Version constraint |
+Versions below are what the NOAA example project was built and tested on. Newer patch releases generally work; minor/major upgrades may require changes.
+
+| Package | Tested version |
 |---|---|
-| Python | >=3.10, <3.15 |
-| dagster | latest |
-| dagster-dbt | latest |
-| dbt-core | latest |
-| dbt-duckdb | latest |
-| ducklake | latest |
-| elementary-data | >=0.16.0 |
+| Python | ≥3.10, <3.15 |
+| dagster | 1.13.6 |
+| dagster-dbt | 0.29.6 |
+| dbt-core | 1.11.11 |
+| dbt-duckdb | 1.10.1 |
+| dlt | 1.28.0 |
+| duckdb | 1.5.3 |
+| ducklake | 0.1.1 |
+| elementary-data | 0.24.0 |
+| marimo | 0.23.9 |
