@@ -1,6 +1,6 @@
 # Toolkit Developer Standards
 
-Decisions about how the toolkit is structured and how it relates to the scaffold and example projects.
+Decisions about how the toolkit is structured and how it relates to the project templates and example projects.
 When working on any of these components, verify against the standards below.
 
 ---
@@ -10,9 +10,9 @@ When working on any of these components, verify against the standards below.
 | Component | Role |
 |---|---|
 | `dbt/optimist/` | The installable dbt package. Contains macros, built-in dimensions, and config templates. |
-| `scaffold/` | Copy-paste template for a new consuming project. Mirrors the structure a real project should have. |
-| `noaa/` | A real example project built on the toolkit. Demonstrates AIS + weather ingestion with Dagster + dlt. |
-| `optimist_platform/` | Dagster platform template. Contains only toolkit assets + commented dlt pattern for new projects. |
+| `optimist_platform/templates/scaffold/` | New-project template, served by `optimist new`. Mirrors the structure a real project should have. |
+| `optimist_platform/templates/demo/` | NOAA worked example, served by `optimist demo`. Demonstrates AIS + weather ingestion with Dagster + dlt. |
+| `optimist_platform/` | Dagster platform for the toolkit itself. Contains toolkit assets + commented dlt pattern. |
 
 ---
 
@@ -21,7 +21,7 @@ When working on any of these components, verify against the standards below.
 `optimist_platform/` is a **template**. Example project assets (like NOAA ingestion) must not be
 added to it — that would imply they are building blocks rather than examples.
 
-Each example project (e.g. `noaa/`) has its own `<project>_platform/` Dagster layer inside its own
+Each example project (e.g. `optimist_platform/templates/demo/`) has its own `<project>_platform/` Dagster layer inside its own
 directory. The root `optimist_platform/` stays clean.
 
 ---
@@ -33,7 +33,7 @@ captain/crew model, pre-departure questions, workflow steps 1–7, modelling con
 conventions, file map, and when to pause. It ships with the package and becomes available at
 `dbt_packages/optimist/data-instructions.md` after `dbt deps`.
 
-**Consuming project data-instructions.md files** (`scaffold/data-instructions.md`, `noaa/data-instructions.md`) contain only:
+**Consuming project data-instructions.md files** (inside `optimist_platform/templates/scaffold/` and `optimist_platform/templates/demo/`) contain only:
 - Project name and one-line description
 - A reference to `dbt_packages/optimist/data-instructions.md`
 - A "Project context" section with project-specific details (sources, warehouse, orchestration)
@@ -49,15 +49,19 @@ It is not the right place for project-level or modelling guidance.
 ## 4. Checklist for adding or changing a convention
 
 - [ ] Update `dbt/optimist/data-instructions.md`
-- [ ] Verify scaffold/data-instructions.md and noaa/data-instructions.md still correctly reference the package doc (no duplication crept in)
+- [ ] Verify `optimist_platform/templates/scaffold/data-instructions.md` and `optimist_platform/templates/demo/data-instructions.md` still correctly reference the package doc (no duplication crept in)
 - [ ] If the convention affects macro behaviour, update `docs/` as well
 
 ---
 
 ## 5. Checklist for adding a new example project
 
-- [ ] Create `<project>/` at the repo root — self-contained, not nested under another project
-- [ ] Create `<project>/<project>_platform/` for the Dagster layer (assets.py, definitions.py)
-- [ ] Create `<project>/pyproject.toml` with `[tool.dagster]` pointing to `<project>_platform.definitions`
-- [ ] Copy `scaffold/data-instructions.md` as the starting `<project>/data-instructions.md` and fill in project-specific details
+- [ ] Create `optimist_platform/templates/<project>/` — self-contained, not nested under another template
+- [ ] Create `optimist_platform/templates/<project>/<project>_platform/` for the Dagster layer (assets.py, definitions.py)
+- [ ] Create `optimist_platform/templates/<project>/pyproject.toml` with `[tool.dagster]` pointing to `<project>_platform.definitions`
+- [ ] Copy `optimist_platform/templates/scaffold/data-instructions.md` as the starting `data-instructions.md` and fill in project-specific details
+- [ ] Add a CLI subcommand or update `optimist demo` to point to the new template
 - [ ] Add a section to the root `README.md` describing the example
+
+## 6. Core design principle: DRY
+- DRY = Don't Repeat Yourself. Never suggest copying code from one place to another and try to keep those in sync. Always let developer decide where the code should live.

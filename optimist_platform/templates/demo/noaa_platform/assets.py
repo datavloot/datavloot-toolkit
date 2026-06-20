@@ -40,7 +40,7 @@ def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
         raise FileNotFoundError(
             f"AIS data not found at {CSV_PATH}. "
             "Download from https://marinecadastre.gov/ais/ "
-            "and save as noaa/data/guam_2025.csv."
+            "and save as data/guam_2025.csv in the project root."
         )
 
     con = duckdb.connect(str(DB_PATH))

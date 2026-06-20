@@ -65,7 +65,7 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 ## Getting started
 
-All commands run from inside the `noaa/` directory. You'll need **Python 3.10–3.14** and **git**.
+All commands run from the project root. You'll need **Python 3.10–3.14** and **git**.
 
 ### 1. Install dependencies and activate the environment
 
@@ -145,7 +145,7 @@ Open [http://localhost:2718](http://localhost:2718). To share a read-only view, 
 
 ## Querying the results
 
-The warehouse is a single DuckDB file at `noaa/noaa.duckdb`. All business-layer tables land in the `noaa_business` schema.
+The warehouse is a single DuckDB file at `noaa.duckdb` in the project root. All business-layer tables land in the `noaa_business` schema.
 
 ### Install the DuckDB CLI
 
