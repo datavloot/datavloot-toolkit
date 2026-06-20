@@ -1,8 +1,10 @@
 # optimist-toolkit
 
-An open-source data platform for small businesses — a complete, self-hosted alternative to big cloud SaaS data platforms.
+A self-hosted data platform for data engineers who want to own their stack rather than be trained on someone else's.
 
-Built on battle-tested open-source tools with no monthly fees, no vendor lock-in, and no cloud required if not desired.
+Most data engineering roles today make you proficient in a vendor — Databricks, Snowflake, a managed orchestrator. That knowledge doesn't transfer when the vendor changes or the contract ends. The Optimist gives you a complete, working platform built on open-source tools that you run and understand yourself, so the expertise stays with you.
+
+The stack:
 
 | Component | Tool | Role |
 |---|---|---|
@@ -12,6 +14,16 @@ Built on battle-tested open-source tools with no monthly fees, no vendor lock-in
 | Storage | [DuckDB](https://duckdb.org) + [DuckLake](https://ducklake.select) | Local lakehouse with two-layer architecture |
 | Data quality | [Elementary](https://elementary-data.com) | Monitors, alerts, and reports on data quality |
 | Exploration | [Marimo](https://marimo.io) | Reactive notebooks for querying and visualising results |
+
+---
+
+## Why this stack
+
+All six tools are Python-native, open source, and run locally without cloud infrastructure. They were chosen because they compose cleanly: dlt loads into DuckDB, dbt transforms it, Dagster orchestrates both, Elementary monitors the output, and Marimo queries the result. Each tool does one job and exposes it through standard interfaces.
+
+The alternatives — Databricks, Fivetran, Airflow on managed infrastructure, a cloud warehouse — are not wrong, but they carry a cost beyond the invoice: you become dependent on the platform, and the platform abstracts away the mechanics you should understand. This stack does not abstract. It uses proven open-source tooling of which the code can be downloaded and reviewed at any time to understand what is under te hood.
+
+The Optimist is a fully functional data platform that runs on your local machine — not a toy or a tutorial environment, but the real thing. The intent is that once you've built and understood it locally, you can scale the same platform up to support an actual business, open source, fully owned, with no black boxes.
 
 ---
 
@@ -82,13 +94,13 @@ This keeps things simple: fewer layers, less pipeline complexity, faster setup.
 
 ## Building your platform with AI
 
-This toolkit is designed to be used in conversation with an AI assistant — no data engineering background required.
+This toolkit is designed to be used alongside an AI assistant. Not as an abstraction that removes the need to understand what you're building, but as a way to move faster while you're learning it.
 
-Think of it as a **captain and crew** relationship: you are the captain who knows your business and your data sources. The AI is the crew that handles the technical implementation. You describe what you need, the AI builds it using the toolkit conventions, and you review and approve.
+The **captain and crew** model describes the workflow: you direct the session — you know your data sources, your domain, and what the output should look like. The AI handles implementation within the toolkit's conventions. You review, question, and approve. The understanding has to be yours; the AI accelerates getting there.
 
-A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and in every scaffold project at `scaffold/data-instructions.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
+A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and in every scaffold project at `scaffold/data-instructions.md`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
-The [`noaa/`](noaa/) example project was built entirely this way — a captain with no data engineering skills directed an AI crew through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is included at [noaa/conversation.md](noaa/conversation.md).
+This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [`noaa/`](noaa/) example project demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [noaa/conversation.md](noaa/conversation.md).
 
 ---
 
