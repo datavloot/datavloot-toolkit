@@ -6,7 +6,7 @@ from dlt.sources.helpers import requests as dlt_requests
 from dlt.destinations import duckdb as duckdb_destination
 from dagster import AssetExecutionContext, AssetKey, asset
 from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_assets
-from dagster_dlt import DagsterDltResource, dlt_assets
+from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
 DB_PATH = PROJECT_DIR / "noaa.duckdb"
@@ -24,6 +24,12 @@ class LayerGroupTranslator(DagsterDbtTranslator):
         if len(fqn) >= 2:
             return fqn[-2]
         return "default"
+
+
+class OpenMeteoDltTranslator(DagsterDltTranslator):
+    # Prefix keys with "open_meteo" to match the dbt source translation and wire the dependency edge.
+    def get_asset_key(self, resource) -> AssetKey:
+        return AssetKey(["open_meteo", resource.name])
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +136,7 @@ def open_meteo_source():
     ),
     group_name="noaa_ingest",
     name="open_meteo",
+    dagster_dlt_translator=OpenMeteoDltTranslator(),
 )
 def open_meteo_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
     yield from dlt.run(context=context)

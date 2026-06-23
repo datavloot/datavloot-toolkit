@@ -1,6 +1,6 @@
 # noaa
 
-A dbt project built on [optimist-toolkit](https://gitlab.com/mycelium4483613/optimist-toolkit).
+A dbt project built on [optimist-toolkit](https://gitlab.com/datavloot/optimist-toolkit).
 
 This project is an **example** of how a project is set up with the optimist toolkit. It uses
 publicly available data from the [National Oceanic and Atmospheric Administration (NOAA)](https://www.noaa.gov/)
@@ -65,28 +65,21 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 ## Getting started
 
-All commands run from the project root. You'll need **Python 3.10–3.14** and **git**.
+All commands run from the project root. You'll need **Python 3.10–3.13** (3.12 recommended) and **git**.
 
-### 1. Install dependencies and activate the environment
-
-**With uv** (recommended — [install uv](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it):
+This demo is part of the [optimist-toolkit](https://gitlab.com/datavloot/optimist-toolkit). If you haven't already, install the toolkit and copy the demo locally:
 
 ```bash
-uv sync
-source .venv/bin/activate   # macOS / Linux
-.venv\Scripts\activate      # Windows
+pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
+optimist demo
+cd optimist-demo
 ```
 
-**With pip** (no extra tools needed):
+### 1. Install the demo's Python package
 
 ```bash
-pip install .
+pip install -e .
 ```
-
-> If using pip without an active virtual environment, create one first:
-> `python -m venv .venv` then activate it as shown above.
-
-All subsequent commands (`dbt`, `dagster`, `duckdb`) run in the activated environment — no prefix needed.
 
 ### 2. Install the optimist-toolkit dbt package
 
@@ -115,13 +108,7 @@ dagster dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-In the **Asset Catalog**, materialise assets in this order:
-
-| Step | Asset | What it does |
-|---|---|---|
-| 1 | `noaa/guam_2025` | Loads `data/guam_2025.csv` → `noaa.duckdb` `raw.guam_2025` |
-| 2 | `open_meteo/guam_atmo_hourly` | Fetches hourly wind data from Open-Meteo archive API → `noaa.duckdb` |
-| 3 | All remaining assets | Runs `dbt build` — seeds ports, stages sources, builds dims and fact, runs tests |
+In the **Asset Catalog**, click **Materialize all** — Dagster knows the dependency order and runs ingestion before dbt automatically.
 
 To re-run only the dbt models without re-loading raw data, select the dbt assets and click **Materialize selected**.
 

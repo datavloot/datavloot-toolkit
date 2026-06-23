@@ -81,10 +81,10 @@ def cmd_demo(args: argparse.Namespace) -> None:
     print(f"  1. cd {dest}")
     print(f"  2. pip install -e .   # install the demo's Python package")
     print(f"  3. dbt deps           # install the optimist dbt package")
-    print(f"  4. See data-instructions.md to load the AIS vessel data")
+    print(f"  4. Download the Guam 2025 AIS zone file from https://ocmgeodatastor1.blob.core.windows.net/marinecadastre/data/ais/guam/index-guam.html")
+    print(f"     and save it as data/guam_2025.csv inside the project folder")
     print(f"  5. dbt parse          # compile the manifest for Dagster")
     print(f"  6. dagster dev        # start the platform at http://localhost:3000")
-    print(f"\nRead conversation.md to see how this project was built with an AI assistant.")
 
 
 def main() -> None:

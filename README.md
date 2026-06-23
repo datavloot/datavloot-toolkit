@@ -31,7 +31,7 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 ### Prerequisites
 
-- Python 3.10–3.14
+- Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
 - Git
 - A C compiler (required to build some dependencies from source)
 
@@ -58,6 +58,8 @@ python -m pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
 ```
 
 If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
+
+> **Note:** The first install downloads and builds a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
 
 
 ### 3. Scaffold a new project
@@ -323,7 +325,7 @@ Versions below are what the NOAA example project was built and tested on. Newer 
 
 | Package | Tested version |
 |---|---|
-| Python | ≥3.10, <3.15 |
+| Python | ≥3.10, <3.14 |
 | dagster | 1.13.6 |
 | dagster-dbt | 0.29.6 |
 | dbt-core | 1.11.11 |
