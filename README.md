@@ -1,8 +1,10 @@
 # optimist-toolkit
 
-An open-source data platform for small businesses — a complete, self-hosted alternative to big cloud SaaS data platforms.
+A self-hosted data platform for data engineers who want to own their stack rather than be trained on someone else's.
 
-Built on battle-tested open-source tools with no monthly fees, no vendor lock-in, and no cloud required if not desired.
+Most data engineering roles today make you proficient in a vendor — Databricks, Snowflake, a managed orchestrator. That knowledge doesn't transfer when the vendor changes or the contract ends. The Optimist gives you a complete, working platform built on open-source tools that you run and understand yourself, so the expertise stays with you.
+
+The stack:
 
 | Component | Tool | Role |
 |---|---|---|
@@ -15,42 +17,74 @@ Built on battle-tested open-source tools with no monthly fees, no vendor lock-in
 
 ---
 
+## Why this stack
+
+All six tools are Python-native, open source, and run locally without cloud infrastructure. They were chosen because they compose cleanly: dlt loads into DuckDB, dbt transforms it, Dagster orchestrates both, Elementary monitors the output, and Marimo queries the result. Each tool does one job and exposes it through standard interfaces.
+
+The alternatives — Databricks, Fivetran, Airflow on managed infrastructure, a cloud warehouse — are not wrong, but they carry a cost beyond the invoice: you become dependent on the platform, and the platform abstracts away the mechanics you should understand. This stack does not abstract. It uses proven open-source tooling of which the code can be downloaded and reviewed at any time to understand what is under te hood.
+
+The Optimist is a fully functional data platform that runs on your local machine — not a toy or a tutorial environment, but the real thing. The intent is that once you've built and understood it locally, you can scale the same platform up to support an actual business, open source, fully owned, with no black boxes.
+
+---
+
 ## Getting started
 
 ### Prerequisites
 
-- Python 3.10–3.14
+- Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
 - Git
+- A C compiler (required to build some dependencies from source)
 
-### 1. Create your project from this template
+  | OS | What you need | How to get it |
+  |---|---|---|
+  | **Windows** | Microsoft C++ Build Tools | Download from [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), select **Desktop development with C++** |
+  | **macOS** | Xcode Command Line Tools | Run `xcode-select --install` in a terminal |
+  | **Linux** | GCC | Run `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum install gcc` (RHEL/Fedora) |
 
-Click **Use this template** on GitHub to create your own repository, then clone it:
+### 1. Create your own repository
+
+Create a new repository on GitHub or GitLab (empty is fine), then clone it and navigate into it.
+
+### 2. Install the toolkit
 
 ```bash
-git clone https://github.com/your-org/your-data-platform
-cd your-data-platform
+pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
 ```
 
-### 2. Install dependencies
+If `pip` is not recognised (common on Windows), use:
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
 ```
 
-### 3. Initialize the lakehouse catalog
+If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
 
-Creates the DuckLake catalog file and sets up source and business schemas:
+> **Note:** The first install downloads and builds a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
+
+
+### 3. Scaffold a new project
 
 ```bash
-python setup_catalog.py
+optimist new my-project
+cd my-project
 ```
 
-### 4. Install dbt packages
+The project name is inferred from the directory — all placeholders in config and code are substituted automatically.
+
+Or try the NOAA worked example first:
 
 ```bash
-cd dbt/optimist
-dbt deps
-cd ../..
+optimist demo
+cd optimist-demo
+pip install -e .   # install the demo's Python package
+```
+
+### 4. Install dependencies and dbt packages
+
+```bash
+pip install -e .   # install your project's Python package
+dbt deps           # install the optimist dbt package — re-run whenever you upgrade or change packages.yml
+dbt parse          # compile the manifest (required before first dagster dev)
 ```
 
 ### 5. Start the platform
@@ -82,46 +116,53 @@ This keeps things simple: fewer layers, less pipeline complexity, faster setup.
 
 ## Building your platform with AI
 
-This toolkit is designed to be used in conversation with an AI assistant — no data engineering background required.
+This toolkit is designed to be used alongside an AI assistant. Not as an abstraction that removes the need to understand what you're building, but as a way to move faster while you're learning it.
 
-Think of it as a **captain and crew** relationship: you are the captain who knows your business and your data sources. The AI is the crew that handles the technical implementation. You describe what you need, the AI builds it using the toolkit conventions, and you review and approve.
+The **captain and crew** model describes the workflow: you direct the session — you know your data sources, your domain, and what the output should look like. The AI handles implementation within the toolkit's conventions. You review, question, and approve. The understanding has to be yours; the AI accelerates getting there.
 
-A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and in every scaffold project at `scaffold/data-instructions.md`. Hand it to your AI assistant at the start of a session and it will know exactly how to work with this toolkit.
+A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and inside every project created with `optimist new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
-The [`noaa/`](noaa/) example project was built entirely this way — a captain with no data engineering skills directed an AI crew through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is included at [noaa/conversation.md](noaa/conversation.md).
+This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](optimist_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](optimist_platform/templates/demo/conversation.md).
 
 ---
 
 ## Starting a new project
 
-Copy the `scaffold/` directory as the foundation for any new project using this toolkit:
+Run `optimist new <path>` to scaffold a new project. The project name is inferred from the directory name you provide — all placeholders are substituted automatically. This copies the following structure:
 
 ```
-scaffold/
-├── data-instructions.md                          # AI agent workflow guide (captain/crew model)
-├── packages.yml                       # points to this toolkit
-├── dbt_project.yml                    # project config with sensible defaults
-├── profiles.yml                       # DuckDB + DuckLake connection config
+<project-name>/
+├── pyproject.toml                    # Python project config; wires Dagster to the platform module
+├── .gitignore
+├── data-instructions.md              # AI agent workflow guide (captain/crew model)
+├── packages.yml                      # points to this toolkit's dbt package
+├── dbt_project.yml                   # project config
+├── profiles.yml                      # DuckDB connection config
+├── explore.py                        # Marimo notebook for querying results
+├── <project_name>_platform/          # Dagster layer (ready to run)
+│   ├── __init__.py
+│   ├── assets.py                     # dbt assets + commented dlt ingestion pattern
+│   └── definitions.py
 ├── seeds/
-│   ├── _seeds.yml                     # seed documentation template
-│   ├── how_to.md                      # when to use seeds
-│   └── priority_levels.csv            # example seed
+│   ├── _seeds.yml
+│   ├── how_to.md
+│   └── priority_levels.csv
 └── models/
     ├── source/
-    │   ├── _sources.yml               # source definition template
-    │   └── _schema.yml                # staging model documentation template
+    │   ├── _sources.yml
+    │   └── _schema.yml
     └── business/
         ├── dimensions/_dim_configs.yml
         └── facts/_fct_configs.yml
 ```
 
-Fill in `<project_name>` in `dbt_project.yml`, run `dbt deps`, then follow `scaffold/data-instructions.md`.
+Run `dbt deps` after scaffolding, then follow `data-instructions.md`.
 
 ---
 
 ## Example project
 
-The [`noaa/`](noaa/) directory is a complete consuming project built on this toolkit. It uses
+The [NOAA demo](optimist_platform/templates/demo/) is a complete consuming project built on this toolkit. It uses
 publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.gov/) near Guam
 (2025) combined with global port reference data. It demonstrates the full workflow:
 
@@ -131,7 +172,7 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 - Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
 - Configuring data quality tests at every layer
 
-See [noaa/README.md](noaa/README.md).
+Run `optimist demo` to copy it locally, or browse it at [optimist_platform/templates/demo/](optimist_platform/templates/demo/). See the [demo README](optimist_platform/templates/demo/README.md) for details.
 
 ---
 
@@ -139,7 +180,7 @@ See [noaa/README.md](noaa/README.md).
 
 ### 1. Ingest raw data
 
-For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa/noaa_platform/assets.py`](noaa/noaa_platform/assets.py) for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
+For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](optimist_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
 
 For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](optimist_platform/assets.py) for the DuckDB connection pattern.
 
@@ -202,7 +243,7 @@ marimo edit explore.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore.py` instead.
 
-The scaffold provides a template notebook with placeholder cells to fill in for your own schema. See [`noaa/explore_noaa.py`](noaa/explore_noaa.py) for a fully worked example.
+The `optimist new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](optimist_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
 
 ---
 
@@ -242,7 +283,7 @@ If you already have a dbt project and only want the standardized macros, install
 ```yaml
 # packages.yml
 packages:
-  - git: "https://gitlab.com/mycelium4483613/optimist-toolkit.git"
+  - git: "https://gitlab.com/datavloot/optimist-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA for reproducible builds
 ```
@@ -284,7 +325,7 @@ Versions below are what the NOAA example project was built and tested on. Newer 
 
 | Package | Tested version |
 |---|---|
-| Python | ≥3.10, <3.15 |
+| Python | ≥3.10, <3.14 |
 | dagster | 1.13.6 |
 | dagster-dbt | 0.29.6 |
 | dbt-core | 1.11.11 |

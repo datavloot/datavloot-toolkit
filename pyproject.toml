@@ -3,21 +3,21 @@ name = "optimist-toolkit"
 version = "0.1.0"
 description = "Open-source data platform toolkit — Dagster + dlt + dbt + DuckDB + Elementary"
 readme = "README.md"
-requires-python = ">=3.10,<3.15"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-    "altair",
-    "dagster",
-    "dagster-dbt",
-    "dagster-dlt",
-    "dagster-duckdb",
-    "dagster-webserver",
-    "dbt-core",
-    "dbt-duckdb",
-    "dlt[duckdb]",
-    "ducklake",
-    "elementary-data[duckdb]",
-    "marimo",
-    "pandas",
+    "altair>=6.0",
+    "dagster>=1.13.6",
+    "dagster-dbt>=0.29.6",
+    "dagster-dlt>=0.29.6",
+    "dagster-duckdb>=0.29.6",
+    "dagster-webserver>=1.13.6",
+    "dbt-core>=1.11",
+    "dbt-duckdb>=1.10",
+    "dlt[duckdb]>=1.28",
+    "ducklake>=0.1.1",
+    "elementary-data[duckdb]>=0.24",
+    "marimo>=0.23.9",
+    "pandas>=2.0",
     "python-dotenv",
 ]
 
@@ -25,6 +25,9 @@ dependencies = [
 dev = [
     "pytest",
 ]
+
+[project.scripts]
+optimist = "optimist_platform.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.19.0"]

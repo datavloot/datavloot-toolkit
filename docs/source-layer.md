@@ -204,7 +204,7 @@ from {{ source('harbor', 'vessels') }}
 
 ## Config templates
 
-Blank templates are provided in the scaffold:
+Blank templates are included in every project created with `optimist new`:
 
-- `scaffold/models/source/_sources.yml` — source definition template
-- `scaffold/models/source/_schema.yml` — staged model documentation template
+- `models/source/_sources.yml` — source definition template
+- `models/source/_schema.yml` — staged model documentation template

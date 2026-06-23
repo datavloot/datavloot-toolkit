@@ -8,22 +8,23 @@ Designed to be used by AI agents (crew) following instructions from a human user
 ## Repo layout
 
 ```
-dbt/optimist/           # the installable dbt package
+dbt/optimist/                              # the installable dbt package
 ├── macros/
-│   ├── source/         # stage_source, add_audit_columns
-│   └── business/       # build_dimension, build_fact, generate_surrogate_key
+│   ├── source/                            # stage_source, add_audit_columns
+│   └── business/                          # build_dimension, build_fact, generate_surrogate_key
 ├── models/
-│   ├── source/         # _sources.yml and _schema.yml templates
-│   └── business/       # dim/fct config templates + dim_date, dim_time
-docs/                   # reference documentation
-scaffold/               # starting point for a new consuming project
+│   ├── source/                            # _sources.yml and _schema.yml templates
+│   └── business/                          # dim/fct config templates + dim_date, dim_time
+docs/                                      # reference documentation
+optimist_platform/templates/scaffold/      # new-project template (served via `optimist new`)
+optimist_platform/templates/demo/          # NOAA worked example (served via `optimist demo`)
 ```
 
 ---
 
 ## If you are building models in a consuming project
 
-You are in the wrong repo. The `scaffold/` directory is a copy-paste template for a new consuming project. Copy it, run `dbt deps`, then follow the `data-instructions.md` in that project.
+You are in the wrong repo. Run `optimist new <path>` to scaffold a new consuming project, then follow the `data-instructions.md` inside it.
 
 ---
 
@@ -34,7 +35,7 @@ The captain will tell you which of these applies:
 - **Adding a macro** — create the `.sql` file under `macros/source/` or `macros/business/`, then document it in `docs/`
 - **Editing a config template** — `_dim_config_template.yml` and `_fct_config_template.yml` are in `dbt/optimist/models/business/`; source templates are in `dbt/optimist/models/source/`
 - **Editing built-in dimensions** — configs in `dbt/optimist/models/business/dimensions/_dim_configs.yml`, SQL alongside
-- **Updating the agent guide** — workflow changes go in `dbt/optimist/data-instructions.md`; it is the single source of truth for all consuming projects. `scaffold/data-instructions.md` contains only project identity and a reference to the package doc — do not duplicate conventions there
+- **Updating the agent guide** — workflow changes go in `dbt/optimist/data-instructions.md`; it is the single source of truth for all consuming projects. The `data-instructions.md` inside each project template contains only project identity and a reference to the package doc — do not duplicate conventions there
 
 ---
 
