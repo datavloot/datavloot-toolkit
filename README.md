@@ -33,6 +33,13 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 - Python 3.10–3.14
 - Git
+- A C compiler (required to build some dependencies from source)
+
+  | OS | What you need | How to get it |
+  |---|---|---|
+  | **Windows** | Microsoft C++ Build Tools | Download from [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), select **Desktop development with C++** |
+  | **macOS** | Xcode Command Line Tools | Run `xcode-select --install` in a terminal |
+  | **Linux** | GCC | Run `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum install gcc` (RHEL/Fedora) |
 
 ### 1. Create your own repository
 
@@ -43,6 +50,15 @@ Create a new repository on GitHub or GitLab (empty is fine), then clone it and n
 ```bash
 pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
 ```
+
+If `pip` is not recognised (common on Windows), use:
+
+```bash
+python -m pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
+```
+
+If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
+
 
 ### 3. Scaffold a new project
 
