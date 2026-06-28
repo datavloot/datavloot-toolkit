@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface-1 text-ink-0 antialiased;
+  }
+}
+
+@layer components {
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium tracking-wide;
+  }
+  .status-success {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+  .status-failure {
+    @apply bg-red-100 text-red-800;
+  }
+  .status-running {
+    @apply bg-blue-100 text-blue-800;
+  }
+  .status-warning, .status-warn {
+    @apply bg-amber-100 text-amber-800;
+  }
+  .status-queued, .status-pending {
+    @apply bg-gray-100 text-gray-600;
+  }
+  .status-cancelled {
+    @apply bg-gray-100 text-gray-500;
+  }
+  .status-error {
+    @apply bg-red-100 text-red-800;
+  }
+  .status-pass {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+  .status-fail {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .card {
+    @apply bg-white rounded-xl border border-surface-3 shadow-sm;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between px-5 py-4 border-b border-surface-3;
+  }
+
+  .panel-title {
+    @apply text-sm font-semibold text-ink-1 tracking-tight;
+  }
+
+  .table-header {
+    @apply text-[11px] font-medium text-ink-3 uppercase tracking-wider text-left px-4 py-2.5;
+  }
+
+  .table-cell {
+    @apply px-4 py-3 text-sm text-ink-1;
+  }
+
+  .table-row {
+    @apply border-t border-surface-2 hover:bg-surface-1 transition-colors;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150;
+  }
+  .sidebar-link-active {
+    @apply bg-datavloot-50 text-datavloot-800;
+  }
+  .sidebar-link-inactive {
+    @apply text-ink-2 hover:bg-surface-2 hover:text-ink-0;
+  }
+
+  .health-pill {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-surface-3 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-ink-3;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}

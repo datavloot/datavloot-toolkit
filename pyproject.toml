@@ -16,9 +16,13 @@ dependencies = [
     "dlt[duckdb]>=1.28",
     "ducklake>=0.1.1",
     "elementary-data[duckdb]>=0.24",
+    "fastapi>=0.115",
+    "httpx>=0.27",
     "marimo>=0.23.9",
     "pandas>=2.0",
     "python-dotenv",
+    "pyyaml>=6.0",
+    "uvicorn[standard]>=0.30",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +31,7 @@ dev = [
 ]
 
 [project.scripts]
-optimist = "optimist_platform.cli:main"
+datavloot = "optimist_platform.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.19.0"]

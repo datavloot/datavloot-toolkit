@@ -14,6 +14,7 @@ The stack:
 | Storage | [DuckDB](https://duckdb.org) + [DuckLake](https://ducklake.select) | Local lakehouse with two-layer architecture |
 | Data quality | [Elementary](https://elementary-data.com) | Monitors, alerts, and reports on data quality |
 | Exploration | [Marimo](https://marimo.io) | Reactive notebooks for querying and visualising results |
+| Dashboard | Crows Nest (built-in) | Unified browser interface for all of the above |
 
 ---
 
@@ -65,7 +66,7 @@ If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see
 ### 3. Scaffold a new project
 
 ```bash
-optimist new my-project
+datavloot new my-project
 cd my-project
 ```
 
@@ -74,7 +75,7 @@ The project name is inferred from the directory — all placeholders in config a
 Or try the NOAA worked example first:
 
 ```bash
-optimist demo
+datavloot demo
 cd optimist-demo
 pip install -e .   # install the demo's Python package
 ```
@@ -94,6 +95,16 @@ dagster dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the Dagster UI.
+
+### 6. Start the Crows Nest (optional)
+
+In a second terminal, from the same project directory:
+
+```bash
+datavloot launch
+```
+
+This opens a unified dashboard at [http://localhost:8080](http://localhost:8080) that brings together all platform tools — pipeline runs, data quality, a SQL editor, the model catalog, and your Marimo notebooks — in one place. Keep it open alongside `dagster dev` while you work.
 
 ---
 
@@ -120,7 +131,7 @@ This toolkit is designed to be used alongside an AI assistant. Not as an abstrac
 
 The **captain and crew** model describes the workflow: you direct the session — you know your data sources, your domain, and what the output should look like. The AI handles implementation within the toolkit's conventions. You review, question, and approve. The understanding has to be yours; the AI accelerates getting there.
 
-A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and inside every project created with `optimist new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
+A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
 This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](optimist_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](optimist_platform/templates/demo/conversation.md).
 
@@ -128,7 +139,7 @@ This is also where AI genuinely opens doors. If you have strong domain knowledge
 
 ## Starting a new project
 
-Run `optimist new <path>` to scaffold a new project. The project name is inferred from the directory name you provide — all placeholders are substituted automatically. This copies the following structure:
+Run `datavloot new <path>` to scaffold a new project. The project name is inferred from the directory name you provide — all placeholders are substituted automatically. This copies the following structure:
 
 ```
 <project-name>/
@@ -172,7 +183,7 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 - Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
 - Configuring data quality tests at every layer
 
-Run `optimist demo` to copy it locally, or browse it at [optimist_platform/templates/demo/](optimist_platform/templates/demo/). See the [demo README](optimist_platform/templates/demo/README.md) for details.
+Run `datavloot demo` to copy it locally, or browse it at [optimist_platform/templates/demo/](optimist_platform/templates/demo/). See the [demo README](optimist_platform/templates/demo/README.md) for details.
 
 ---
 
@@ -243,7 +254,40 @@ marimo edit explore.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore.py` instead.
 
-The `optimist new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](optimist_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
+The `datavloot new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](optimist_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
+
+---
+
+## The Crows Nest
+
+The **Crows Nest** is a built-in unified dashboard that replaces the need to manage multiple browser tabs. Instead of switching between Dagster on :3000 and Marimo on :2718, you get one URL with everything:
+
+```bash
+datavloot launch
+```
+
+Opens [http://localhost:8080](http://localhost:8080) with five panels:
+
+| Panel | What it shows |
+|---|---|
+| **Pipelines** | Recent Dagster run history with status, job name, and duration. Auto-refreshes every 15 seconds. |
+| **Data quality** | Elementary test results grouped by model, a full test log, and anomaly detection results. |
+| **SQL editor** | Read-only Monaco editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. |
+| **Catalog** | Every dbt model with its columns, descriptions, and recent test coverage. Falls back to `information_schema` if Elementary hasn't run yet. |
+| **Notebooks** | Embedded Marimo interface. Shows a launch prompt when Marimo isn't running; embeds the notebook session once it is. |
+
+The **health banner** at the top shows live status dots for Dagster, DuckDB, and Marimo — green when reachable, red when not.
+
+The Crows Nest runs alongside `dagster dev` and auto-discovers your project's DuckDB path from `profiles.yml`. No additional configuration needed for standard projects. You can override settings with environment variables:
+
+| Variable | Default |
+|---|---|
+| `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml` |
+| `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
+| `CROWSNEST_MARIMO_URL` | `http://localhost:2718` |
+| `CROWSNEST_ELEMENTARY_SCHEMA` | `elementary` |
+
+Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
 
 ---
 

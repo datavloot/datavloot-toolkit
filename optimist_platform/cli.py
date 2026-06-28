@@ -87,10 +87,39 @@ def cmd_demo(args: argparse.Namespace) -> None:
     print(f"  6. dagster dev        # start the platform at http://localhost:3000")
 
 
+def cmd_crowsnest(args: argparse.Namespace) -> None:
+    try:
+        import uvicorn
+    except ImportError:
+        sys.exit(
+            "Error: uvicorn is required for the Crows Nest. "
+            "Install it with: pip install 'optimist-toolkit[crowsnest]'"
+        )
+
+    from optimist_platform.crowsnest.config import get_config
+    from optimist_platform.crowsnest.server import create_app
+
+    config = get_config()
+    print(f"Starting Crows Nest on http://{args.host}:{args.port}")
+    print(f"  DuckDB:  {config.duckdb_path}")
+    print(f"  Dagster: {config.dagster_graphql_url}")
+    print(f"  Marimo:  {config.marimo_url}")
+    print()
+
+    if args.open:
+        import threading
+        import webbrowser
+        url = f"http://{'localhost' if args.host == '127.0.0.1' else args.host}:{args.port}"
+        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+
+    app = create_app()
+    uvicorn.run(app, host=args.host, port=args.port)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="optimist",
-        description="Optimist Toolkit CLI",
+        prog="datavloot",
+        description="Datavloot CLI",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -109,6 +138,21 @@ def main() -> None:
         help="Path for the demo (default: ./optimist-demo)",
     )
     demo_parser.set_defaults(func=cmd_demo)
+
+    crowsnest_parser = subparsers.add_parser(
+        "launch", help="Start the Crows Nest unified dashboard"
+    )
+    crowsnest_parser.add_argument(
+        "--port", type=int, default=8080, help="Port to listen on (default: 8080)"
+    )
+    crowsnest_parser.add_argument(
+        "--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)"
+    )
+    crowsnest_parser.add_argument(
+        "--no-open", dest="open", action="store_false",
+        help="Do not open the browser automatically"
+    )
+    crowsnest_parser.set_defaults(func=cmd_crowsnest, open=True)
 
     args = parser.parse_args()
     args.func(args)
