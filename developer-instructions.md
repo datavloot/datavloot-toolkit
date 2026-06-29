@@ -16,8 +16,8 @@ dbt/optimist/                              # the installable dbt package
 │   ├── source/                            # _sources.yml and _schema.yml templates
 │   └── business/                          # dim/fct config templates + dim_date, dim_time
 docs/                                      # reference documentation
-optimist_platform/templates/scaffold/      # new-project template (served via `optimist new`)
-optimist_platform/templates/demo/          # NOAA worked example (served via `optimist demo`)
+datavloot_platform/templates/scaffold/      # new-project template (served via `optimist new`)
+datavloot_platform/templates/demo/          # NOAA worked example (served via `optimist demo`)
 ```
 
 ---

@@ -10,19 +10,19 @@ When working on any of these components, verify against the standards below.
 | Component | Role |
 |---|---|
 | `dbt/optimist/` | The installable dbt package. Contains macros, built-in dimensions, and config templates. |
-| `optimist_platform/templates/scaffold/` | New-project template, served by `optimist new`. Mirrors the structure a real project should have. |
-| `optimist_platform/templates/demo/` | NOAA worked example, served by `optimist demo`. Demonstrates AIS + weather ingestion with Dagster + dlt. |
-| `optimist_platform/` | Dagster platform for the toolkit itself. Contains toolkit assets + commented dlt pattern. |
+| `datavloot_platform/templates/scaffold/` | New-project template, served by `optimist new`. Mirrors the structure a real project should have. |
+| `datavloot_platform/templates/demo/` | NOAA worked example, served by `optimist demo`. Demonstrates AIS + weather ingestion with Dagster + dlt. |
+| `datavloot_platform/` | Dagster platform for the toolkit itself. Contains toolkit assets + commented dlt pattern. |
 
 ---
 
 ## 2. Architectural separation
 
-`optimist_platform/` is a **template**. Example project assets (like NOAA ingestion) must not be
+`datavloot_platform/` is a **template**. Example project assets (like NOAA ingestion) must not be
 added to it — that would imply they are building blocks rather than examples.
 
-Each example project (e.g. `optimist_platform/templates/demo/`) has its own `<project>_platform/` Dagster layer inside its own
-directory. The root `optimist_platform/` stays clean.
+Each example project (e.g. `datavloot_platform/templates/demo/`) has its own `<project>_platform/` Dagster layer inside its own
+directory. The root `datavloot_platform/` stays clean.
 
 ---
 
@@ -33,7 +33,7 @@ captain/crew model, pre-departure questions, workflow steps 1–7, modelling con
 conventions, file map, and when to pause. It ships with the package and becomes available at
 `dbt_packages/optimist/data-instructions.md` after `dbt deps`.
 
-**Consuming project data-instructions.md files** (inside `optimist_platform/templates/scaffold/` and `optimist_platform/templates/demo/`) contain only:
+**Consuming project data-instructions.md files** (inside `datavloot_platform/templates/scaffold/` and `datavloot_platform/templates/demo/`) contain only:
 - Project name and one-line description
 - A reference to `dbt_packages/optimist/data-instructions.md`
 - A "Project context" section with project-specific details (sources, warehouse, orchestration)
@@ -49,17 +49,17 @@ It is not the right place for project-level or modelling guidance.
 ## 4. Checklist for adding or changing a convention
 
 - [ ] Update `dbt/optimist/data-instructions.md`
-- [ ] Verify `optimist_platform/templates/scaffold/data-instructions.md` and `optimist_platform/templates/demo/data-instructions.md` still correctly reference the package doc (no duplication crept in)
+- [ ] Verify `datavloot_platform/templates/scaffold/data-instructions.md` and `datavloot_platform/templates/demo/data-instructions.md` still correctly reference the package doc (no duplication crept in)
 - [ ] If the convention affects macro behaviour, update `docs/` as well
 
 ---
 
 ## 5. Checklist for adding a new example project
 
-- [ ] Create `optimist_platform/templates/<project>/` — self-contained, not nested under another template
-- [ ] Create `optimist_platform/templates/<project>/<project>_platform/` for the Dagster layer (assets.py, definitions.py)
-- [ ] Create `optimist_platform/templates/<project>/pyproject.toml` with `[tool.dagster]` pointing to `<project>_platform.definitions`
-- [ ] Copy `optimist_platform/templates/scaffold/data-instructions.md` as the starting `data-instructions.md` and fill in project-specific details
+- [ ] Create `datavloot_platform/templates/<project>/` — self-contained, not nested under another template
+- [ ] Create `datavloot_platform/templates/<project>/<project>_platform/` for the Dagster layer (assets.py, definitions.py)
+- [ ] Create `datavloot_platform/templates/<project>/pyproject.toml` with `[tool.dagster]` pointing to `<project>_platform.definitions`
+- [ ] Copy `datavloot_platform/templates/scaffold/data-instructions.md` as the starting `data-instructions.md` and fill in project-specific details
 - [ ] Add a CLI subcommand or update `optimist demo` to point to the new template
 - [ ] Add a section to the root `README.md` describing the example
 

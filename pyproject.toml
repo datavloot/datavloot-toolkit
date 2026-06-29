@@ -1,10 +1,16 @@
 [project]
-name = "optimist-toolkit"
+name = "datavloot"
 version = "0.1.0"
-description = "Open-source data platform toolkit — Dagster + dlt + dbt + DuckDB + Elementary"
+description = "Open, modular, Python-native data platform — from a laptop to a fleet, without vendor lock-in."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
+    "python-dotenv",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+optimist = [
     "altair>=6.0",
     "dagster>=1.13.6",
     "dagster-dbt>=0.29.6",
@@ -16,26 +22,26 @@ dependencies = [
     "dlt[duckdb]>=1.28",
     "ducklake>=0.1.1",
     "elementary-data[duckdb]>=0.24",
+    "fastapi>=0.115",
+    "httpx>=0.27",
     "marimo>=0.23.9",
     "pandas>=2.0",
-    "python-dotenv",
+    "uvicorn[standard]>=0.30",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest",
 ]
 
 [project.scripts]
-optimist = "optimist_platform.cli:main"
+datavloot = "datavloot_platform.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.19.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["optimist_platform"]
+packages = ["datavloot_platform"]
 
 [tool.dagster]
-module_name = "optimist_platform.definitions"
+module_name = "datavloot_platform.definitions"
 code_location_name = "optimist-toolkit"
