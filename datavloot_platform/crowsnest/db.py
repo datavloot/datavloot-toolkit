@@ -10,7 +10,7 @@ Supports two modes:
 import duckdb
 from fastapi import HTTPException
 
-from optimist_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.config import get_config
 
 
 def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:

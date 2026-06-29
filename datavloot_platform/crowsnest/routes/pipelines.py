@@ -5,7 +5,7 @@ Pipeline status route — pulls from Dagster's GraphQL API.
 from fastapi import APIRouter, HTTPException
 import httpx
 
-from optimist_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.config import get_config
 
 router = APIRouter()
 

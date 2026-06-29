@@ -51,7 +51,7 @@ pip install -e ".[dev]"   # dlt[duckdb] and dagster-dlt are included
 
 ### 2. Write the pipeline asset
 
-In `optimist_platform/assets.py`, add a `@dlt_assets` function for your
+In `datavloot_platform/assets.py`, add a `@dlt_assets` function for your
 source. dlt ships with
 [verified sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources/)
 for common systems (GitHub, Salesforce, Stripe, SQL databases, REST APIs,

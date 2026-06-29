@@ -33,15 +33,15 @@ dev = [
 ]
 
 [project.scripts]
-datavloot = "optimist_platform.cli:main"
+datavloot = "datavloot_platform.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.19.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["optimist_platform"]
+packages = ["datavloot_platform"]
 
 [tool.dagster]
-module_name = "optimist_platform.definitions"
+module_name = "datavloot_platform.definitions"
 code_location_name = "optimist-toolkit"

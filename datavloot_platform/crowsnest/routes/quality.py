@@ -5,8 +5,8 @@ Data quality route — reads Elementary's metadata tables from the warehouse.
 from fastapi import APIRouter, HTTPException
 import duckdb
 
-from optimist_platform.crowsnest.config import get_config
-from optimist_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.db import get_conn
 
 router = APIRouter()
 

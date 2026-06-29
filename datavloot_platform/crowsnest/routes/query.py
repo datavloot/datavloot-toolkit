@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import duckdb
 import time
 
-from optimist_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.db import get_conn
 
 router = APIRouter()
 

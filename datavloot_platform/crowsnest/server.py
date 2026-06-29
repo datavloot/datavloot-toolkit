@@ -12,8 +12,8 @@ import httpx
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from optimist_platform.crowsnest.config import get_config
-from optimist_platform.crowsnest.routes import pipelines, quality, query, catalog
+from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 

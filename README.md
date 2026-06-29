@@ -87,26 +87,23 @@ pip install -e .   # install the demo's Python package
 ```bash
 pip install -e .   # install your project's Python package
 dbt deps           # install the optimist dbt package — re-run whenever you upgrade or change packages.yml
-dbt parse          # compile the manifest (required before first dagster dev)
+dbt parse          # compile the manifest (required before first run)
 ```
 
 ### 5. Start the platform
 
 ```bash
-dagster dev
+datavloot start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the Dagster UI.
+This starts Dagster and the Crows Nest together and opens the dashboard at [http://localhost:8080](http://localhost:8080). Dagster is available separately at [http://localhost:3000](http://localhost:3000). Press Ctrl+C to stop both.
 
-### 6. Start the Crows Nest (optional)
-
-In a second terminal, from the same project directory:
+If you prefer two terminals, you can start them independently:
 
 ```bash
-datavloot launch
+dagster dev          # terminal 1 — Dagster at http://localhost:3000
+datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
 ```
-
-This opens a unified dashboard at [http://localhost:8080](http://localhost:8080) that brings together all platform tools — pipeline runs, data quality, a SQL editor, the model catalog, and your Marimo notebooks — in one place. Keep it open alongside `dagster dev` while you work.
 
 ---
 
@@ -135,7 +132,7 @@ The **captain and crew** model describes the workflow: you direct the session �
 
 A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
-This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](optimist_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](optimist_platform/templates/demo/conversation.md).
+This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](datavloot_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](datavloot_platform/templates/demo/conversation.md).
 
 ---
 
@@ -175,7 +172,7 @@ Run `dbt deps` after scaffolding, then follow `data-instructions.md`.
 
 ## Example project
 
-The [NOAA demo](optimist_platform/templates/demo/) is a complete consuming project built on this toolkit. It uses
+The [NOAA demo](datavloot_platform/templates/demo/) is a complete consuming project built on this toolkit. It uses
 publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.gov/) near Guam
 (2025) combined with global port reference data. It demonstrates the full workflow:
 
@@ -185,7 +182,7 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 - Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
 - Configuring data quality tests at every layer
 
-Run `datavloot demo` to copy it locally, or browse it at [optimist_platform/templates/demo/](optimist_platform/templates/demo/). See the [demo README](optimist_platform/templates/demo/README.md) for details.
+Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/templates/demo/](datavloot_platform/templates/demo/). See the [demo README](datavloot_platform/templates/demo/README.md) for details.
 
 ---
 
@@ -193,9 +190,9 @@ Run `datavloot demo` to copy it locally, or browse it at [optimist_platform/temp
 
 ### 1. Ingest raw data
 
-For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](optimist_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
+For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](datavloot_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
 
-For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](optimist_platform/assets.py) for the DuckDB connection pattern.
+For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](datavloot_platform/assets.py) for the DuckDB connection pattern.
 
 ### 2. Define your sources in dbt
 
@@ -256,13 +253,15 @@ marimo edit explore.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore.py` instead.
 
-The `datavloot new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](optimist_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
+The `datavloot new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](datavloot_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
 
 ---
 
 ## The Crows Nest
 
-The **Crows Nest** is a built-in unified dashboard that replaces the need to manage multiple browser tabs. Instead of switching between Dagster on :3000 and Marimo on :2718, you get one URL with everything:
+The **Crows Nest** is a built-in unified dashboard that replaces the need to manage multiple browser tabs. Instead of switching between Dagster on :3000 and Marimo on :2718, you get one URL with everything.
+
+`datavloot start` launches both Dagster and the Crows Nest together. To start the Crows Nest on its own (when Dagster is already running):
 
 ```bash
 datavloot launch
@@ -280,7 +279,7 @@ Opens [http://localhost:8080](http://localhost:8080) with five panels:
 
 The **health banner** at the top shows live status dots for Dagster, DuckDB, and Marimo — green when reachable, red when not.
 
-The Crows Nest runs alongside `dagster dev` and auto-discovers your project's DuckDB path from `profiles.yml`. No additional configuration needed for standard projects. You can override settings with environment variables:
+The Crows Nest auto-discovers your project's DuckDB path from `profiles.yml`. No additional configuration needed for standard projects. You can override settings with environment variables:
 
 | Variable | Default |
 |---|---|

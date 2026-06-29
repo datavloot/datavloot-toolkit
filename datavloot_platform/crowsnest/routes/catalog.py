@@ -5,8 +5,8 @@ Catalog route — builds a data catalog from Elementary's warehouse tables.
 from fastapi import APIRouter, HTTPException
 import duckdb
 
-from optimist_platform.crowsnest.config import get_config
-from optimist_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.db import get_conn
 
 router = APIRouter()
 
