@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
@@ -18,12 +18,17 @@ export default function QueryPanel() {
 
   const tables = useApi(() => api.getTables(), []);
 
+  // Ref so the Monaco keybinding always sees the latest sql value
+  const sqlRef = useRef(sql);
+  sqlRef.current = sql;
+
   const executeQuery = useCallback(async () => {
-    if (!sql.trim()) return;
+    const currentSql = sqlRef.current;
+    if (!currentSql.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.executeQuery(sql);
+      const res = await api.executeQuery(currentSql);
       setResult(res);
     } catch (err) {
       setError(err.message);
@@ -31,7 +36,7 @@ export default function QueryPanel() {
     } finally {
       setLoading(false);
     }
-  }, [sql]);
+  }, []);
 
   const handleEditorMount = (editor, monaco) => {
     editor.addAction({
@@ -133,7 +138,7 @@ export default function QueryPanel() {
           )}
 
           {result && (
-            <div className="card">
+            <div className="card overflow-hidden">
               <div className="panel-header">
                 <span className="panel-title">
                   Results

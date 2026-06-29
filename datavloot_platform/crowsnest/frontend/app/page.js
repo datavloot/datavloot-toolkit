@@ -19,7 +19,13 @@ export default function CrowsNestPage() {
   const [activeTab, setActiveTab] = useState('pipelines');
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col">
+      {/* TEST BANNER — uncomment when iterating on the Crows Nest to confirm the correct build is deployed */}
+      {/* <div className="w-full bg-amber-400 text-amber-900 text-xs font-semibold text-center py-1 tracking-wide z-20 shrink-0">
+        Testing build — Iteration 7
+      </div> */}
+
+      <div className="flex flex-1">
       {/* Sidebar */}
       <aside className="w-60 bg-white border-r border-surface-3 flex flex-col fixed h-full z-10">
         {/* Logo */}
@@ -70,7 +76,7 @@ export default function CrowsNestPage() {
       </aside>
 
       {/* Main content */}
-      <main className="ml-60 flex-1 min-h-screen">
+      <main className="ml-60 flex-1 overflow-x-hidden">
         <HealthBanner />
 
         <div className="p-6">
@@ -81,6 +87,7 @@ export default function CrowsNestPage() {
           {activeTab === 'notebooks' && <NotebooksPanel />}
         </div>
       </main>
+      </div>
     </div>
   );
 }

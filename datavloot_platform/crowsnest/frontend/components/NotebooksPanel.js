@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
 
@@ -14,22 +14,43 @@ export default function NotebooksPanel() {
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
 
+  // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
+  useEffect(() => {
+    if (marimoStatus !== 'ok') return;
+    const id = setInterval(reloadHealth, 3000);
+    return () => clearInterval(id);
+  }, [marimoStatus]);
+
   const handleLaunch = async (name) => {
     setLaunching(name);
     setLaunchError(null);
     try {
       await api.launchNotebook(name);
-      // Poll health at increasing intervals until Marimo responds
-      const delays = [2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000, 5000];
+      const delays = [2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000];
       for (const delay of delays) {
         await new Promise((r) => setTimeout(r, delay));
-        await reloadHealth();
-        if (healthData?.services?.marimo === 'ok') break;
+        try {
+          const health = await api.getHealth();
+          if (health?.services?.marimo === 'ok') break;
+        } catch {
+          // keep polling
+        }
       }
     } catch (err) {
       setLaunchError(err.message);
+    } finally {
       setLaunching(null);
+      reloadHealth();
     }
+  };
+
+  const handleClose = async () => {
+    try {
+      await api.stopNotebook();
+    } catch {
+      // process may already be dead
+    }
+    reloadHealth();
   };
 
   return (
@@ -50,10 +71,22 @@ export default function NotebooksPanel() {
 
       {marimoStatus === 'ok' ? (
         <div className="card overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-surface-3 bg-surface-1">
+            <span className="text-xs text-ink-3 font-mono">{marimoUrl}</span>
+            <button
+              onClick={handleClose}
+              className="text-xs text-ink-2 hover:text-ink-0 transition-colors flex items-center gap-1.5 px-2 py-1 rounded hover:bg-surface-2"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+              Close notebook
+            </button>
+          </div>
           <iframe
             src={marimoUrl}
             className="w-full border-0"
-            style={{ height: 'calc(100vh - 200px)', minHeight: '600px' }}
+            style={{ height: 'calc(100vh - 230px)', minHeight: '560px' }}
             title="Marimo notebooks"
           />
         </div>

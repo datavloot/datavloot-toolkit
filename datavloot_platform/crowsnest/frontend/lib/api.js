@@ -24,6 +24,7 @@ export const api = {
   getTestResults: (limit = 100) => apiFetch(`/quality/test-results?limit=${limit}`),
   getQualitySummary: () => apiFetch('/quality/summary'),
   getQualityByModel: () => apiFetch('/quality/by-model'),
+  getQualityByTest: (model) => apiFetch(`/quality/by-test?model=${encodeURIComponent(model)}`),
   getAnomalies: () => apiFetch('/quality/anomalies'),
 
   // SQL Query
@@ -49,6 +50,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
+  stopNotebook: () => apiFetch('/notebooks/stop', { method: 'POST' }),
 
   // Health & Services
   getHealth: () => apiFetch('/health'),

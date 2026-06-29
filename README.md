@@ -275,21 +275,21 @@ Opens [http://localhost:8080](http://localhost:8080) with five panels:
 | Panel | What it shows |
 |---|---|
 | **Pipelines** | Recent Dagster run history with status, job name, and duration. Auto-refreshes every 15 seconds. |
-| **Data quality** | Elementary test results grouped by model, a full test log, and anomaly detection results. |
-| **SQL editor** | Read-only Monaco editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. |
-| **Catalog** | Every dbt model with its columns, descriptions, and recent test coverage. Falls back to `information_schema` if Elementary hasn't run yet. |
-| **Notebooks** | Embedded Marimo interface. Shows a launch prompt when Marimo isn't running; embeds the notebook session once it is. |
+| **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
+| **SQL editor** | Read-only SQL editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
+| **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
+| **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
 
-The **health banner** at the top shows live status dots for Dagster, DuckDB, and Marimo — green when reachable, red when not.
+The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, DuckDB locked by an active Dagster run) return a descriptive message rather than an error.
 
-The Crows Nest auto-discovers your project's DuckDB path from `profiles.yml`. No additional configuration needed for standard projects. You can override settings with environment variables:
+The Crows Nest auto-discovers your project's DuckDB path from `profiles.yml` and infers the Elementary schema from your target schema name. No additional configuration is needed for standard projects. You can override any setting with environment variables:
 
 | Variable | Default |
 |---|---|
 | `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml` |
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
-| `CROWSNEST_MARIMO_URL` | `http://localhost:2718` |
-| `CROWSNEST_ELEMENTARY_SCHEMA` | `elementary` |
+| `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
+| `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
 
