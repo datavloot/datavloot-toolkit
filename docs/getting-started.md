@@ -11,7 +11,7 @@ Add the package to your project's `packages.yml`:
 
 ```yaml
 packages:
-  - git: "https://gitlab.com/mycelium4483613/optimist-toolkit.git"
+  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA in production
 ```

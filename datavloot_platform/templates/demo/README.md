@@ -67,10 +67,10 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 All commands run from the project root. You'll need **Python 3.10–3.13** (3.12 recommended) and **git**.
 
-This demo is part of the [optimist-toolkit](https://gitlab.com/datavloot/optimist-toolkit). If you haven't already, install the toolkit and copy the demo locally:
+This demo is part of the [datavloot-toolkit](https://gitlab.com/datavloot/datavloot-toolkit). If you haven't already, install the toolkit and copy the demo locally:
 
 ```bash
-pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
+pip install git+https://gitlab.com/datavloot/datavloot-toolkit.git
 optimist demo
 cd optimist-demo
 ```

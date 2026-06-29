@@ -334,7 +334,7 @@ If you already have a dbt project and only want the standardized macros, install
 ```yaml
 # packages.yml
 packages:
-  - git: "https://gitlab.com/datavloot/optimist-toolkit.git"
+  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA for reproducible builds
 ```
