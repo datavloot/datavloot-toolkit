@@ -49,13 +49,15 @@ Create a new repository on GitHub or GitLab (empty is fine), then clone it and n
 ### 2. Install the toolkit
 
 ```bash
-pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
+pip install datavloot[optimist]
 ```
+
+The `[optimist]` part installs the full Optimist stack (Dagster, dbt, dlt, DuckDB, Marimo, Elementary). Without it you get only the bare `datavloot` package with no tools.
 
 If `pip` is not recognised (common on Windows), use:
 
 ```bash
-python -m pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
+python -m pip install datavloot[optimist]
 ```
 
 If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
@@ -66,11 +68,11 @@ If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see
 ### 3. Scaffold a new project
 
 ```bash
-datavloot new my-project
-cd my-project
+datavloot new <my-project>
+cd <my-project>
 ```
 
-The project name is inferred from the directory — all placeholders in config and code are substituted automatically.
+Please substitute 'my-project' here with the desired name of your project. The project name is inferred from the directory — all placeholders in config and code are substituted automatically.
 
 Or try the NOAA worked example first:
 
@@ -307,16 +309,19 @@ Schedules and sensors are defined in `definitions.py` alongside the existing ass
 
 ## Scaling up
 
-This platform runs entirely on a local machine out of the box, but each component scales independently when your needs grow:
+The Optimist runs entirely on a local machine. When you're ready for team scale, the goal is to change a config flag — not rewrite your pipelines. The pipelines, dbt models, and orchestration logic you build on the Optimist are designed to carry forward unchanged.
+
+The **Falcon** tier (on the roadmap) formalises this: switching `vessel: optimist` to `vessel: falcon` in `datavloot.yml` moves your platform to production-grade lakehouse storage on infrastructure of your choice, without starting over.
+
+In the meantime, the Optimist's individual components are independently portable:
 
 | Step | What changes | What stays the same |
 |---|---|---|
-| **Cloud VM** | Move the whole platform to EC2 / GCE / Azure VM | Nothing — runs identically |
+| **Cloud VM** | Move the whole platform to a VPS or cloud VM | Nothing — runs identically |
 | **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
-| **Managed orchestration** | Switch to [Dagster Cloud](https://dagster.io/cloud) | Your `definitions.py` and `assets.py` |
 | **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
 
-You can take any of these steps independently and in any order. Start local, move to cloud when it makes sense.
+See [datavloot.com/#fleet](https://datavloot.com/#fleet) for the full vessel roadmap.
 
 ---
 
