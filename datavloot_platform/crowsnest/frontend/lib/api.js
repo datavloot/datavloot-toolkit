@@ -42,6 +42,14 @@ export const api = {
   getSources: () => apiFetch('/catalog/sources'),
   searchCatalog: (q) => apiFetch(`/catalog/search?q=${encodeURIComponent(q)}`),
 
+  // Notebooks
+  getNotebooks: () => apiFetch('/notebooks/list'),
+  launchNotebook: (name) =>
+    apiFetch('/notebooks/launch', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
   // Health & Services
   getHealth: () => apiFetch('/health'),
   getServices: () => apiFetch('/services'),

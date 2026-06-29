@@ -148,7 +148,8 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── packages.yml                      # points to this toolkit's dbt package
 ├── dbt_project.yml                   # project config
 ├── profiles.yml                      # DuckDB connection config
-├── explore.py                        # Marimo notebook for querying results
+├── notebooks/
+│   └── explore.py                    # Marimo notebook for querying results
 ├── <project_name>_platform/          # Dagster layer (ready to run)
 │   ├── __init__.py
 │   ├── assets.py                     # dbt assets + commented dlt ingestion pattern
@@ -245,15 +246,17 @@ To re-run only the dbt layer without re-loading raw data, select the dbt assets 
 
 ## Exploring the data
 
-Each project includes `explore.py`, a [Marimo](https://marimo.io) reactive notebook that connects directly to your DuckDB database and lets you query and visualise results in the browser — no SQL terminal needed.
+Each project includes a `notebooks/` folder with Marimo notebooks that connect directly to your DuckDB database and let you query and visualise results in the browser — no SQL terminal needed.
 
 ```bash
-marimo edit explore.py
+marimo edit notebooks/explore.py
 ```
 
-Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore.py` instead.
+Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore.py` instead.
 
-The `datavloot new` scaffold includes a template notebook with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](datavloot_platform/templates/demo/explore_noaa.py) in the demo for a fully worked example.
+The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](datavloot_platform/templates/demo/notebooks/explore_noaa.py) in the demo for a fully worked example.
+
+You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click.
 
 ---
 

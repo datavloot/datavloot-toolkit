@@ -17,6 +17,8 @@ seeds:
     +schema: seeds
 
 models:
+  elementary:
+    +schema: elementary
   noaa:
     source:
       ais:

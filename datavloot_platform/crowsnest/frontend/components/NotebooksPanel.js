@@ -1,13 +1,36 @@
 'use client';
+import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
 
 export default function NotebooksPanel() {
-  const health = useApi(() => api.getHealth(), [], 10000);
+  const { data: healthData, reload: reloadHealth } = useApi(() => api.getHealth(), [], 10000);
   const services = useApi(() => api.getServices(), []);
+  const notebooks = useApi(() => api.getNotebooks(), []);
 
-  const marimoStatus = health.data?.services?.marimo;
+  const [launching, setLaunching] = useState(null);
+  const [launchError, setLaunchError] = useState(null);
+
+  const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
+
+  const handleLaunch = async (name) => {
+    setLaunching(name);
+    setLaunchError(null);
+    try {
+      await api.launchNotebook(name);
+      // Poll health at increasing intervals until Marimo responds
+      const delays = [2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000, 5000];
+      for (const delay of delays) {
+        await new Promise((r) => setTimeout(r, delay));
+        await reloadHealth();
+        if (healthData?.services?.marimo === 'ok') break;
+      }
+    } catch (err) {
+      setLaunchError(err.message);
+      setLaunching(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -25,12 +48,7 @@ export default function NotebooksPanel() {
         )}
       </div>
 
-      {health.loading ? (
-        <div className="card px-4 py-16 text-center">
-          <div className="inline-block w-5 h-5 border-2 border-surface-3 border-t-datavloot-600 rounded-full animate-spin" />
-          <p className="mt-3 text-sm text-ink-3">Checking Marimo status...</p>
-        </div>
-      ) : marimoStatus === 'ok' ? (
+      {marimoStatus === 'ok' ? (
         <div className="card overflow-hidden">
           <iframe
             src={marimoUrl}
@@ -39,40 +57,99 @@ export default function NotebooksPanel() {
             title="Marimo notebooks"
           />
         </div>
+      ) : launching ? (
+        <LaunchingState name={launching} />
       ) : (
-        <NotRunning marimoUrl={marimoUrl} />
+        <NotRunning
+          marimoUrl={marimoUrl}
+          notebooks={notebooks.data?.notebooks || []}
+          notebooksAvailable={notebooks.data?.available}
+          notebooksLoading={notebooks.loading}
+          launchError={launchError}
+          onLaunch={handleLaunch}
+        />
       )}
     </div>
   );
 }
 
-function NotRunning({ marimoUrl }) {
+function LaunchingState({ name }) {
   return (
-    <div className="card px-6 py-12 text-center space-y-4">
-      <div className="w-12 h-12 rounded-full bg-surface-2 flex items-center justify-center mx-auto">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6b8f7d" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" />
-          <path d="M8 21h8M12 17v4" />
-          <path d="M9 8l2 2-2 2" />
-          <path d="M13 12h3" />
-        </svg>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-ink-1">Marimo is not running</p>
-        <p className="text-xs text-ink-3 mt-1">
-          Expected at <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
-        </p>
-      </div>
-      <div className="bg-surface-1 rounded-lg border border-surface-3 px-5 py-4 text-left inline-block mx-auto">
-        <p className="text-xs text-ink-3 font-medium uppercase tracking-wider mb-2">Start Marimo</p>
-        <code className="text-sm font-mono text-ink-1 block">marimo edit explore.py</code>
-        <p className="text-xs text-ink-3 mt-2">
-          Run this in your project directory to start the notebook server.
-        </p>
-      </div>
+    <div className="card px-6 py-12 text-center space-y-3">
+      <div className="inline-block w-6 h-6 border-2 border-surface-3 border-t-datavloot-600 rounded-full animate-spin" />
+      <p className="text-sm font-medium text-ink-1">Starting Marimo…</p>
       <p className="text-xs text-ink-3">
-        Once running, this panel will automatically show the notebook interface.
+        Launching <code className="font-mono bg-surface-2 px-1 rounded">{name}</code> — this may take a few seconds.
       </p>
+    </div>
+  );
+}
+
+function NotRunning({ marimoUrl, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
+  return (
+    <div className="space-y-4">
+      {launchError && (
+        <div className="card border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-700">{launchError}</p>
+        </div>
+      )}
+
+      <div className="card px-6 py-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center shrink-0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b8f7d" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+              <path d="M9 8l2 2-2 2" />
+              <path d="M13 12h3" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-ink-1">Marimo is not running</p>
+            <p className="text-xs text-ink-3 mt-0.5">
+              Expected at <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
+            </p>
+          </div>
+        </div>
+
+        {notebooksLoading ? (
+          <div className="text-xs text-ink-3">Looking for notebooks…</div>
+        ) : notebooksAvailable && notebooks.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-ink-3 uppercase tracking-wider">Launch a notebook</p>
+            {notebooks.map((nb) => (
+              <div
+                key={nb.name}
+                className="flex items-center justify-between px-3 py-2.5 bg-surface-1 rounded-lg border border-surface-3"
+              >
+                <span className="text-sm font-mono text-ink-1">{nb.name}</span>
+                <button
+                  onClick={() => onLaunch(nb.name)}
+                  className="text-xs px-3 py-1.5 bg-datavloot-600 text-white rounded-lg hover:bg-datavloot-700 transition-colors"
+                >
+                  Launch
+                </button>
+              </div>
+            ))}
+            <p className="text-xs text-ink-3 pt-1">
+              Or run manually:{' '}
+              <code className="font-mono bg-surface-2 px-1 rounded">
+                marimo edit notebooks/{notebooks[0]?.name}
+              </code>
+            </p>
+          </div>
+        ) : (
+          <div className="bg-surface-1 rounded-lg border border-surface-3 px-5 py-4 space-y-2">
+            <p className="text-xs text-ink-3 font-medium uppercase tracking-wider">
+              {notebooksAvailable === false ? 'No notebooks/ folder found' : 'No notebooks found'}
+            </p>
+            <p className="text-xs text-ink-3">
+              Add <code className="font-mono bg-surface-2 px-1 rounded">.py</code> Marimo notebooks to the{' '}
+              <code className="font-mono bg-surface-2 px-1 rounded">notebooks/</code> folder in your project, then launch them here.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

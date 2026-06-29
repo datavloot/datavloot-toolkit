@@ -11,7 +11,7 @@ def _():
     import altair as alt
     from pathlib import Path
 
-    DB_PATH = Path(__file__).parent / "noaa.duckdb"
+    DB_PATH = Path(__file__).parent.parent / "noaa.duckdb"
     con = duckdb.connect(str(DB_PATH), read_only=True)
     mo.md(f"Connected to `{DB_PATH.name}` — {DB_PATH.stat().st_size // 1_000_000} MB")
     return DB_PATH, alt, con, mo

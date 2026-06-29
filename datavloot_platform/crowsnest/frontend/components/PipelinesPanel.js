@@ -8,24 +8,36 @@ export default function PipelinesPanel() {
     [],
     15000
   );
+  const services = useApi(() => api.getServices(), []);
+  const dagsterUrl = services.data?.dagster_url || 'http://localhost:3000';
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Pipeline runs</h2>
-        <button
-          onClick={reload}
-          className="text-xs text-ink-3 hover:text-ink-1 px-3 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={dagsterUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
+          >
+            Open Dagster ↗
+          </a>
+          <button
+            onClick={reload}
+            className="text-xs text-ink-3 hover:text-ink-1 px-3 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
         {loading && !data ? (
           <LoadingState />
         ) : error ? (
-          <ErrorState message={error} />
+          <ErrorState message={error} dagsterUrl={dagsterUrl} />
         ) : (
           <table className="w-full">
             <thead>
@@ -41,7 +53,16 @@ export default function PipelinesPanel() {
               {data?.runs?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-ink-3 text-sm">
-                    No pipeline runs found. Is Dagster running at localhost:3000?
+                    No pipeline runs yet.{' '}
+                    <a
+                      href={dagsterUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-datavloot-600 hover:underline"
+                    >
+                      Open Dagster
+                    </a>
+                    {' '}to start your first run.
                   </td>
                 </tr>
               )}
@@ -52,9 +73,14 @@ export default function PipelinesPanel() {
                   </td>
                   <td className="table-cell font-medium">{run.job}</td>
                   <td className="table-cell">
-                    <code className="text-xs text-ink-3 font-mono bg-surface-2 px-1.5 py-0.5 rounded">
+                    <a
+                      href={`${dagsterUrl}/runs/${run.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-datavloot-600 hover:underline font-mono bg-surface-2 px-1.5 py-0.5 rounded"
+                    >
                       {run.id.slice(0, 8)}
-                    </code>
+                    </a>
                   </td>
                   <td className="table-cell text-ink-2">{formatTimestamp(run.started_at)}</td>
                   <td className="table-cell text-right text-ink-2 font-mono text-xs">
@@ -88,13 +114,18 @@ function LoadingState() {
   );
 }
 
-function ErrorState({ message }) {
+function ErrorState({ message, dagsterUrl }) {
   return (
     <div className="px-4 py-12 text-center">
       <div className="text-red-400 text-2xl mb-2">!</div>
       <p className="text-sm text-ink-2">{message}</p>
       <p className="text-xs text-ink-3 mt-1">
-        Make sure Dagster is running: <code className="font-mono bg-surface-2 px-1 rounded">dagster dev</code>
+        Make sure Dagster is running:{' '}
+        <code className="font-mono bg-surface-2 px-1 rounded">dagster dev</code>
+        {' '}or{' '}
+        <a href={dagsterUrl} target="_blank" rel="noopener noreferrer" className="text-datavloot-600 hover:underline">
+          open Dagster
+        </a>
       </p>
     </div>
   );

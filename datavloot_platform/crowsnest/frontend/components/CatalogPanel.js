@@ -48,31 +48,15 @@ export default function CatalogPanel() {
                     {search ? `No models matching "${search}"` : 'No models found in catalog'}
                   </div>
                 )}
-                {data?.models?.map((m) => (
-                  <button
-                    key={m.unique_id || m.name}
-                    onClick={() => setSelectedModel(m.name)}
-                    className={`w-full text-left px-4 py-3 border-b border-surface-2 hover:bg-surface-1 transition-colors ${
-                      selectedModel === m.name ? 'bg-datavloot-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium font-mono text-ink-0">{m.name}</span>
-                      {m.schema && (
-                        <span className="text-[10px] text-ink-3 bg-surface-2 px-1.5 py-0.5 rounded">{m.schema}</span>
-                      )}
-                    </div>
-                    {m.description && (
-                      <p className="text-xs text-ink-3 mt-1 line-clamp-2">{m.description}</p>
-                    )}
-                    {m.owner && (
-                      <p className="text-[10px] text-ink-3 mt-1">Owner: {m.owner}</p>
-                    )}
-                  </button>
-                ))}
+                {data?.source === 'information_schema'
+                  ? <SchemaGroupedList models={data?.models || []} selectedModel={selectedModel} onSelect={setSelectedModel} />
+                  : data?.models?.map((m) => (
+                    <ModelRow key={m.unique_id || m.name} model={m} selected={selectedModel === m.name} onSelect={setSelectedModel} />
+                  ))
+                }
                 {data?.source === 'information_schema' && (
                   <div className="px-4 py-2 bg-amber-50 text-xs text-amber-700">
-                    Showing tables from information_schema (Elementary catalog not available)
+                    Showing tables from information_schema — Elementary catalog not available
                   </div>
                 )}
               </div>
@@ -185,6 +169,49 @@ function ModelDetail({ name }) {
       )}
     </div>
   );
+}
+
+function ModelRow({ model: m, selected, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(m.name)}
+      className={`w-full text-left px-4 py-3 border-b border-surface-2 hover:bg-surface-1 transition-colors ${
+        selected ? 'bg-datavloot-50' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium font-mono text-ink-0">{m.name}</span>
+        {m.schema && (
+          <span className="text-[10px] text-ink-3 bg-surface-2 px-1.5 py-0.5 rounded">{m.schema}</span>
+        )}
+      </div>
+      {m.description && (
+        <p className="text-xs text-ink-3 mt-1 line-clamp-2">{m.description}</p>
+      )}
+      {m.owner && (
+        <p className="text-[10px] text-ink-3 mt-1">Owner: {m.owner}</p>
+      )}
+    </button>
+  );
+}
+
+function SchemaGroupedList({ models, selectedModel, onSelect }) {
+  const bySchema = {};
+  models.forEach((m) => {
+    const s = m.schema || 'main';
+    if (!bySchema[s]) bySchema[s] = [];
+    bySchema[s].push(m);
+  });
+  return Object.entries(bySchema).map(([schema, schemaModels]) => (
+    <div key={schema}>
+      <div className="px-4 py-1.5 text-[9px] font-semibold text-ink-3 uppercase tracking-widest bg-surface-1 border-b border-surface-2 sticky top-0">
+        {schema}
+      </div>
+      {schemaModels.map((m) => (
+        <ModelRow key={m.unique_id || m.name} model={m} selected={selectedModel === m.name} onSelect={onSelect} />
+      ))}
+    </div>
+  ));
 }
 
 function Detail({ label, value }) {

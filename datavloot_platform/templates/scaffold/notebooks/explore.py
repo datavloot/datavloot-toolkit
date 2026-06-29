@@ -12,7 +12,7 @@ def _():
     from pathlib import Path
 
     # Update this to match your project's DuckDB file name
-    DB_PATH = Path(__file__).parent / "<project_name>.duckdb"
+    DB_PATH = Path(__file__).parent.parent / "<project_name>.duckdb"
     con = duckdb.connect(str(DB_PATH), read_only=True)
     mo.md(f"Connected to `{DB_PATH.name}` — {DB_PATH.stat().st_size // 1_000_000} MB")
     return DB_PATH, alt, con, mo

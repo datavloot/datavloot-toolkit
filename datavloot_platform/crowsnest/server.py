@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.config import get_config
-from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog
+from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(quality.router, prefix="/api/quality", tags=["Data Quality"])
     app.include_router(query.router, prefix="/api/query", tags=["SQL Query"])
     app.include_router(catalog.router, prefix="/api/catalog", tags=["Catalog"])
+    app.include_router(notebooks.router, prefix="/api/notebooks", tags=["Notebooks"])
 
     @app.get("/api/health")
     async def health_check():

@@ -42,6 +42,15 @@ export default function QueryPanel() {
     });
   };
 
+  // Group tables by schema
+  const tablesBySchema = {};
+  (tables.data?.tables || []).forEach((t) => {
+    const s = t.schema || 'main';
+    if (!tablesBySchema[s]) tablesBySchema[s] = [];
+    tablesBySchema[s].push(t);
+  });
+  const schemaEntries = Object.entries(tablesBySchema);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -66,28 +75,34 @@ export default function QueryPanel() {
             <div className="space-y-0.5 max-h-[400px] overflow-y-auto">
               {tables.loading ? (
                 <p className="text-xs text-ink-3">Loading...</p>
-              ) : (
-                tables.data?.tables?.map((t) => (
-                  <button
-                    key={t.full_name}
-                    onClick={() => setSql(`SELECT *\nFROM ${t.full_name}\nLIMIT 100;`)}
-                    className="block w-full text-left px-2 py-1.5 text-xs font-mono text-ink-2 hover:bg-surface-2 rounded transition-colors truncate"
-                    title={t.full_name}
-                  >
-                    {t.type === 'view' && <span className="text-ink-3 mr-1">v</span>}
-                    {t.name}
-                  </button>
-                ))
-              )}
-              {!tables.loading && tables.data?.tables?.length === 0 && (
+              ) : schemaEntries.length === 0 ? (
                 <p className="text-xs text-ink-3">No tables found</p>
+              ) : (
+                schemaEntries.map(([schema, schemaTables]) => (
+                  <div key={schema}>
+                    <div className="px-2 pt-2 pb-0.5 text-[9px] font-semibold text-ink-3 uppercase tracking-widest">
+                      {schema}
+                    </div>
+                    {schemaTables.map((t) => (
+                      <button
+                        key={t.full_name}
+                        onClick={() => setSql(`SELECT *\nFROM ${t.full_name}\nLIMIT 100;`)}
+                        className="block w-full text-left px-2 py-1.5 text-xs font-mono text-ink-2 hover:bg-surface-2 rounded transition-colors truncate"
+                        title={t.full_name}
+                      >
+                        {t.type === 'view' && <span className="text-ink-3 mr-1">v</span>}
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                ))
               )}
             </div>
           </div>
         </div>
 
         {/* Editor + results */}
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 min-w-0 space-y-4">
           <div className="card overflow-hidden">
             <Editor
               height="220px"
@@ -118,7 +133,7 @@ export default function QueryPanel() {
           )}
 
           {result && (
-            <div className="card overflow-hidden">
+            <div className="card">
               <div className="panel-header">
                 <span className="panel-title">
                   Results
