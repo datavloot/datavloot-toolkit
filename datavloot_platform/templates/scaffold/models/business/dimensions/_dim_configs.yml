@@ -11,7 +11,7 @@ version: 2
 # Reference them in facts with ref('dim_date') and ref('dim_time').
 # ─────────────────────────────────────────────────────────────────────────────
 
-models:
+models: []
 
   # Add your dimensions below.
 

@@ -36,14 +36,14 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #
 #   import dlt
 #   from dagster_dlt import DagsterDltResource, dlt_assets
+#   from dlt.destinations import duckdb as duckdb_destination
 #
 #   @dlt_assets(
 #       dlt_source=my_source(),
 #       dlt_pipeline=dlt.pipeline(
 #           pipeline_name="my_pipeline",
 #           dataset_name="source",
-#           destination="duckdb",
-#           credentials=str(DB_PATH),
+#           destination=duckdb_destination(credentials=str(DB_PATH)),
 #       ),
 #       group_name="source",
 #   )

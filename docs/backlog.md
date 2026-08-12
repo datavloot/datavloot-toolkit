@@ -4,18 +4,6 @@ Improvements deferred from implementation. Pick these up in future sessions.
 
 ---
 
-## README
-
-### Update dbt packages.yml git URL when repo is renamed
-
-`README.md` line 332 contains a git reference used by `dbt deps`:
-```yaml
-- git: "https://gitlab.com/datavloot/optimist-toolkit.git"
-```
-When the GitLab repo is renamed (e.g. to `datavloot`), update this URL. Also update the same reference in any project templates that include a `packages.yml`.
-
----
-
 ## Website
 
 ### Update install commands to `pip install datavloot[optimist]`

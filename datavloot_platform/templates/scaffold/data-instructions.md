@@ -1,6 +1,6 @@
 # [project-name]
 
-A dbt project built on [optimist-toolkit](https://gitlab.com/mycelium4483613/optimist-toolkit).
+A dbt project built on [optimist-toolkit](https://gitlab.com/datavloot/datavloot-toolkit).
 
 See `dbt_packages/optimist/data-instructions.md` for the full workflow, naming conventions, modelling
 conventions, and captain/crew guide. Run `dbt deps` if the file is not yet present.

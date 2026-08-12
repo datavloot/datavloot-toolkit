@@ -171,9 +171,9 @@ function ModelDetail({ model: selected }) {
           <div className="panel-header">
             <span className="panel-title">Sample data <span className="font-normal text-ink-3">({sampleData.row_count} rows)</span></span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[500px]">
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-surface-1">
                   {sampleData.columns.map((col) => (
                     <th key={col} className="table-header whitespace-nowrap">{col}</th>

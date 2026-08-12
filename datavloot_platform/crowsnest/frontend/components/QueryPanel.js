@@ -149,9 +149,9 @@ export default function QueryPanel() {
                 </span>
                 <span className="text-xs text-ink-3 font-mono">{result.duration_ms}ms</span>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-auto max-h-[500px]">
                 <table className="w-full">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-1">
                       {result.columns.map((col) => (
                         <th key={col} className="table-header whitespace-nowrap">{col}</th>
