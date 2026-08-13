@@ -44,4 +44,4 @@ packages = ["datavloot_platform"]
 
 [tool.dagster]
 module_name = "datavloot_platform.definitions"
-code_location_name = "optimist-toolkit"
+code_location_name = "datavloot-toolkit"

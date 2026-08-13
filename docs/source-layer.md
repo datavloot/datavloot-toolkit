@@ -4,6 +4,21 @@ The source layer contains thin staging models that sit directly on top of raw so
 Each model selects all available columns from the source and appends standard audit columns.
 No business logic lives here — that belongs in the business layer.
 
+**Guideline, not a hard rule** — this toolkit is used across different teams with different
+ways of working, so treat this as advice rather than something to enforce mechanically. The
+reasoning behind it: keep a staged model's shape as close as possible to its one source table,
+so you can always compare it back to the source system and trust that a mismatch points at
+ingestion, not at something a transformation changed along the way. Concretely:
+
+- No joins between tables in a source model — combine tables in the business layer instead.
+- No aggregations (`group by`, window functions used to summarize) — aggregate in the business
+  layer instead.
+- Renaming, casting, deduplicating within the one source table, and adding audit columns are
+  fine here — none of those change the model's relationship to its source table.
+
+If you need to combine or summarize across sources, that belongs in a dimension or fact model
+(or an intermediate model, if your project has one) — see the [business layer](business-layer.md).
+
 ---
 
 ## Naming convention

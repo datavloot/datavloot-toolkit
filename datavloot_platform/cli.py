@@ -68,7 +68,8 @@ def cmd_new(args: argparse.Namespace) -> None:
     print(f"  3. dbt deps           # install the optimist dbt package")
     print(f"  4. dbt parse          # compile the manifest for Dagster")
     print(f"  5. dagster dev        # start the platform at http://localhost:3000")
-    print(f"\nSee data-instructions.md to start adding your data sources.")
+    print(f"\nSee data-instructions.md or hand it to your AI assistant at the start of a session so it")
+    print(f"knows the toolkit's conventions, then start adding your data sources.")
 
 
 def cmd_demo(args: argparse.Namespace) -> None:
@@ -87,6 +88,8 @@ def cmd_demo(args: argparse.Namespace) -> None:
     print(f"     and save it as data/guam_2025.csv inside the project folder")
     print(f"  5. dbt parse          # compile the manifest for Dagster")
     print(f"  6. dagster dev        # start the platform at http://localhost:3000")
+    print(f"\nHand data-instructions.md to your AI assistant at the start of a session so it")
+    print(f"knows the toolkit's conventions.")
 
 
 def cmd_crowsnest(args: argparse.Namespace) -> None:

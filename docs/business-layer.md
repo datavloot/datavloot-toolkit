@@ -5,6 +5,10 @@ Models here apply business logic, generate surrogate keys, and deduplicate where
 No raw source references (`source()`) belong here — always read from `ref()` or from
 an inline CTE.
 
+This is also where joins across source-layer models and aggregations belong. The
+[source layer](source-layer.md) intentionally stays one model per source table, so any logic
+that combines or summarizes across tables has exactly one place to live: here.
+
 ---
 
 ## Naming convention
