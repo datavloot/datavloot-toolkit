@@ -181,7 +181,7 @@ SELECT
     v.vessel_type,
     COUNT(*) AS port_events
 FROM noaa_business.fct_port_event f
-LEFT JOIN noaa_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
+LEFT JOIN noaa_business.dim_vessel v ON f.vessel_key = v.vessel_key
 GROUP BY 1
 ORDER BY 2 DESC
 LIMIT 10;

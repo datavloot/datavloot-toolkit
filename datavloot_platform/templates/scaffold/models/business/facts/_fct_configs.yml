@@ -19,7 +19,7 @@ models: []
   #       description: "Surrogate key; MD5 hash of <grain_column>."
   #     - name: <grain_column>
   #       description: ""
-  #     - name: dim_<entity>_key
+  #     - name: <entity>_key
   #       description: "FK to dim_<entity>."
   #     - name: <measure_column>
   #       description: ""
@@ -32,12 +32,10 @@ models: []
   #       dimensions:
   #         - dim: dim_<entity>
   #           fk: <fk_column>
-  #           key: dim_<entity>_key
   #         - dim: dim_date
   #           fk: <timestamp_column>
   #           dim_fk: date_day
   #           fk_cast: date
-  #           key: dim_date_key
   #           alias: <event>_date_key
   #       columns:
   #         - <grain_column>
