@@ -57,8 +57,8 @@ export default function QueryPanel() {
   const schemaEntries = Object.entries(tablesBySchema);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex-1 min-h-0 flex flex-col gap-4">
+      <div className="flex items-center justify-between shrink-0">
         <h2 className="text-lg font-semibold text-ink-0 tracking-tight">SQL editor</h2>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-ink-3">Ctrl+Enter to run</span>
@@ -72,7 +72,7 @@ export default function QueryPanel() {
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Table sidebar */}
         <div className="w-48 shrink-0">
           <div className="card p-3">
@@ -107,8 +107,8 @@ export default function QueryPanel() {
         </div>
 
         {/* Editor + results */}
-        <div className="flex-1 min-w-0 space-y-4">
-          <div className="card overflow-hidden">
+        <div className="flex-1 min-w-0 flex flex-col gap-4 min-h-0">
+          <div className="card overflow-hidden shrink-0">
             <Editor
               height="220px"
               defaultLanguage="sql"
@@ -132,14 +132,14 @@ export default function QueryPanel() {
           </div>
 
           {error && (
-            <div className="card border-red-200 bg-red-50 px-4 py-3">
+            <div className="card border-red-200 bg-red-50 px-4 py-3 shrink-0">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
           {result && (
-            <div className="card overflow-hidden">
-              <div className="panel-header">
+            <div className="card overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div className="panel-header shrink-0">
                 <span className="panel-title">
                   Results
                   <span className="ml-2 text-ink-3 font-normal">
@@ -149,7 +149,7 @@ export default function QueryPanel() {
                 </span>
                 <span className="text-xs text-ink-3 font-mono">{result.duration_ms}ms</span>
               </div>
-              <div className="overflow-auto max-h-[500px]">
+              <div className="overflow-auto flex-1 min-h-0">
                 <table className="w-full">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-surface-1">

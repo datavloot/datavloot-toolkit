@@ -19,13 +19,13 @@ export default function CrowsNestPage() {
   const [activeTab, setActiveTab] = useState('pipelines');
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* TEST BANNER — uncomment when iterating on the Crows Nest to confirm the correct build is deployed */}
       {/* <div className="w-full bg-amber-400 text-amber-900 text-xs font-semibold text-center py-1 tracking-wide z-20 shrink-0">
         Testing build — Iteration 7
       </div> */}
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
       {/* Sidebar */}
       <aside className="w-60 bg-white border-r border-surface-3 flex flex-col fixed h-full z-10">
         {/* Logo */}
@@ -76,10 +76,10 @@ export default function CrowsNestPage() {
       </aside>
 
       {/* Main content */}
-      <main className="ml-60 flex-1 overflow-x-hidden">
+      <main className="ml-60 flex-1 flex flex-col overflow-hidden">
         <HealthBanner />
 
-        <div className="p-6">
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden p-6">
           {activeTab === 'pipelines' && <PipelinesPanel />}
           {activeTab === 'quality' && <QualityPanel />}
           {activeTab === 'query' && <QueryPanel />}
