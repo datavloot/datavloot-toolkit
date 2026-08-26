@@ -1,6 +1,6 @@
 # noaa
 
-A dbt project built on [optimist-toolkit](https://gitlab.com/datavloot/optimist-toolkit).
+A dbt project built on [optimist-toolkit](https://gitlab.com/datavloot/datavloot-toolkit).
 
 This project is an **example** of how a project is set up with the optimist toolkit. It uses
 publicly available data from the [National Oceanic and Atmospheric Administration (NOAA)](https://www.noaa.gov/)
@@ -67,11 +67,11 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 All commands run from the project root. You'll need **Python 3.10–3.13** (3.12 recommended) and **git**.
 
-This demo is part of the [optimist-toolkit](https://gitlab.com/datavloot/optimist-toolkit). If you haven't already, install the toolkit and copy the demo locally:
+This demo is part of the [optimist-toolkit](https://gitlab.com/datavloot/datavloot-toolkit). If you haven't already, install the toolkit and copy the demo locally:
 
 ```bash
-pip install git+https://gitlab.com/datavloot/optimist-toolkit.git
-optimist demo
+pip install datavloot[optimist]
+datavloot demo
 cd optimist-demo
 ```
 
@@ -181,7 +181,7 @@ SELECT
     v.vessel_type,
     COUNT(*) AS port_events
 FROM noaa_business.fct_port_event f
-LEFT JOIN noaa_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
+LEFT JOIN noaa_business.dim_vessel v ON f.vessel_key = v.vessel_key
 GROUP BY 1
 ORDER BY 2 DESC
 LIMIT 10;

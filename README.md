@@ -130,7 +130,7 @@ This toolkit is designed to be used alongside an AI assistant. Not as an abstrac
 
 The **captain and crew** model describes the workflow: you direct the session — you know your data sources, your domain, and what the output should look like. The AI handles implementation within the toolkit's conventions. You review, question, and approve. The understanding has to be yours; the AI accelerates getting there.
 
-A dedicated agent guide lives at [data-instructions.md](data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
+A dedicated agent guide lives at [data-instructions.md](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
 This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](datavloot_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](datavloot_platform/templates/demo/conversation.md).
 
@@ -334,7 +334,7 @@ If you already have a dbt project and only want the standardized macros, install
 ```yaml
 # packages.yml
 packages:
-  - git: "https://gitlab.com/datavloot/optimist-toolkit.git"
+  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
     revision: main        # pin to a tag or commit SHA for reproducible builds
 ```
@@ -349,10 +349,10 @@ dbt deps
 
 ## Documentation
 
-- [Getting started with the dbt package](docs/getting-started.md)
-- [Ingestion layer — loading data with dlt](docs/ingestion.md)
-- [Source layer — auto-staging and audit columns](docs/source-layer.md)
-- [Business layer — dimensions, facts, and surrogate keys](docs/business-layer.md)
+- [Getting started with the dbt package](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/getting-started.md)
+- [Ingestion layer — loading data with dlt](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/ingestion.md)
+- [Source layer — auto-staging and audit columns](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/source-layer.md)
+- [Business layer — dimensions, facts, and surrogate keys](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/business-layer.md)
 
 ---
 

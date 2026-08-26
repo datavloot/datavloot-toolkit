@@ -22,22 +22,22 @@ models:
         data_tests:
           - not_null
           - unique
-      - name: dim_vessel_key
+      - name: vessel_key
         description: "FK to dim_vessel."
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_vessel')
-                field: dim_vessel_key
-      - name: dim_port_key
+                field: vessel_key
+      - name: port_key
         description: "FK to dim_port."
         data_tests:
           - not_null
           - relationships:
               arguments:
                 to: ref('dim_port')
-                field: dim_port_key
+                field: port_key
       - name: event_date_key
         description: "FK to dim_date — date of the arrival or departure."
         data_tests:
@@ -58,13 +58,13 @@ models:
         description: "True if this event is a departure; false if it is an arrival."
         data_tests:
           - not_null
-      - name: dim_sea_state_key
+      - name: sea_state_key
         description: "FK to dim_sea_state — sea conditions at the time of the event. Null when no weather data is available for that hour."
         data_tests:
           - relationships:
               arguments:
                 to: ref('dim_sea_state')
-                field: dim_sea_state_key
+                field: sea_state_key
       - name: sog
         description: "Speed Over Ground in knots at the moment of the event broadcast."
       - name: status
@@ -78,26 +78,21 @@ models:
         dimensions:
           - dim: dim_vessel
             fk: mmsi
-            key: dim_vessel_key
           - dim: dim_port
             fk: port_index_number
             dim_fk: port_index_number
-            key: dim_port_key
           - dim: dim_date
             fk: event_time
             dim_fk: date_day
             fk_cast: date
-            key: dim_date_key
             alias: event_date_key
           - dim: dim_time
             fk: event_time_minute
             dim_fk: time_of_day
-            key: dim_time_key
             alias: event_time_key
           - dim: dim_sea_state
             fk: sea_state_code
             dim_fk: sea_state_code
-            key: dim_sea_state_key
         columns:
           - event_time
           - is_departure
