@@ -14,7 +14,7 @@ that machinery at all. This doc covers both.
 ## Releasing the optimist dbt package
 
 How `dbt/optimist` is versioned and tagged, so consuming projects can pin to a moving
-"current major version" ref instead of `main` (see [feedback_thijs.md #1](feedback_thijs.md))
+"current minor version" ref instead of `main` (see [feedback_thijs.md #1](feedback_thijs.md))
 without silently picking up breaking changes.
 
 ### Versioning
@@ -38,28 +38,29 @@ truth.
 
 ### Git refs
 
-- **Immutable release tags:** `optimist-vX.Y.Z`, one per release. Never moved once pushed.
-- **Moving major branches:** `optimist-0.x`, `optimist-1.x`, … — each points at the latest
-  released commit within that major version. Fast-forwarded on every patch/minor release.
-  Frozen permanently the moment the next major version ships.
-- Prefixed with `optimist-` (rather than a bare `vX.Y.Z`) to leave room for the `datavloot`
-  PyPI package to get its own `datavloot-vX.Y.Z` tags later without collision.
+- **Immutable release tags:** bare `X.Y.Z`, one per release. Never moved once pushed.
+- **Moving minor branches:** `0.1.x`, `0.2.x`, … — each points at the latest released commit
+  within that minor version. Fast-forwarded on every patch release. Frozen permanently the
+  moment the next minor version ships.
+- Unprefixed: a bare `X.Y.Z` tag in this repo always means the dbt package. The `datavloot`
+  PyPI package uses `datavloot-vX.Y.Z` instead, so the two series never collide.
 
 A consuming project's `packages.yml` references either:
 
 ```yaml
-# floats within the current major — picks up 0.1, 0.2, 0.3, ... automatically
-revision: optimist-0.x
+# floats within the current minor — picks up 0.1.1, 0.1.2, ... automatically
+revision: 0.1.x
 ```
 
 ```yaml
 # pinned to one exact release for full reproducibility
-revision: optimist-v0.2.0
+revision: 0.1.0
 ```
 
-Moving from `optimist-0.x` to `optimist-1.x` is always a manual, deliberate edit in the
-consumer's `packages.yml` — never automatic. This is the same model as GitHub Actions'
-`uses: action@v4`-style moving major tags.
+Moving from `0.1.x` to `0.2.x` is always a manual, deliberate edit in the consumer's
+`packages.yml` — never automatic. Floating is deliberately scoped to patches rather than to a
+whole major: while the package is pre-1.0, a minor bump is allowed to change behaviour, so
+picking those up silently would defeat the point.
 
 ### Cutting a release
 
@@ -69,37 +70,33 @@ consumer's `packages.yml` — never automatic. This is the same model as GitHub 
 3. Merge to `main`.
 4. Tag the merge commit:
    ```bash
-   git tag optimist-vX.Y.Z
-   git push origin optimist-vX.Y.Z
+   git tag X.Y.Z
+   git push origin X.Y.Z
    ```
-5. Fast-forward the moving major branch (patch/minor release):
+5. Fast-forward the moving minor branch (patch release):
    ```bash
-   git branch -f optimist-0.x optimist-vX.Y.Z
-   git push origin optimist-0.x --force-with-lease
+   git branch -f 0.1.x 0.1.1
+   git push origin 0.1.x --force-with-lease
    ```
-   Or, on a major bump, create the new branch instead and stop touching the old one:
+   Or, on a minor/major bump, create the new branch instead and stop touching the old one:
    ```bash
-   git branch optimist-1.x optimist-v1.0.0
-   git push origin optimist-1.x
-   # optimist-0.x is now frozen — do not push to it again
+   git branch 0.2.x 0.2.0
+   git push origin 0.2.x
+   # 0.1.x is now frozen — do not push to it again
    ```
-6. On a major bump, update `revision:` in
+6. On a minor or major bump, update `revision:` in
    [`datavloot_platform/templates/scaffold/packages.yml`](../datavloot_platform/templates/scaffold/packages.yml)
    and
    [`datavloot_platform/templates/demo/packages.yml`](../datavloot_platform/templates/demo/packages.yml)
-   to the new major branch, so newly scaffolded projects get the new default.
+   to the new minor branch, so newly scaffolded projects get the new default.
 
-### First release
+### Release history
 
-No tags exist yet. `dbt/optimist/dbt_project.yml` previously declared `version: '1.0.0'` — that
-was a stale default from `dbt init`, not an actual release; corrected to `'0.1.0'` to match
-reality. The first release should be `optimist-v0.1.0`, cut from `main`, which replaces
-`revision: main` (and its `dbt deps` warning) with `revision: optimist-0.x` in the scaffold and
-demo `packages.yml` templates.
-
-Cutting this tag/branch and pushing it were intentionally **not** done as part of this write-up
-— that's shared remote state and belongs on `main`, not a feature branch mid-review. Run the
-steps above (or ask for it to be done) once this is merged.
+- **`0.1.0`** — first release. `dbt/optimist/dbt_project.yml` previously declared
+  `version: '1.0.0'`, a stale default from `dbt init` rather than an actual release; corrected
+  to `'0.1.0'` to match reality. This release also replaced `revision: main` (and its
+  `dbt deps` warning) with `revision: 0.1.x` in the scaffold and demo `packages.yml` templates,
+  and established the unprefixed-tag / `X.Y.x` moving-branch scheme described above.
 
 ---
 
@@ -128,7 +125,7 @@ give consumers a "stay within a major" option without any extra git machinery on
 ### Git refs
 
 One immutable tag per release: `datavloot-vX.Y.Z`, matching the version just published to PyPI.
-Prefixed with `datavloot-` (as opposed to the dbt package's `optimist-` prefix) so the two tag
+Prefixed with `datavloot-` (as opposed to the dbt package's bare `X.Y.Z` tags) so the two tag
 series never collide in the same repo.
 
 ### Cutting a release

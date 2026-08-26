@@ -336,7 +336,7 @@ If you already have a dbt project and only want the standardized macros, install
 packages:
   - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
-    revision: main        # pin to a tag or commit SHA for reproducible builds
+    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) for reproducible builds
 ```
 
 Then install:

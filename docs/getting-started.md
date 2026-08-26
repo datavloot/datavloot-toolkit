@@ -13,7 +13,7 @@ Add the package to your project's `packages.yml`:
 packages:
   - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
-    revision: main        # pin to a tag or commit SHA in production
+    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) in production
 ```
 
 Then install it:
