@@ -64,13 +64,27 @@ picking those up silently would defeat the point.
 
 ### Cutting a release
 
-1. On `main`, decide the bump type (see Versioning above) based only on what changed under
-   `dbt/optimist/`.
-2. Update `version:` in `dbt/optimist/dbt_project.yml` to match.
-3. Merge to `main`.
-4. Tag the merge commit:
+1. Decide the bump type (see Versioning above) based only on what changed under
+   `dbt/optimist/` since the last release.
+2. On a feature branch off `main`, update `version:` in `dbt/optimist/dbt_project.yml` to
+   match, and commit.
+3. Push the branch and open a merge request against `main`. **`main` is protected — it cannot
+   be pushed to directly, and the release must not be merged locally.** The tag in the next
+   step has to point at the merge commit GitLab itself creates, which does not exist until the
+   MR is accepted.
    ```bash
-   git tag X.Y.Z
+   git push origin feature/<name> \
+     -o merge_request.create \
+     -o merge_request.target=main \
+     -o merge_request.title="Release X.Y.Z"
+   ```
+   Then accept the MR in the GitLab UI. (`glab mr create` does the same thing if the CLI is
+   installed; the push options above need no extra tooling.)
+4. Pull the resulting merge commit and tag it:
+   ```bash
+   git switch main
+   git pull origin main
+   git tag -a X.Y.Z -m "optimist dbt package X.Y.Z"
    git push origin X.Y.Z
    ```
 5. Fast-forward the moving minor branch (patch release):
@@ -84,11 +98,23 @@ picking those up silently would defeat the point.
    git push origin 0.2.x
    # 0.1.x is now frozen — do not push to it again
    ```
-6. On a minor or major bump, update `revision:` in
+6. On a minor or major bump, `revision:` in
    [`datavloot_platform/templates/scaffold/packages.yml`](../datavloot_platform/templates/scaffold/packages.yml)
    and
    [`datavloot_platform/templates/demo/packages.yml`](../datavloot_platform/templates/demo/packages.yml)
-   to the new minor branch, so newly scaffolded projects get the new default.
+   must point at the new minor branch, so newly scaffolded projects get the new default. Make
+   this edit on the **same feature branch as step 2**, not afterwards — it goes through the
+   protected-branch MR like any other change, and doing it as a follow-up MR just widens the
+   window described in the note below.
+
+> **Ordering hazard.** Between the MR merging (step 3) and the branch push (step 5), the
+> templates reference a ref that does not exist yet, so `dbt deps` in a freshly scaffolded
+> project fails to resolve. Run steps 4 and 5 promptly after accepting the MR.
+>
+> **Protected refs.** GitLab protects tags and branches by pattern, separately from protected
+> branches. If `git push origin X.Y.Z` or the `0.1.x` push is rejected, the ref pattern needs
+> allowing under *Settings → Repository → Protected tags / Protected branches*, or someone with
+> Maintainer rights has to push it.
 
 ### Release history
 
@@ -130,12 +156,17 @@ series never collide in the same repo.
 
 ### Cutting a release
 
-1. On `main`, decide the bump type (see Versioning above) based on what changed outside
-   `dbt/optimist/`.
-2. Update `version` in `pyproject.toml` to match.
-3. Merge to `main`.
-4. Build:
+1. Decide the bump type (see Versioning above) based on what changed outside `dbt/optimist/`
+   since the last release.
+2. On a feature branch off `main`, update `version` in `pyproject.toml` to match, and commit.
+3. Push the branch, open a merge request against `main`, and accept it in the GitLab UI —
+   `main` is protected and cannot be pushed to directly. Same flow and same push options as
+   [step 3 of the dbt package procedure](#cutting-a-release) above; do not merge locally.
+4. Pull the merge commit and build from it, so the uploaded artifact matches the commit that
+   gets tagged in step 7:
    ```bash
+   git switch main
+   git pull origin main
    rm -rf dist/
    uv build
    ```
@@ -150,11 +181,12 @@ series never collide in the same repo.
    Needs a PyPI API token — either `UV_PUBLISH_TOKEN` in the environment or `--token` on the
    command line. (`twine upload dist/*` is the equivalent if not using uv, reading credentials
    from `~/.pypirc` or `TWINE_PASSWORD`.)
-7. Tag the release commit and push:
+7. Tag the merge commit you built from in step 4, and push:
    ```bash
-   git tag datavloot-vX.Y.Z
+   git tag -a datavloot-vX.Y.Z -m "datavloot X.Y.Z"
    git push origin datavloot-vX.Y.Z
    ```
+   If the push is rejected, see the protected-refs note in the dbt package procedure above.
 8. Check whether the install snippet on the marketing site (`html/production/index.html`) needs
    updating to match — see the open item in [`docs/backlog.md`](backlog.md).
 
