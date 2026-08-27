@@ -71,6 +71,14 @@ Two rules keep this scheme working. Both fail silently if broken:
   consumers; they track the branch. A release where step 5 was skipped looks complete from the
   repo and leaves everyone on the previous version.
 
+Note that moving the branch does not, on its own, put the release in consumers' hands. dbt
+writes a `package-lock.yml` pinning the resolved commit, and a plain `dbt deps` reinstalls from
+that lock rather than re-checking the branch. Projects that commit the lock — dbt's default —
+take a patch release only when someone runs `dbt deps --upgrade`. Treat "released" as "available
+to consumers", not "in use by consumers", and announce patch releases rather than assuming they
+propagate. The trade-off is laid out for consumers in
+[`getting-started.md`](getting-started.md#keeping-the-package-up-to-date).
+
 ### Cutting a release
 
 1. Decide the bump type (see Versioning above) based only on what changed under

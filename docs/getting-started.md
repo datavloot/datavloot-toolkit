@@ -22,6 +22,35 @@ Then install it:
 dbt deps
 ```
 
+### Keeping the package up to date
+
+`revision: 0.1.x` is a moving branch that always points at the newest `0.1.*` release, so it
+picks up patch releases without you editing `packages.yml`. Pin to an exact tag (`0.1.0`)
+instead if you would rather bump deliberately. New releases where the "x" part of the tag is upgraded will never contain breaking changes. You are required to manually change the revision to something like 0.2.x when a breaking change is introduced and you will have to adjust your project to deal with it. The breaking change and how to handle it will always come with instructions for your agent of choice. 
+
+On the first `dbt deps`, dbt
+writes a `package-lock.yml` recording the exact commit it resolved:
+
+```yaml
+- git: https://gitlab.com/datavloot/datavloot-toolkit.git
+  name: optimist
+  revision: <>
+  subdirectory: dbt/optimist
+```
+
+From then on, `dbt deps` reinstalls that pinned commit — it does **not** re-check the
+branch. Whether you get new patch releases automatically is therefore decided by what you do
+with that file:
+
+| | Commit `package-lock.yml` | Add it to `.gitignore` |
+|---|---|---|
+| **Getting a new patch** | `dbt deps --upgrade`, then commit the updated lock | automatic on the next `dbt deps` |
+| **Reproducibility** | everyone and CI build the identical commit | devs and CI can resolve different patches |
+| **Audit trail** | version changes appear in git history | no record of which version was used |
+
+The scaffold in `datavloot new` deliberately ships neither choice, so the file lands wherever
+your project's conventions put it.
+
 ---
 
 ## Project structure
