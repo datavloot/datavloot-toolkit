@@ -62,6 +62,15 @@ Moving from `0.1.x` to `0.2.x` is always a manual, deliberate edit in the consum
 whole major: while the package is pre-1.0, a minor bump is allowed to change behaviour, so
 picking those up silently would defeat the point.
 
+Two rules keep this scheme working. Both fail silently if broken:
+
+- **Never create a tag named `X.Y.x`.** dbt resolves a `revision:` by preferring a tag over a
+  branch of the same name, so such a tag would shadow the moving branch permanently — every
+  consumer would freeze on it, with no error and no warning.
+- **Pushing the moving branch is what ships the release.** The tag alone changes nothing for
+  consumers; they track the branch. A release where step 5 was skipped looks complete from the
+  repo and leaves everyone on the previous version.
+
 ### Cutting a release
 
 1. Decide the bump type (see Versioning above) based only on what changed under
