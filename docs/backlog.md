@@ -18,6 +18,26 @@ Locations in `index.html`:
 
 ---
 
+## Release process
+
+### Automate the moving-branch fast-forward
+
+Step 5 of the dbt package release in [`releasing.md`](releasing.md) — fast-forwarding `X.Y.x` to
+the new tag — is manual, and skipping it fails silently: the tag exists, the release looks
+shipped, and every consumer tracking `X.Y.x` stays on the previous version indefinitely. No
+warning is emitted on either side, since dbt only warns about unpinned revisions for the literal
+strings `HEAD`, `main`, and `master`.
+
+Replace it with a GitLab CI job triggered on pushing a tag matching `X.Y.Z`, which fast-forwards
+the corresponding `X.Y.x` branch to that tag. Needs a token with write access to protected
+branches (a project access token or CI/CD variable), and `rules:` gated on
+`$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+$/` so it never fires on the `datavloot-v*` PyPI tag series.
+
+Documentation is the current mitigation, which is why this is worth doing properly — the failure
+mode is invisible rather than noisy.
+
+---
+
 ## Crow's Nest
 
 ### v1.1 — Trigger pipeline runs from UI
