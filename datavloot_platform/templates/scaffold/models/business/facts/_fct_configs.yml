@@ -7,7 +7,7 @@ version: 2
 # config.meta and is read by build_fact() at compile time.
 # ─────────────────────────────────────────────────────────────────────────────
 
-models: []
+models: []      # <- remove the [] when you add your first entry below
 
   # Add your facts below.
 

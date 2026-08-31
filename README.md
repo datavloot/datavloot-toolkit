@@ -323,7 +323,7 @@ In the meantime, the Optimist's individual components are independently portable
 | **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
 | **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
 
-See [datavloot.com/#fleet](https://datavloot.com/#fleet) for the full vessel roadmap.
+See [datavloot.nl/vaarroute](https://datavloot.nl/vaarroute) for the full vessel roadmap.
 
 ---
 

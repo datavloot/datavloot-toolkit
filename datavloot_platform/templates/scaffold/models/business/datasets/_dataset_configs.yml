@@ -11,7 +11,7 @@ version: 2
 # This file is for column descriptions and data_tests only.
 # ─────────────────────────────────────────────────────────────────────────────
 
-models: []
+models: []      # <- remove the [] when you add your first entry below
 
   # Add your datasets below.
 
