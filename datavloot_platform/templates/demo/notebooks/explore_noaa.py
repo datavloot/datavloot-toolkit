@@ -113,7 +113,7 @@ def _(alt, con, mo):
             COALESCE(CAST(v.vessel_type AS VARCHAR), 'Unknown') AS vessel_type,
             COUNT(*) AS port_events
         FROM noaa_business.fct_port_event f
-        LEFT JOIN noaa_business.dim_vessel v ON f.dim_vessel_key = v.dim_vessel_key
+        LEFT JOIN noaa_business.dim_vessel v ON f.vessel_key = v.vessel_key
         GROUP BY 1
         ORDER BY 2 DESC
         LIMIT 15
@@ -140,7 +140,7 @@ def _(con, mo):
             COUNT(*) AS port_events,
             ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct
         FROM noaa_business.fct_port_event f
-        LEFT JOIN noaa_business.dim_sea_state s ON f.dim_sea_state_key = s.dim_sea_state_key
+        LEFT JOIN noaa_business.dim_sea_state s ON f.sea_state_key = s.sea_state_key
         GROUP BY 1
         ORDER BY 2 DESC
     """).df()

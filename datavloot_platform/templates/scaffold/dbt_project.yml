@@ -20,6 +20,7 @@ models:
     +schema: elementary
   <project_name>:
     source:
+      +schema: source
       +materialized: incremental  # only new rows per run; pair with incremental_column in stage_source and unique_key per model
     business:
       +materialized: table
