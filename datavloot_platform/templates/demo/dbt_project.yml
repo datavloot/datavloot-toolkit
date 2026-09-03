@@ -21,6 +21,7 @@ models:
     +schema: elementary
   noaa:
     source:
+      +schema: source
       ais:
         +materialized: incremental    # upsert on new broadcasts; pair with unique_key + incremental_column in the model
       open_meteo:

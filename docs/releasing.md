@@ -14,8 +14,8 @@ that machinery at all. This doc covers both.
 ## Releasing the optimist dbt package
 
 How `dbt/optimist` is versioned and tagged, so consuming projects can pin to a moving
-"current minor version" ref instead of `main` (see [feedback_thijs.md #1](feedback_thijs.md))
-without silently picking up breaking changes.
+"current minor version" ref instead of `main` — picking up patch releases without silently
+picking up breaking changes.
 
 ### Versioning
 
@@ -29,12 +29,11 @@ truth.
   (e.g. converting `generate_surrogate_key` to `adapter.dispatch` — same signature, still minor).
 - **MAJOR** (`0.x` → `1.0.0`) — anything that would break `dbt parse`/`dbt build` for an
   existing consumer without them changing their own project: renaming or removing a macro or
-  macro argument, renaming a required `meta` key (e.g. the `fk`/`dim_fk`/`key` rename from
-  feedback #12), changing a built-in model's public columns or grain (e.g. `dim_time` moving to
-  a different default granularity, feedback #10), or any other default-behavior change that
-  changes output. Bundle breaking changes into one deliberate major bump rather than shipping
-  them piecemeal — several open items from `feedback_thijs.md` (#10, #11, #12, #13) belong in
-  the same future major release for this reason.
+  macro argument, renaming a required `meta` key (e.g. a future `fk`/`dim_fk`/`key` rename),
+  changing a built-in model's public columns or grain (e.g. `dim_time` moving to a different
+  default granularity), or any other default-behavior change that changes output. Bundle
+  breaking changes into one deliberate major bump rather than shipping them piecemeal — a
+  consumer should have to read one migration note, not four.
 
 ### Git refs
 

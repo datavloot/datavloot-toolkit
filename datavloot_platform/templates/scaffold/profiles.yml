@@ -3,5 +3,5 @@
   outputs:
     dev:
       type: duckdb
-      path: ":memory:"
+      path: "<project_name>.duckdb"
       schema: <project_name>
