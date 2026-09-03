@@ -63,15 +63,6 @@ package:
   artifacts:
     paths: [dist/]
     expire_in: 1 week
-  # Fails until issue #2 (wave 3) adds the hatch exclude rules. Remove
-  # allow_failure in that same MR.
-  #
-  # The test plants decoy files in node_modules/, .next/, out/, dbt_packages/
-  # and target/ before building. A fresh clone has none of them -- they are all
-  # hidden by nested .gitignore files -- so without the decoys the build here
-  # would be small and this job would pass while the bug was fully intact. The
-  # 276 MB wheel on PyPI was built on a developer machine, where they exist.
-  allow_failure: true
   rules:
     - if: $CI_COMMIT_TAG
       when: never
