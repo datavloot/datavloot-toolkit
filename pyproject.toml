@@ -32,6 +32,7 @@ optimist = [
 ]
 dev = [
     "pytest",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -47,3 +48,10 @@ packages = ["datavloot_platform"]
 [tool.dagster]
 module_name = "datavloot_platform.definitions"
 code_location_name = "datavloot-toolkit"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: runs dbt deps/parse/run; needs dbt and network. Deselect with -m 'not slow'.",
+    "package: builds a wheel and inspects it; slow. Deselect with -m 'not package'.",
+]
