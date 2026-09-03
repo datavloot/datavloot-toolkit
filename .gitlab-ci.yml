@@ -1,0 +1,110 @@
+# Datavloot CI
+#
+# Four things are checked, in rough order of how fast they fail:
+#
+#   lint      - the templates parse and declare nothing that does not exist
+#   smoke     - a fresh `datavloot new` project builds a real warehouse on disk
+#   package   - the built wheel contains no build inputs
+#   release   - on a bare X.Y.Z tag, fast-forward the moving X.Y.x branch
+#
+# The smoke job installs the dbt package from *this checkout*, not from the
+# published 0.1.x branch, so a change under dbt/optimist is actually tested.
+
+stages: [test, package, release]
+
+default:
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet --root-user-action=ignore uv
+  cache:
+    key: "uv-$CI_COMMIT_REF_SLUG"
+    paths: [.uv-cache]
+
+variables:
+  UV_CACHE_DIR: .uv-cache
+
+# ---------------------------------------------------------------------------
+# test
+# ---------------------------------------------------------------------------
+
+lint:
+  stage: test
+  script:
+    - uv run --with pytest --with pyyaml python -m pytest tests/ -m "not slow and not package" -v
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
+smoke:
+  stage: test
+  script:
+    # git is needed for `dbt deps` to resolve the hub packages' metadata
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
+    - >
+      uv run --with pytest --with pyyaml --with duckdb
+      --with dbt-core --with dbt-duckdb
+      python -m pytest tests/ -m slow -v
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
+# ---------------------------------------------------------------------------
+# package
+# ---------------------------------------------------------------------------
+
+package:
+  stage: package
+  script:
+    - uv run --with pytest --with pyyaml python -m pytest tests/test_packaging.py -v
+    - uv build --wheel --out-dir dist/
+    - ls -lh dist/
+  artifacts:
+    paths: [dist/]
+    expire_in: 1 week
+  # Fails until issue #2 (wave 3) adds the hatch exclude rules. Remove
+  # allow_failure in that same MR.
+  #
+  # The test plants decoy files in node_modules/, .next/, out/, dbt_packages/
+  # and target/ before building. A fresh clone has none of them -- they are all
+  # hidden by nested .gitignore files -- so without the decoys the build here
+  # would be small and this job would pass while the bug was fully intact. The
+  # 276 MB wheel on PyPI was built on a developer machine, where they exist.
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
+# ---------------------------------------------------------------------------
+# release
+# ---------------------------------------------------------------------------
+
+# Fast-forward the moving X.Y.x branch when a bare X.Y.Z tag is pushed.
+#
+# Skipping this step by hand fails silently: the tag exists, the release looks
+# shipped, and every consumer tracking X.Y.x stays on the previous version with
+# no warning on either side -- dbt only warns about unpinned revisions for the
+# literal strings HEAD, main and master.
+#
+# Needs a project access token with write access to protected branches, exposed
+# as the masked CI/CD variable GITLAB_PUSH_TOKEN.
+fast-forward-minor-branch:
+  stage: release
+  # GitLab clones shallow (depth 20) by default. A branch fast-forward needs the
+  # real history, and this job runs only on tag pushes, so the full clone is free.
+  variables:
+    GIT_DEPTH: 0
+  rules:
+    # Bare X.Y.Z only. The PyPI package uses datavloot-vX.Y.Z, so the two tag
+    # series never trigger each other.
+    - if: $CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+$/
+  before_script: []
+  script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
+    - MINOR_BRANCH="$(echo "$CI_COMMIT_TAG" | cut -d. -f1,2).x"
+    - echo "Fast-forwarding $MINOR_BRANCH to $CI_COMMIT_TAG"
+    - git remote set-url origin "https://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+    - git fetch origin "$MINOR_BRANCH" || echo "$MINOR_BRANCH does not exist yet; it will be created"
+    - git push origin "$CI_COMMIT_SHA:refs/heads/$MINOR_BRANCH"
