@@ -76,7 +76,7 @@ def wheel(tmp_path_factory, repo_root: pathlib.Path) -> pathlib.Path:
 
         out = tmp_path_factory.mktemp("dist")
         proc = subprocess.run(
-            ["uv", "build", "--wheel", "--out-dir", str(out)],
+            ["uv", "build", "--out-dir", str(out)],
             cwd=repo_root, capture_output=True, text=True, timeout=1800,
         )
         assert proc.returncode == 0, "uv build failed:" + proc.stderr[-3000:]
@@ -92,6 +92,49 @@ def wheel(tmp_path_factory, repo_root: pathlib.Path) -> pathlib.Path:
                 d.rmdir()          # only ever removes a directory this fixture created
             except OSError:
                 pass
+
+
+@pytest.fixture(scope="module")
+def sdist(wheel: pathlib.Path) -> pathlib.Path:
+    """The sdist built alongside the wheel.
+
+    Scoping the excludes to targets.wheel left this at 64 MB compressed and
+    282 MB expanded while the wheel was 0.44 MB, and `uv publish` uploads both --
+    so checking only the wheel checked half the release.
+    """
+    sdists = list(wheel.parent.glob("*.tar.gz"))
+    assert len(sdists) == 1, f"expected one sdist, got {sdists}"
+    return sdists[0]
+
+
+def test_sdist_excludes_build_inputs(sdist: pathlib.Path):
+    import tarfile
+    with tarfile.open(sdist) as t:
+        offenders = sorted({
+            "/".join(n.split("/")[:5]) for n in t.getnames() if FORBIDDEN.search(n)
+        })
+    assert offenders == [], (
+        "the sdist ships build inputs:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nPut `exclude` under [tool.hatch.build] so every target inherits it, "
+          "not under [tool.hatch.build.targets.wheel]."
+    )
+
+
+def test_sdist_is_not_enormous(sdist: pathlib.Path):
+    import tarfile
+    with tarfile.open(sdist) as t:
+        expanded_mb = sum(m.size for m in t.getmembers()) / 1e6
+    assert expanded_mb < MAX_UNPACKED_MB, f"sdist expands to {expanded_mb:,.1f} MB"
+
+
+def test_sdist_can_still_build_the_project(sdist: pathlib.Path):
+    """Excluding too much would leave an sdist nobody can build from."""
+    import tarfile
+    with tarfile.open(sdist) as t:
+        names = t.getnames()
+    for required in ("pyproject.toml", "README.md", "LICENSE"):
+        assert any(n.endswith("/" + required) for n in names), f"sdist has no {required}"
 
 
 def test_wheel_excludes_build_inputs(wheel: pathlib.Path):
