@@ -95,7 +95,12 @@ Two rules keep this scheme working. Both fail silently if broken:
    git tag -a X.Y.Z -m "optimist dbt package X.Y.Z"
    git push origin X.Y.Z
    ```
-5. Fast-forward the moving minor branch (patch release):
+5. Fast-forward the moving minor branch (patch release). **On a patch release this is
+   automatic**: the `fast-forward-minor-branch` job in
+   [`.gitlab-ci.yml`](../.gitlab-ci.yml) fires on any bare `X.Y.Z` tag push and advances
+   `X.Y.x` for you. It needs `GITLAB_PUSH_TOKEN` set as a masked CI/CD variable with write
+   access to protected branches; check the job succeeded, and if the variable is not
+   configured yet, do it by hand:
    ```bash
    git branch -f 0.1.x 0.1.1
    git push origin 0.1.x --force-with-lease

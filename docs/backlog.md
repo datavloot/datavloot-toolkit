@@ -20,21 +20,15 @@ Locations in `index.html`:
 
 ## Release process
 
-### Automate the moving-branch fast-forward
+### Finish wiring the moving-branch fast-forward
 
-Step 5 of the dbt package release in [`releasing.md`](releasing.md) — fast-forwarding `X.Y.x` to
-the new tag — is manual, and skipping it fails silently: the tag exists, the release looks
-shipped, and every consumer tracking `X.Y.x` stays on the previous version indefinitely. No
-warning is emitted on either side, since dbt only warns about unpinned revisions for the literal
-strings `HEAD`, `main`, and `master`.
+The CI job exists — `fast-forward-minor-branch` in [`.gitlab-ci.yml`](../.gitlab-ci.yml), gated on
+`$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+$/` so the `datavloot-v*` PyPI series never triggers it.
 
-Replace it with a GitLab CI job triggered on pushing a tag matching `X.Y.Z`, which fast-forwards
-the corresponding `X.Y.x` branch to that tag. Needs a token with write access to protected
-branches (a project access token or CI/CD variable), and `rules:` gated on
-`$CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+$/` so it never fires on the `datavloot-v*` PyPI tag series.
-
-Documentation is the current mitigation, which is why this is worth doing properly — the failure
-mode is invisible rather than noisy.
+What is left is operational: create a project access token with write access to protected branches,
+expose it as the masked CI/CD variable `GITLAB_PUSH_TOKEN`, and prove the job works by pushing a
+throwaway tag before relying on it for a real release. Until that variable exists the job will fail
+on every tag push, and `releasing.md` step 5 still has the manual commands as a fallback.
 
 ---
 
@@ -66,8 +60,76 @@ Clicking a run ID in the Pipelines panel should open a log view for that run. Da
 
 Beyond job-level runs, allow selecting and materializing individual Dagster assets from the Catalog panel (analogous to clicking "Materialize" in the Dagster UI).
 
+
 ---
 
-### Later — Authentication
+### Notebook lifecycle — orphaned marimo process and a hard-coded port
 
-Currently all endpoints are public — fine for localhost, but needed before exposing on a shared server or VM. Consider HTTP Basic Auth or a simple token header, configurable via `CROWSNEST_AUTH_TOKEN`.
+Launching a notebook starts marimo with `subprocess.Popen`, and stopping it calls
+`_marimo_process.kill()` ([`routes/notebooks.py:85`](../datavloot_platform/crowsnest/routes/notebooks.py),
+again at `:123`), which signals only the launcher. Any children it spawned are orphaned and keep
+holding the port, so the fallback is `_kill_port(2718)` — scanning for whatever is listening and
+killing it, which is a blunt instrument that will happily kill an unrelated process.
+
+This is the same problem `datavloot start` already solved for Dagster.
+[`cli.py:217 _terminate_tree()`](../datavloot_platform/cli.py) walks the whole tree
+(`taskkill /F /T` on Windows, `killpg` on POSIX) and is the pattern to reuse here.
+
+Port 2718 is hard-coded in four places (`:89`, `:111`, `:114`, `:127`) even though the Crows Nest
+already has a configured marimo URL — `config.marimo_url`, overridable via `CROWSNEST_MARIMO_URL`
+and documented in the README. `notebooks.py` does not import the config at all. Two notebooks on
+one machine, or anything else already on 2718, currently has no way out.
+
+---
+
+## Demo
+
+### Demo uses the deprecated `dagster-dlt` translator API
+
+`OpenMeteoDltTranslator` in
+[`templates/demo/noaa_platform/assets.py`](../datavloot_platform/templates/demo/noaa_platform/assets.py)
+overrides `get_asset_key(resource)`. The scaffold's commented example has already moved to the
+current API; the demo has not, so the reference project teaches the older form. Worth doing before
+the deprecation becomes a removal, since the demo is what people copy.
+
+---
+
+### Demo requires a manual browser download before it runs
+
+`datavloot demo` prints step 4 as: download the Guam 2025 AIS zone file from a NOAA Marine Cadastre
+index page and save it as `data/guam_2025.csv` ([`cli.py:89`](../datavloot_platform/cli.py)). The
+link is an HTML index, not a file, so it cannot be scripted as-is — the user has to find the right
+zone file by hand before anything works.
+
+Options: resolve the file URL and fetch it in the dlt ingestion asset, or ship a small sample
+extract in the template so the demo runs end to end out of the box and the full download becomes
+optional. The second keeps the repository small and makes the first run reliable.
+
+---
+
+### AIS vessel and status codes are exposed raw
+
+`dim_vessel.vessel_type` carries the numeric AIS category code, documented as
+"e.g. 52 = Tug, 70 = Cargo, 80 = Tanker"
+([`_dim_configs.yml:146`](../datavloot_platform/templates/demo/models/business/dimensions/_dim_configs.yml)),
+and `status` carries the raw navigational status code. Anyone querying the demo has to keep the
+mapping in their head or go back to the docs.
+
+The demo already demonstrates the fix for exactly this shape of problem: `sea_state_categories.csv`
+is a seed that turns a raw measurement into a label via a range join. A `vessel_types.csv` seed and
+a `dim_vessel_type` would make the star schema self-describing and show the pattern twice.
+
+---
+
+## Installation
+
+### Dependencies still need a C compiler
+
+[`README.md:37`](../README.md) lists a C compiler as a prerequisite, with per-OS instructions for
+MSVC, Xcode command line tools and GCC. That is honest documentation of a real requirement, but it
+is a substantial ask for a toolkit whose pitch is that it runs on a laptop — on Windows especially,
+"install Visual C++ Build Tools" is where a first-time user stops.
+
+Worth identifying which dependency actually forces a source build on a supported Python, and whether
+a version bound or a swap removes the need. If it can be dropped, the prerequisites section gets
+much shorter.
