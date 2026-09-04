@@ -12,6 +12,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
 
@@ -132,6 +133,11 @@ def create_app() -> FastAPI:
         description="Unified dashboard for the Optimist data platform",
         version="0.1.0",
     )
+
+    # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
+    # covers the API and the static dashboard alike -- serving the UI to anyone
+    # who asks while the data behind it needs a token is not a useful boundary.
+    app.add_middleware(TokenAuthMiddleware)
 
     app.include_router(pipelines.router, prefix="/api/pipelines", tags=["Pipelines"])
     app.include_router(quality.router, prefix="/api/quality", tags=["Data Quality"])

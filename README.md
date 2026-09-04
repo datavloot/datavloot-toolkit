@@ -290,8 +290,28 @@ The Crows Nest auto-discovers your project's DuckDB path from `profiles.yml` and
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
 | `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
+| `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
+
+### Putting the Crows Nest on a shared host
+
+On a laptop it binds to localhost and needs no password. Anywhere else, set
+`CROWSNEST_AUTH_TOKEN` and every request must present it:
+
+```bash
+CROWSNEST_AUTH_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")   datavloot launch --host 0.0.0.0
+```
+
+A browser is prompted for credentials on first visit — enter any username and the
+token as the password. Scripts can send `Authorization: Bearer <token>` instead.
+`/api/health` stays open so an uptime check does not need the token.
+
+The SQL editor is read-only and enforces that by parsing each statement rather
+than by inspecting keywords, and the DuckDB connection is sandboxed so a query
+cannot read or write files, attach another database, or load an extension.
+Nothing here gives you TLS, so terminate HTTPS at a reverse proxy if the host is
+reachable from anywhere untrusted.
 
 ---
 

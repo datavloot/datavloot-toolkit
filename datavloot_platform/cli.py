@@ -111,6 +111,8 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
     print(f"  DuckDB:  {config.duckdb_path}")
     print(f"  Dagster: {config.dagster_graphql_url}")
     print(f"  Marimo:  {config.marimo_url}")
+    from datavloot_platform.crowsnest.auth import get_auth_token
+    print(f"  Auth:    {'token required' if get_auth_token() else 'none (set CROWSNEST_AUTH_TOKEN to require one)'}")
     print()
 
     if args.open:
