@@ -46,10 +46,6 @@ models:
         description: "FK to dim_time — time of day (minute precision) of the arrival or departure."
         data_tests:
           - not_null
-      - name: mmsi
-        description: "Vessel identifier — matches mmsi in dim_vessel."
-      - name: port_index_number
-        description: "Port identifier — matches port_index_number in dim_port."
       - name: event_time
         description: "UTC timestamp of the first broadcast that triggered the arrival or departure transition."
         data_tests:

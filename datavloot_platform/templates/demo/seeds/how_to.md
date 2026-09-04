@@ -48,7 +48,6 @@ and it changes rarely enough that a git commit is the right change mechanism.
     source_seed: priority_levels
     surrogate_key:
       columns: [priority_id]
-      alias: dim_priority_key
     columns:
       - priority_id
       - priority_label
