@@ -1,6 +1,6 @@
 [project]
 name = "datavloot"
-version = "0.1.0"
+version = "0.1.2"
 description = "Open, modular, Python-native data platform — from a laptop to a fleet, without vendor lock-in."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -44,6 +44,25 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datavloot_platform"]
+
+# Hatchling honours only the ROOT .gitignore, so anything hidden by a nested one
+# ships unless it is listed here. That is how the 0.1.1 wheel reached PyPI at
+# 66.9 MB / 276 MB unpacked, over 99% of it frontend build input.
+#
+# frontend/ is excluded wholesale, not just its build output: only crowsnest/
+# static/ is ever served, so the Next.js source is build input for maintainers,
+# who get it from the repository. Excluding it also means FRONTEND_DIR is
+# genuinely absent in an installed package, which is what check_static_freshness()
+# already assumes.
+#
+# tests/test_packaging.py enforces all of this against the built artifact.
+exclude = [
+  "datavloot_platform/crowsnest/frontend",
+  "datavloot_platform/templates/*/target",
+  "datavloot_platform/templates/*/dbt_packages",
+  "datavloot_platform/templates/*/logs",
+  "*.duckdb",
+]
 
 [tool.dagster]
 module_name = "datavloot_platform.definitions"

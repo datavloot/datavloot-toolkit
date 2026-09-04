@@ -181,7 +181,16 @@ series never collide in the same repo.
 5. Sanity-check the built artifacts before uploading anything:
    ```bash
    uvx twine check dist/*
+   ls -lh dist/
    ```
+   `twine check` validates metadata and README rendering only — it will pass a 300 MB wheel
+   without comment, which is exactly how 0.1.1 shipped 66.9 MB of frontend build inputs. So
+   check the size too: **the wheel should be well under 5 MB**. If it is not, something that
+   only a nested `.gitignore` was hiding has entered the build; see the `exclude` list in
+   [`pyproject.toml`](../pyproject.toml).
+
+   `tests/test_packaging.py` asserts this in CI on every commit, so a surprise here means the
+   pipeline was skipped or the build is being run from a dirty tree.
 6. Publish:
    ```bash
    uv publish

@@ -78,8 +78,11 @@ def check_static_freshness():
     static/ leaves the server quietly serving an older UI.  That failure is silent
     and indistinguishable from a change not working, so it is worth catching here.
 
-    Returns None when frontend/ is absent, which is the normal case for an
-    installed package, and never raises -- a broken check must not stop the server.
+    Returns None when frontend/ is absent, and never raises -- a broken check must
+    not stop the server.  frontend/ is excluded from the wheel (see the `exclude`
+    list in pyproject.toml), so absent is guaranteed for an installed package and
+    this check only ever runs from a source checkout, which is the only place the
+    warning it prints is actionable.
     """
     try:
         if not FRONTEND_DIR.is_dir() or not STATIC_DIR.is_dir():
