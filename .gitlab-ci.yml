@@ -36,6 +36,20 @@ lint:
       when: never
     - when: always
 
+# The Crows Nest tests need the web stack, which lint does not install -- without
+# this job they would silently skip and the security assertions would never run.
+crowsnest:
+  stage: test
+  script:
+    - >
+      uv run --with pytest --with pyyaml --with duckdb
+      --with fastapi --with httpx
+      python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py -v
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - when: always
+
 smoke:
   stage: test
   script:
