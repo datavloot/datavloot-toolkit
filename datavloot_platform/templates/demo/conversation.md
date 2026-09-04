@@ -162,7 +162,6 @@ meta:
   source_model: stg_noaa__guam_2025
   surrogate_key:
     columns: [mmsi]
-    alias: dim_vessel_key
   deduplicate:
     partition_by: [mmsi]
     order_by: base_date_time desc
@@ -180,7 +179,7 @@ meta:
   source_seed: ports
   surrogate_key:
     columns: [port_index_number]
-    alias: dim_port_key
+    # alias omitted -> defaults to port_key
 ```
 
 SQL: `{{ optimist.build_dimension() }}`
