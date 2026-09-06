@@ -48,7 +48,13 @@ dev = [
 datavloot = "datavloot_platform.cli:main"
 
 [build-system]
-requires = ["hatchling>=1.27.0"]   # >=1.27 for PEP 639 license/license-files
+# Upper bound pins the emitted core-metadata version, not just the backend.
+# hatchling >=1.32 emits Metadata-Version 2.5, which twine 6.x rejects outright
+# ("InvalidDistribution: '2.5' is not a valid metadata version") and which only
+# very recent packaging releases accept. 1.27-1.31 emit 2.4 -- the version PEP 639
+# defined and PyPI has supported since, so the artifact uploads with whatever
+# twine a maintainer happens to have. Lower bound is 1.27 for PEP 639 support.
+requires = ["hatchling>=1.27,<1.32"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]

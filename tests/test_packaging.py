@@ -192,6 +192,29 @@ def test_templates_ship(wheel: pathlib.Path):
         assert required in names, f"{required} is missing from the wheel"
 
 
+def test_metadata_version_is_widely_accepted(wheel: pathlib.Path):
+    """
+    Core metadata must stay at 2.4, the version PEP 639 defined.
+
+    hatchling >=1.32 emits 2.5, which twine 6.x refuses with
+    "InvalidDistribution: '2.5' is not a valid metadata version" -- the upload
+    fails on the maintainer's machine before PyPI is ever contacted. The build
+    requirement in pyproject.toml pins below that; this asserts the result, so
+    relaxing the pin fails here rather than during a release.
+    """
+    with zipfile.ZipFile(wheel) as z:
+        meta = z.read(next(n for n in z.namelist() if n.endswith(".dist-info/METADATA")))
+    version = next(
+        line.split(": ", 1)[1]
+        for line in meta.decode("utf-8", "replace").splitlines()
+        if line.startswith("Metadata-Version:")
+    )
+    assert version == "2.4", (
+        f"wheel declares Metadata-Version {version}; 2.4 is what older twine accepts. "
+        "Check the hatchling bound in [build-system] requires."
+    )
+
+
 def test_license_is_declared(wheel: pathlib.Path):
     """Apache-2.0 must reach PyPI, not just sit in the repository."""
     with zipfile.ZipFile(wheel) as z:
