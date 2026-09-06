@@ -56,6 +56,16 @@ build-backend = "hatchling.build"
 # left the sdist at 64 MB compressed / 282 MB expanded, and `uv publish` uploads
 # both, so the exclusion has to live here.
 exclude = [
+  # Tooling state that lands inside the tree. CI sets UV_CACHE_DIR=.uv-cache
+  # because GitLab can only cache paths under the build directory, and the sdist
+  # packs whatever is not excluded: on Linux that cache holds absolute symlinks
+  # into /usr/local/bin and the build dies with "Invalid tar file"; on Windows it
+  # silently produced a 22.78 MB sdist instead of 0.68 MB.
+  ".uv-cache",
+  ".venv",
+  ".pytest_cache",
+  "dist",
+  "build",
   "datavloot_platform/crowsnest/frontend",
   "datavloot_platform/templates/*/target",
   "datavloot_platform/templates/*/dbt_packages",

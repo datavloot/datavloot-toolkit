@@ -24,7 +24,8 @@ pytestmark = pytest.mark.package
 
 # Build inputs and generated state. None of this belongs in a wheel.
 FORBIDDEN = re.compile(
-    r"(^|/)(node_modules|\.next|out|dbt_packages|target|logs|__pycache__)/|\.duckdb$"
+    r"(^|/)(node_modules|\.next|out|dbt_packages|target|logs|__pycache__"
+    r"|\.uv-cache|\.venv|\.pytest_cache|dist|build)/|\.duckdb$"
 )
 
 # The 0.1.1 wheel was 276 MB unpacked. The source, templates and pre-built

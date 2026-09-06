@@ -5,6 +5,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.uv-cache/
+.pytest_cache/
 
 # dbt
 dbt/optimist/target/
