@@ -7,3 +7,6 @@ logs/
 __pycache__/
 *.pyc
 .env
+# The Valk: generated secrets and the pinned SRDP checkout
+deploy/valk/.env
+.srdp/

@@ -1,0 +1,27 @@
+#!/bin/sh
+# deploy/valk/entrypoint.sh -- rendered by `datavloot valk render`.
+#
+# Runs before the code server (and before the Crows Nest, unless the overlay
+# clears the entrypoint). Two jobs that need Postgres and therefore cannot happen
+# at image build time:
+#
+#   1. make sure the DuckLake catalog database exists (SRDP's init script creates
+#      `zitadel` and `dagster` only; whoever attaches first creates `ducklake`)
+#   2. `dbt parse`, so dagster-dbt has a manifest for the @@project_name code location
+set -eu
+cd /app
+
+attempt=0
+until python -c "from datavloot_platform.vessel import ensure_catalog_database as e; e()"; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 20 ]; then
+    echo "entrypoint: Postgres at ${DUCKLAKE_PG_HOST:-localhost} did not become reachable" >&2
+    exit 1
+  fi
+  echo "entrypoint: waiting for Postgres (${attempt}/20)..."
+  sleep 3
+done
+
+dbt parse --profiles-dir /app --target "${DBT_TARGET:-valk}"
+
+exec "$@"

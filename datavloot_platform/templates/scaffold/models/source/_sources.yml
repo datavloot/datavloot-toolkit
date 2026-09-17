@@ -3,7 +3,9 @@ version: 2
 sources:
   - name: <source_name>           # used as first arg in stage_source() and source()
     description: ""
-    database: <database>
+    # Keep the env_var: on the Valk the raw tables live in the shared DuckLake catalog,
+    # and DATAVLOOT_DBT_DATABASE points dbt at it. Locally it resolves to the DuckDB file.
+    database: "{{ env_var('DATAVLOOT_DBT_DATABASE', '<project_name>') }}"
     schema: <schema>
 
     # Freshness checks — dbt source freshness will warn/error if the source

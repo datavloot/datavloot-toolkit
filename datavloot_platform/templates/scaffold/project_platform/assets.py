@@ -32,18 +32,19 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 # ---------------------------------------------------------------------------
 # See the NOAA demo for a complete worked example: optimist demo
 #
-# Pattern:
+# Pattern (the vessel module picks the destination: the DuckDB file on the
+# Optimist, the shared DuckLake catalog on the Valk -- see datavloot.yml):
 #
 #   import dlt
 #   from dagster_dlt import DagsterDltResource, dlt_assets
-#   from dlt.destinations import duckdb as duckdb_destination
+#   from datavloot_platform.vessel import dlt_destination
 #
 #   @dlt_assets(
 #       dlt_source=my_source(),
 #       dlt_pipeline=dlt.pipeline(
 #           pipeline_name="my_pipeline",
 #           dataset_name="source",
-#           destination=duckdb_destination(credentials=str(DB_PATH)),
+#           destination=dlt_destination(PROJECT_DIR, DB_PATH),
 #       ),
 #       group_name="source",
 #   )
@@ -51,3 +52,10 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #       yield from dlt.run(context=context)
 #
 # Add DagsterDltResource to definitions.py resources when wiring this up.
+#
+# Plain assets that write with DuckDB directly should open the warehouse the same
+# way, so they follow the vessel too:
+#
+#   from datavloot_platform.vessel import connect as vessel_connect
+#   con = vessel_connect(PROJECT_DIR, DB_PATH)
+#   con.execute("CREATE SCHEMA IF NOT EXISTS raw")

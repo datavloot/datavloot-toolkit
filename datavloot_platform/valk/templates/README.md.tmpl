@@ -1,0 +1,91 @@
+# The Valk: `@@project_name` on SRDP
+
+Rendered by `datavloot valk render` from `datavloot.yml`, against SRDP commit
+`@@srdp_ref`. Re-render after changing `datavloot.yml`; do not edit the rendered
+files. Design and background: `docs/valk.md` in the datavloot toolkit.
+
+## What runs where
+
+| URL | Service | Who runs it |
+|---|---|---|
+| `https://crowsnest.@@domain` | Crows Nest: catalog, quality, SQL, pipelines, notebooks | this project (`deploy/valk/Dockerfile`) |
+| `https://dagster.@@domain` | Dagster UI | SRDP compose, rebuilt on this project's Dagster version |
+| `https://marimo.@@domain` | Marimo | SRDP compose |
+| `https://quarto.@@domain` | Quarto | SRDP compose |
+| `https://auth.@@domain` | Zitadel (login, users, roles) | SRDP compose |
+| (internal) | Postgres: DuckLake catalog, Dagster state, Zitadel data | SRDP compose |
+| (internal) | DuckLake data: `@@data_path` | volume or bucket |
+
+One login covers all of them: Traefik asks oauth2-proxy, oauth2-proxy asks Zitadel.
+
+## Bring it up
+
+```bash
+datavloot valk render          # after any datavloot.yml change
+datavloot valk fetch           # SRDP @@srdp_ref into .srdp/ (shallow)
+datavloot valk certs           # mkcert certificates for *.@@domain
+datavloot valk up              # docker compose up -d --build, both stacks layered
+```
+
+`datavloot valk up --prod` adds SRDP's Let's Encrypt override. It needs `ACME_EMAIL`
+in `.env`, a public IP, and DNS A records for every host in the table above.
+
+Without `--prod`, point the hostnames at the machine yourself (`/etc/hosts`, or a
+wildcard record for `*.@@domain`) and run `mkcert -install` once on each browser
+machine so the certificates are trusted.
+
+## One-time: the Zitadel OIDC application
+
+oauth2-proxy cannot log anyone in until Zitadel knows it. This is SRDP's documented
+bootstrap gap (their issue #35); until it is automated:
+
+1. Open `https://auth.@@domain`, sign in as `zitadel-admin@zitadel.auth.@@domain`
+   with `ZITADEL_ADMIN_PASSWORD` from `.env`.
+2. Create a project (call it `@@project_name`). Add an application of type **Web**,
+   auth method **Code**, with these redirect URIs:
+   - `https://crowsnest.@@domain/oauth2/callback`
+   - `https://dagster.@@domain/oauth2/callback`
+   - `https://marimo.@@domain/oauth2/callback`
+   - `https://quarto.@@domain/oauth2/callback`
+3. In the application's **Token settings**, set *Auth token type* to **JWT** and
+   tick *Add user roles to the access token*. In the project's settings tick
+   *Assert roles on authentication*. Without these the Crows Nest falls back to
+   Zitadel's userinfo endpoint on every request, which works but is slower.
+4. Create three roles on the project: `reader`, `writer`, `admin`. Grant them to
+   users. An authenticated user with no role gets `@@default_role`.
+5. Paste the client id and secret into `deploy/valk/.env`, then
+   `datavloot valk up` again to restart oauth2-proxy with them.
+
+## Day to day
+
+```bash
+datavloot valk compose ps
+datavloot valk compose logs -f crowsnest
+datavloot valk compose logs -f dagster-code
+datavloot valk down
+```
+
+Materialize from the Dagster UI, or from inside the code server:
+
+```bash
+datavloot valk compose exec dagster-code dagster asset materialize -m @@module_name --select "*"
+```
+
+Check the shared catalog from any container:
+
+```bash
+datavloot valk compose exec dagster-code python -c "from datavloot_platform.vessel import connect; print(connect('/app', 'unused').sql('select table_schema, table_name from information_schema.tables'))"
+```
+
+## Backups
+
+Everything durable is in two places: the Postgres volume (`srdp-pgdata`: catalog,
+Dagster history, Zitadel users) and the DuckLake data (`@@data_path`). Back up
+both; the containers and images are rebuildable. SRDP's Helm chart has a nightly
+`pg_dump` CronJob; their Compose stack does not, so add one on the VM:
+
+```bash
+docker exec srdp-postgres pg_dumpall -U postgres | gzip > /backup/valk-$(date +%F).sql.gz
+```
+
+Never run `docker compose down -v` on this stack: it deletes Zitadel's data.

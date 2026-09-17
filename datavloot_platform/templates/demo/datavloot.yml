@@ -1,0 +1,27 @@
+# datavloot.yml -- which vessel this project sails on.
+#
+#   optimist   everything on this machine: one DuckDB file, no login (the default)
+#   valk       the same project on an SRDP stack: shared DuckLake catalog on
+#              Postgres, Parquet on a volume or S3 bucket, Zitadel single sign-on
+#
+# Switching is this one key plus the `valk:` block below, then:
+#   datavloot valk render && datavloot valk fetch && datavloot valk certs && datavloot valk up
+# Nothing in models/, seeds/ or the Dagster assets changes. Details: docs/valk.md.
+#
+# Secrets never go in this file. They live in deploy/valk/.env (generated, git-ignored).
+
+vessel: optimist
+
+# valk:
+#   domain: noaa.valk.localhost    # services become crowsnest.<domain>, dagster.<domain>, auth.<domain>, ...
+#   acme_email: ""                 # Let's Encrypt contact for `datavloot valk up --prod`; empty = local mkcert certs
+#   catalog:
+#     metadata_schema: ducklake_noaa
+#   storage:
+#     kind: local                  # local | s3
+#     data_path: /data/ducklake
+#   access:
+#     default_role: reader         # reader | none
+#   srdp:
+#     repo: https://github.com/srdp-hub/srdp.git
+#     ref: 896ceea82b73fdb5b53502bdd9cc5882d90efae8

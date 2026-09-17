@@ -53,7 +53,8 @@ def test_every_model_layer_sets_a_custom_schema(scaffold: pathlib.Path):
     emits three-part names); it breaks what a person types.
     """
     project = yaml.safe_load((scaffold / "dbt_project.yml").read_text(encoding="utf-8"))
-    layers = project["models"]["probe"]
+    # `+database` and friends are project-level configs, not layers.
+    layers = {k: v for k, v in project["models"]["probe"].items() if not k.startswith("+")}
 
     missing = [name for name, cfg in layers.items() if "+schema" not in cfg]
     assert missing == [], f"layers with no +schema, will collide with the catalog: {missing}"

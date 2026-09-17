@@ -1,0 +1,37 @@
+# deploy/valk/dagster/dagster.yaml -- Dagster instance config for the Valk.
+# Rendered by `datavloot valk render`; same shape as SRDP's config/dagster/dagster.yaml.
+# Run and event storage in the shared Postgres, runs launched in the code server's
+# process (SRDP's Compose choice; ADR-0007 keeps the k8s launcher for Kubernetes).
+
+storage:
+  postgres:
+    postgres_db:
+      hostname:
+        env: DAGSTER_PG_HOST
+      username:
+        env: DAGSTER_PG_USER
+      password:
+        env: DAGSTER_PG_PASSWORD
+      db_name:
+        env: DAGSTER_PG_DB
+      port: 5432
+
+compute_logs:
+  module: dagster._core.storage.local_compute_log_manager
+  class: LocalComputeLogManager
+  config:
+    base_dir: /app/compute_logs
+
+run_launcher:
+  module: dagster
+  class: DefaultRunLauncher
+
+# One writer at a time on the shared catalog, the rule the Optimist VM test
+# established (draaiboek 2026-09-11). DuckLake tolerates concurrent writers, but
+# a project's dbt build is one unit of work and overlapping runs only slow it.
+concurrency:
+  runs:
+    max_concurrent_runs: 1
+
+telemetry:
+  enabled: false

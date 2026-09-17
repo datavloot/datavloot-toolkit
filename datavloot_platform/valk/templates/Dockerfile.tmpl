@@ -1,0 +1,38 @@
+# deploy/valk/Dockerfile -- the project image: Dagster code server and Crows Nest.
+#
+# Rendered by `datavloot valk render`. One image, two roles: SRDP's compose runs it
+# as `dagster-code` (gRPC code server) and the overlay runs it as `crowsnest`.
+# Same interpreter, same dbt, same DuckLake catalog on both.
+#
+# SRDP's ADR-0001 model is "FROM an srdp base image, COPY the project". SRDP does
+# not publish a base image yet, so this is the equivalent built from python:3.12,
+# which is the only Python SRDP supports (their pyproject pins >=3.12,<3.13).
+
+FROM python:3.12-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# The toolkit first, so project-only edits do not reinstall the whole stack.
+RUN pip install --no-cache-dir "@@datavloot_spec"
+
+COPY . /app
+RUN pip install --no-cache-dir -e /app \
+ && chmod +x /app/deploy/valk/entrypoint.sh
+
+# `dbt deps` needs the network but no warehouse, so it runs at build time; `dbt
+# parse` needs the profile and runs in the entrypoint once Postgres is reachable.
+RUN dbt deps --profiles-dir /app
+
+ENV DAGSTER_HOME=/opt/dagster/dagster_home \
+    DBT_PROFILES_DIR=/app \
+    DBT_TARGET=valk
+RUN mkdir -p "$DAGSTER_HOME" && cp /app/deploy/valk/dagster/dagster.yaml "$DAGSTER_HOME/"
+
+EXPOSE 3030 8080
+
+ENTRYPOINT ["/app/deploy/valk/entrypoint.sh"]
+CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "3030", "-m", "@@module_name"]

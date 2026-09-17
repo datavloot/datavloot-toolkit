@@ -331,17 +331,31 @@ Schedules and sensors are defined in `definitions.py` alongside the existing ass
 
 ## Scaling up
 
-The Optimist runs entirely on a local machine. When you're ready for team scale, the goal is to change a config flag — not rewrite your pipelines. The pipelines, dbt models, and orchestration logic you build on the Optimist are designed to carry forward unchanged.
+The Optimist runs entirely on a local machine. When you're ready for team scale, you change a config flag — not your pipelines. The dbt models, dlt sources and Dagster assets you build on the Optimist carry forward unchanged.
 
-The **Falcon** tier (on the roadmap) formalises this: switching `vessel: optimist` to `vessel: falcon` in `datavloot.yml` moves your platform to production-grade lakehouse storage on infrastructure of your choice, without starting over.
+The **Valk** is the next vessel: the same project on a shared server for a small team, with single sign-on, a shared DuckLake catalog on Postgres, and Parquet on a volume or any S3-compatible EU bucket. It is built as a client project on [SRDP](https://github.com/srdp-hub/srdp), which supplies the reverse proxy, identity and the Compose stack; datavloot supplies the project and the Crows Nest.
 
-In the meantime, the Optimist's individual components are independently portable:
+```yaml
+# datavloot.yml
+vessel: valk
+valk:
+  domain: valk.example.nl
+```
+
+```bash
+pip install "datavloot[valk]"
+datavloot valk render && datavloot valk fetch && datavloot valk certs && datavloot valk up
+```
+
+Every project scaffolded with `datavloot new` already carries a `datavloot.yml`. The full walkthrough, the access model and the honest list of what has not been exercised yet are in [docs/valk.md](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/valk.md).
+
+Beyond the Valk, the components stay independently portable:
 
 | Step | What changes | What stays the same |
 |---|---|---|
 | **Cloud VM** | Move the whole platform to a VPS or cloud VM | Nothing — runs identically |
-| **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
-| **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
+| **Cloud storage** | Point DuckLake at an S3-compatible bucket instead of a local volume | All dbt models and Dagster assets |
+| **Cloud warehouse** | Swap `dbt-duckdb` for another dbt adapter | All models and macros (mostly portable SQL) |
 
 See [datavloot.nl/vaarroute](https://datavloot.nl/vaarroute) for the full vessel roadmap.
 

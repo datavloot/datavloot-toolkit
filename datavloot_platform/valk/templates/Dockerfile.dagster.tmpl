@@ -1,0 +1,23 @@
+# deploy/valk/Dockerfile.dagster -- Dagster webserver and daemon.
+#
+# Rendered by `datavloot valk render`. SRDP builds these from their own lockfile
+# (dagster @@dagster_version is what the project pins; theirs may differ). The webserver
+# and daemon talk gRPC to the code server, and Dagster only guarantees that
+# protocol between matching versions, so the Valk builds them here on the same
+# version as the project image instead of trusting SRDP's pin to line up.
+#
+# No source code in this image, exactly as in SRDP's dagster-webserver.Dockerfile.
+
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir \
+      "dagster==@@dagster_version" \
+      "dagster-webserver==@@dagster_version" \
+      "dagster-graphql==@@dagster_version" \
+      "dagster-postgres==@@dagster_lib_version"
+
+ENV DAGSTER_HOME=/app/config/dagster
+COPY dagster/ /app/config/dagster/
+RUN mkdir -p /app/compute_logs
+
+EXPOSE 3000

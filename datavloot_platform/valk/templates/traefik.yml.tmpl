@@ -1,0 +1,75 @@
+# deploy/valk/traefik.yml -- Traefik static configuration for @@domain.
+#
+# Rendered by `datavloot valk render`. Mounted over SRDP's config/traefik/traefik.yml,
+# which hardcodes SRDP's own dev hostname. Identical otherwise, except that the Traefik
+# dashboard is off: SRDP publishes port 8080 for it, and on a VM that is a hole.
+
+log:
+  level: "INFO"
+accessLog: {}
+ping: {}
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: "srdp-app"
+  file:
+    filename: "/etc/traefik/traefik.yaml"
+
+entrypoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entrypoint:
+          to: "websecure"
+          scheme: "https"
+          permanent: true
+  websecure:
+    address: ":443"
+    http:
+      tls: {}
+
+http:
+  routers:
+    zitadel:
+      entryPoints:
+        - "websecure"
+      service: "zitadel"
+      rule: '(Host(`auth.@@domain`) && !PathPrefix(`/ui/v2/login`) && !PathPrefix(`/oauth2/`))'
+      tls: {}
+    zitadel-login:
+      entryPoints:
+        - "websecure"
+      service: "zitadel-login"
+      rule: '(Host(`auth.@@domain`) && PathPrefix(`/ui/v2/login`))'
+      tls: {}
+  services:
+    zitadel:
+      loadBalancer:
+        serversTransport: "zitadel"
+        passHostHeader: true
+        servers:
+          - url: "https://zitadel:8080"
+    zitadel-login:
+      loadBalancer:
+        serversTransport: "zitadel-login"
+        passHostHeader: true
+        servers:
+          - url: "http://zitadel-login:3000"
+  serversTransports:
+    zitadel:
+      insecureSkipVerify: true
+    zitadel-login:
+      insecureSkipVerify: true
+
+tls:
+  stores:
+    default:
+      defaultCertificate:
+        certFile: "/etc/certs/selfsigned.crt"
+        keyFile: "/etc/certs/selfsigned.key"
+
+api:
+  dashboard: false
+  insecure: false

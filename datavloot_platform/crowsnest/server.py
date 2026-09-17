@@ -9,10 +9,10 @@ import pathlib
 
 import duckdb
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
-from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
+from datavloot_platform.crowsnest.auth import OidcAuthMiddleware, TokenAuthMiddleware
 from datavloot_platform.crowsnest.config import get_config
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
 
@@ -134,10 +134,13 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
-    # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
-    # covers the API and the static dashboard alike -- serving the UI to anyone
-    # who asks while the data behind it needs a token is not a useful boundary.
+    # Off unless CROWSNEST_AUTH_TOKEN (token mode) or CROWSNEST_OIDC_ISSUER (OIDC
+    # mode, the Valk) is set. Added before the routers so they cover the API and
+    # the static dashboard alike -- serving the UI to anyone who asks while the
+    # data behind it needs a login is not a useful boundary. Starlette runs the
+    # last-added middleware first, so OIDC decides before the token check runs.
     app.add_middleware(TokenAuthMiddleware)
+    app.add_middleware(OidcAuthMiddleware)
 
     app.include_router(pipelines.router, prefix="/api/pipelines", tags=["Pipelines"])
     app.include_router(quality.router, prefix="/api/quality", tags=["Data Quality"])
@@ -162,9 +165,14 @@ def create_app() -> FastAPI:
         except Exception:
             results["dagster"] = "offline"
 
-        # DuckDB: try opening the file
+        # Warehouse: open it the same way the query routes do, so a DuckLake
+        # catalog on Postgres is probed for real instead of "the file exists".
         try:
-            if config.duckdb_path == ":memory:":
+            if config.uses_ducklake:
+                from datavloot_platform.crowsnest.db import get_conn
+                get_conn(read_only=True).close()
+                results["duckdb"] = "ok"
+            elif config.duckdb_path == ":memory:":
                 results["duckdb"] = "ok"
             else:
                 conn = duckdb.connect(config.duckdb_path, read_only=True)
@@ -188,10 +196,18 @@ def create_app() -> FastAPI:
         """Return live service URLs for the frontend to use."""
         config = get_config()
         return {
-            "dagster_url": "http://localhost:3000",
+            "dagster_url": config.dagster_public_url,
             "marimo_url": config.marimo_url,
             "duckdb_path": config.duckdb_path,
+            "warehouse": config.warehouse_label,
+            "vessel": config.vessel.vessel if config.vessel else "optimist",
         }
+
+    @app.get("/api/me")
+    async def whoami(request: Request):
+        """Who the platform says you are. Empty when no authentication is configured."""
+        user = getattr(request.state, "user", None)
+        return {"authenticated": user is not None, "user": user}
 
     warning = check_static_freshness()
     if warning:

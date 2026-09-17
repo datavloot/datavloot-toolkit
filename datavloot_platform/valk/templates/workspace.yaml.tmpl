@@ -1,0 +1,8 @@
+# deploy/valk/dagster/workspace.yaml -- where the webserver and daemon find the
+# @@project_name code location. `srdp-dagster-code` is the container_name SRDP's
+# compose gives the code server at @@srdp_ref.
+load_from:
+  - grpc_server:
+      host: srdp-dagster-code
+      port: 3030
+      location_name: "@@project_name"

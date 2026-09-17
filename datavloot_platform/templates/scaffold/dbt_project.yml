@@ -11,14 +11,23 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+# `+database` is what lets this project move vessels without edits. On the Optimist
+# it is the DuckDB file's own catalog name (the default anyway). On the Valk the
+# Compose overlay sets DATAVLOOT_DBT_DATABASE to the attached DuckLake catalog, so
+# every model, seed and Elementary table lands in the shared lakehouse instead of
+# the in-memory database the valk target opens.
+
 seeds:
   <project_name>:
     +schema: seeds
+    +database: "{{ env_var('DATAVLOOT_DBT_DATABASE', '<project_name>') }}"
 
 models:
   elementary:
     +schema: elementary
+    +database: "{{ env_var('DATAVLOOT_DBT_DATABASE', '<project_name>') }}"
   <project_name>:
+    +database: "{{ env_var('DATAVLOOT_DBT_DATABASE', '<project_name>') }}"
     source:
       +schema: source
       +materialized: incremental  # only new rows per run; pair with incremental_column in stage_source and unique_key per model

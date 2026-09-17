@@ -4,3 +4,6 @@ data/
 target/
 dbt_packages/
 logs/
+# The Valk: generated secrets and the pinned SRDP checkout
+deploy/valk/.env
+.srdp/

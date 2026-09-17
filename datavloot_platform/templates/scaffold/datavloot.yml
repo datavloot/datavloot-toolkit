@@ -1,0 +1,33 @@
+# datavloot.yml -- which vessel this project sails on.
+#
+#   optimist   everything on this machine: one DuckDB file, no login (the default)
+#   valk       the same project on an SRDP stack: shared DuckLake catalog on
+#              Postgres, Parquet on a volume or S3 bucket, Zitadel single sign-on
+#
+# Switching is this one key plus the `valk:` block below, then:
+#   datavloot valk render && datavloot valk fetch && datavloot valk certs && datavloot valk up
+# Nothing in models/, seeds/ or the Dagster assets changes. Details: docs/valk.md.
+#
+# Secrets never go in this file. They live in deploy/valk/.env (generated, git-ignored).
+
+vessel: optimist
+
+# valk:
+#   domain: valk.example.nl        # services become crowsnest.<domain>, dagster.<domain>, auth.<domain>, ...
+#   acme_email: ""                 # Let's Encrypt contact for `datavloot valk up --prod`; empty = local mkcert certs
+#   catalog:
+#     metadata_schema: ducklake_<project_name>   # DuckLake metadata schema in the shared Postgres (SRDP ADR-0006 style)
+#   storage:
+#     kind: local                  # local | s3
+#     data_path: /data/ducklake    # local: a Docker volume shared by the code server and the Crows Nest
+#     # kind: s3                   # any S3-compatible EU provider; the key pair goes in deploy/valk/.env
+#     # bucket: acme-lakehouse
+#     # prefix: <project_name>
+#     # endpoint: s3.nl-ams.scw.cloud
+#     # region: nl-ams
+#     # url_style: path
+#   access:
+#     default_role: reader         # role for a signed-in user with no Zitadel role: reader | none
+#   srdp:
+#     repo: https://github.com/srdp-hub/srdp.git
+#     ref: 896ceea82b73fdb5b53502bdd9cc5882d90efae8    # the SRDP commit the overlay is rendered against

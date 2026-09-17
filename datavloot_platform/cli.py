@@ -108,11 +108,18 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
 
     config = get_config()
     print(f"Starting Crows Nest on http://{args.host}:{args.port}")
-    print(f"  DuckDB:  {config.duckdb_path}")
+    print(f"  Data:    {config.warehouse_label}")
     print(f"  Dagster: {config.dagster_graphql_url}")
     print(f"  Marimo:  {config.marimo_url}")
-    from datavloot_platform.crowsnest.auth import get_auth_token
-    print(f"  Auth:    {'token required' if get_auth_token() else 'none (set CROWSNEST_AUTH_TOKEN to require one)'}")
+    from datavloot_platform.crowsnest.auth import get_auth_token, get_oidc_settings
+    oidc = get_oidc_settings()
+    if oidc:
+        auth = f"OIDC tokens from {oidc.issuer} (default role: {oidc.default_role})"
+    elif get_auth_token():
+        auth = "token required"
+    else:
+        auth = "none (set CROWSNEST_AUTH_TOKEN to require one)"
+    print(f"  Auth:    {auth}")
     print()
 
     if args.open:
@@ -281,12 +288,63 @@ def cmd_start(args: argparse.Namespace) -> None:
         _terminate_tree(dagster_proc)
 
 
+def cmd_valk(args: argparse.Namespace) -> None:
+    """
+    `datavloot valk <render|fetch|certs|up|down|compose>`: sail this project as the Valk.
+
+    The Valk is the project deployed as a client project on an SRDP Compose stack.
+    Everything here reads datavloot.yml; see docs/valk.md.
+    """
+    from datavloot_platform.valk import commands
+
+    config = commands.load_valk(args.project)
+    action = args.action
+    if action == "render":
+        commands.cmd_render(config, datavloot_source=args.datavloot_source)
+    elif action == "fetch":
+        commands.cmd_fetch(config)
+    elif action == "certs":
+        commands.cmd_certs(config)
+    elif action == "up":
+        commands.cmd_up(config, prod=args.prod, build=not args.no_build)
+    elif action == "down":
+        commands.cmd_down(config, prod=args.prod)
+    elif action == "compose":
+        commands.cmd_compose(config, args.compose_args, prod=args.prod)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="datavloot",
         description="Datavloot CLI",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    valk_parser = subparsers.add_parser(
+        "valk", help="Deploy this project as the Valk, on an SRDP Compose stack"
+    )
+    valk_parser.add_argument(
+        "--project", default=None,
+        help="Project directory holding datavloot.yml (default: search upward from the cwd)",
+    )
+    valk_parser.add_argument(
+        "--prod", action="store_true",
+        help="Layer SRDP's production override (Let's Encrypt TLS, read-only Dagster UI)",
+    )
+    valk_actions = valk_parser.add_subparsers(dest="action", required=True)
+    render_p = valk_actions.add_parser("render", help="Write deploy/valk/ from datavloot.yml")
+    render_p.add_argument(
+        "--datavloot-source", default=None,
+        help="What the project image installs: a PyPI version, or git+https://...@ref for an unreleased toolkit",
+    )
+    valk_actions.add_parser("fetch", help="Check SRDP out at the pinned commit into .srdp/")
+    valk_actions.add_parser("certs", help="Create mkcert certificates for every hostname")
+    up_p = valk_actions.add_parser("up", help="docker compose up -d --build, both stacks layered")
+    up_p.add_argument("--no-build", action="store_true", help="Skip rebuilding images")
+    valk_actions.add_parser("down", help="docker compose down")
+    compose_p = valk_actions.add_parser("compose", help="Pass arguments straight to docker compose")
+    compose_p.add_argument("compose_args", nargs=argparse.REMAINDER)
+    valk_parser.set_defaults(func=cmd_valk)
 
     new_parser = subparsers.add_parser(
         "new", help="Scaffold a new project at the given path"

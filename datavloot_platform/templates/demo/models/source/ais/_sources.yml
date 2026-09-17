@@ -3,6 +3,7 @@ version: 2
 sources:
   - name: noaa
     description: "AIS vessel position broadcasts sourced from NOAA Marine Cadastre, loaded into the raw schema via the noaa_guam_2025_raw Dagster asset."
+    database: "{{ env_var('DATAVLOOT_DBT_DATABASE', 'noaa') }}"   # the DuckDB file locally, the DuckLake catalog on the Valk
     schema: raw
 
     # No freshness config — this is a static historical dataset loaded once.

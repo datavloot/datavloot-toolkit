@@ -1,12 +1,16 @@
 from pathlib import Path
 from datetime import date
-import duckdb
 import dlt
 from dlt.sources.helpers import requests as dlt_requests
-from dlt.destinations import duckdb as duckdb_destination
 from dagster import AssetExecutionContext, AssetKey, asset
 from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_assets
 from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
+
+# Where the warehouse is depends on the vessel in datavloot.yml: the noaa.duckdb
+# file on the Optimist, the shared DuckLake catalog on the Valk. Asking the vessel
+# module instead of calling duckdb.connect() is what keeps this file unchanged
+# when the project moves.
+from datavloot_platform.vessel import connect as vessel_connect, dlt_destination
 
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
 DB_PATH = PROJECT_DIR / "noaa.duckdb"
@@ -49,7 +53,7 @@ def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
             "and save as data/guam_2025.csv in the project root."
         )
 
-    con = duckdb.connect(str(DB_PATH))
+    con = vessel_connect(PROJECT_DIR, DB_PATH)
     try:
         con.execute("CREATE SCHEMA IF NOT EXISTS raw")
         context.log.info(f"Loading {CSV_PATH.name} → raw.guam_2025 (may take a minute)...")
@@ -132,7 +136,7 @@ def open_meteo_source():
     dlt_pipeline=dlt.pipeline(
         pipeline_name="open_meteo_marine",
         dataset_name="source",
-        destination=duckdb_destination(credentials=str(DB_PATH)),
+        destination=dlt_destination(PROJECT_DIR, DB_PATH),
     ),
     group_name="noaa_ingest",
     name="open_meteo",

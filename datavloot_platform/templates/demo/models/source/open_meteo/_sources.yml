@@ -3,6 +3,7 @@ version: 2
 sources:
   - name: open_meteo
     description: "Hourly atmospheric wind conditions near Guam from Open-Meteo ERA5 archive, loaded incrementally by the open_meteo_assets Dagster asset via dlt."
+    database: "{{ env_var('DATAVLOOT_DBT_DATABASE', 'noaa') }}"   # the DuckDB file locally, the DuckLake catalog on the Valk
     schema: source    # dlt dataset_name
 
     # No freshness config — dlt manages its own incremental cursor state.
