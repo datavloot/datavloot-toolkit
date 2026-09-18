@@ -1,0 +1,84 @@
+# Datavloot CI — GitHub Actions port of .gitlab-ci.yml
+#
+# Same four checks, fastest-to-fail first:
+#
+#   lint       - the templates parse and declare nothing that does not exist
+#   crowsnest  - the Crows Nest security/auth tests, which need the web stack
+#   smoke      - a fresh `datavloot new` project builds a real warehouse on disk
+#   package    - the built wheel contains no build inputs
+#
+# The `release` step (fast-forward the moving X.Y.x branch on a bare X.Y.Z tag)
+# lives in release.yml, because tag pushes do not match this workflow's trigger.
+#
+# Deps are pulled ephemerally with `uv run --with ...`, exactly as on GitLab, so
+# a change under dbt/optimist is tested against *this checkout*.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']       # every branch; tag pushes do NOT match, so releases are excluded
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv run --with pytest --with pyyaml python -m pytest tests/ -m "not slow and not package" -v
+
+  # The Crows Nest tests importorskip fastapi/duckdb, so `lint` silently skips
+  # them. This job installs the web stack so the security assertions actually run.
+  crowsnest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: >
+          uv run --with pytest --with pyyaml --with duckdb
+          --with fastapi --with httpx
+          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py -v
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      # git is preinstalled on ubuntu-latest, and `dbt deps` needs it to resolve
+      # the hub packages' metadata.
+      - run: >
+          uv run --with pytest --with pyyaml --with duckdb
+          --with dbt-core --with dbt-duckdb
+          python -m pytest tests/ -m slow -v
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv run --with pytest --with pyyaml python -m pytest tests/test_packaging.py -v
+      - run: uv build --wheel --out-dir dist/
+      - run: ls -lh dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+          retention-days: 7
