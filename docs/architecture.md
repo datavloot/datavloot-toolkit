@@ -2,7 +2,7 @@
 
 > **Status: proposed.** This describes the target architecture, not the current implementation: scaffolded projects currently write to a single DuckDB file, without a DuckLake catalog or maintenance jobs. The decision is recorded in an ADR (to be added).
 
-The Optimist is the single-node tier, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory.
+The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory. The next vessel, the Valk, runs the same project on an SRDP stack (see `docs/valk.md`, not yet merged); the Optimist's VM mode deliberately uses the same building blocks so that moving up is adding services, not rebuilding.
 
 ## 1. Component overview
 
@@ -86,7 +86,7 @@ flowchart TB
     subgraph VM["VM mode"]
         V1["Docker image built from the package"]
         V2["Docker Compose: Dagster, Crows Nest, Marimo"]
-        V3["Reverse proxy + optional oauth2-proxy"]
+        V3["Traefik + optional oauth2-proxy"]
     end
 
     DIR["Same directory: catalog + Parquet (relative paths)"]
@@ -100,15 +100,19 @@ flowchart TB
 
 ## 4. Access on the VM
 
-Access to the site, not access policy on data. Per-user data authorisation belongs to Falcon. The Dagster UI and Marimo have no authentication of their own, so every service sits behind the proxy.
+Access to the site, not access policy on data; per-user roles belong to the Valk. The Dagster UI and Marimo have no authentication of their own, so every service sits behind Traefik.
+
+The setup mirrors the Valk: same Traefik static configuration (Docker provider, `exposedByDefault: false`, HTTP to HTTPS redirect, dashboard off), same hostnames (`crowsnest.`, `dagster.`, `marimo.<domain>`) and the same ForwardAuth middleware to oauth2-proxy. The difference is the identity provider: the customer's own IdP instead of Zitadel. Without an IdP, Traefik's built-in `basicAuth` middleware replaces oauth2-proxy. TLS comes from Let's Encrypt through Traefik's ACME resolver.
+
+Open: the Crows Nest validates access tokens itself rather than trusting the proxy's headers. Pointing its OIDC mode at the customer's IdP, with `reader` as default role, is the likely route; it has not been tested against Entra ID or Google Workspace.
 
 ```mermaid
 flowchart LR
-    U["User in the organisation"] --> RP["Reverse proxy (TLS, port 443)"]
-    RP --> OP["oauth2-proxy (optional)"]
+    U["User in the organisation"] --> TR["Traefik (TLS, port 443)"]
+    TR -- "ForwardAuth" --> OP["oauth2-proxy (optional)"]
     OP <--> IDP["Customer IdP: Entra ID / Google Workspace"]
-    OP --> APPS["Crows Nest, Dagster UI, Marimo"]
-    RP -. "fallback" .-> BA["VPN or basic auth"]
+    TR --> APPS["crowsnest. / dagster. / marimo.#lt;domain#gt;"]
+    TR -. "fallback" .-> BA["Traefik basicAuth middleware, or VPN"]
 ```
 
 ## 5. Backup
@@ -124,43 +128,44 @@ flowchart LR
     SNAP -. "optional" .-> BUCKET["S3-compatible bucket (restic / rclone)"]
 ```
 
-## 6. Upgrade path to Falcon
+## 6. Upgrade path to the Valk
 
-Swap catalog and storage; project code (dlt, dbt, Dagster assets) stays the same. Falcon is on the roadmap; its components below are indicative, not decided.
+Set `vessel: valk` in `datavloot.yml`, move the catalog and the data; project code (dlt, dbt, Dagster assets) stays the same. The Valk is built as a client project on SRDP, which supplies Traefik, oauth2-proxy with Zitadel, and the Postgres that holds the DuckLake catalog.
 
 ```mermaid
 flowchart LR
     subgraph OPT["Optimist"]
         O1[("SQLite catalog")]
         O2["Parquet on local disk"]
-        O3["Access via customer IdP / proxy"]
+        O3["Traefik + oauth2-proxy, customer IdP"]
     end
 
-    subgraph FULL["Falcon (roadmap, indicative)"]
+    subgraph VALK["Valk (on SRDP)"]
         F1[("PostgreSQL catalog")]
-        F2["Parquet in S3-compatible storage"]
-        F3["IAM (to be decided), per-user policy"]
+        F2["Parquet on a volume or in S3-compatible storage"]
+        F3["Traefik + oauth2-proxy, Zitadel with roles"]
     end
 
     O1 -- "migrate metadata" --> F1
     O2 -- "copy files, update data path" --> F2
-    O3 -- "enable component" --> F3
+    O3 -- "switch identity provider" --> F3
 ```
 
 ## Component summary
 
-| Component | Optimist | Falcon (indicative) |
+| Component | Optimist | Valk |
 |---|---|---|
 | Ingest | dlt | dlt |
 | Catalog | DuckLake + SQLite | DuckLake + PostgreSQL |
-| Data storage | Parquet on local disk | Parquet in S3-compatible storage |
+| Data storage | Parquet on local disk | Parquet on a volume or in S3-compatible storage |
 | Transform & test | dbt | dbt |
 | Data quality | Elementary | Elementary |
-| Orchestration | Dagster, concurrency limit on writing jobs | Dagster, multiple code locations |
-| Writers | Multiple local processes, one production path | Multiple users and machines |
-| Dashboard | Crows Nest, read-only | Crows Nest |
-| Analysis | Marimo, read-only | Marimo per user with own rights |
-| Access | Customer IdP via oauth2-proxy, or VPN / basic auth | IAM (to be decided), per-user policy |
-| Secrets | `.env` on the host | Secrets management |
-| Backup | Copy of the directory, optional off-site bucket | PostgreSQL dump + object storage versioning |
-| Runtime | Laptop (pip) or single VM (Compose) | Compose or Kubernetes |
+| Orchestration | Dagster, concurrency limit on writing jobs | Dagster webserver, daemon and code server as separate containers |
+| Writers | Multiple local processes, one production path | One project per stack, writes through Dagster |
+| Dashboard | Crows Nest, read-only | Crows Nest, roles `reader` / `writer` / `admin` |
+| Analysis | Marimo, read-only | Marimo (SRDP's service) |
+| Reverse proxy | Traefik (VM mode only) | Traefik (from SRDP) |
+| Access | oauth2-proxy with the customer's IdP, or Traefik basic auth | oauth2-proxy with Zitadel, per-user roles |
+| Secrets | `.env` on the host | `.env` in `deploy/valk/` |
+| Backup | Copy of the directory, optional off-site bucket | Not yet defined |
+| Runtime | Laptop (pip) or single VM (Compose) | Docker Compose: SRDP stack plus the project's overlay |
