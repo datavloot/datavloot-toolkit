@@ -34,13 +34,10 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 - Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
 - Git
-- A C compiler (required to build some dependencies from source)
 
-  | OS | What you need | How to get it |
-  |---|---|---|
-  | **Windows** | Microsoft C++ Build Tools | Download from [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), select **Desktop development with C++** |
-  | **macOS** | Xcode Command Line Tools | Run `xcode-select --install` in a terminal |
-  | **Linux** | GCC | Run `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum install gcc` (RHEL/Fedora) |
+No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
+
+> **Intel Macs:** `cryptography` has no Intel wheel from version 49 on. Run `pip install "cryptography<49"` before installing datavloot, or pip will try to build it from source (needs Rust and a C compiler).
 
 ### 1. Create your own repository
 
@@ -60,9 +57,7 @@ If `pip` is not recognised (common on Windows), use:
 python -m pip install datavloot[optimist]
 ```
 
-If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
-
-> **Note:** The first install downloads and builds a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
+> **Note:** The first install downloads and installs a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
 
 
 ### 3. Scaffold a new project
@@ -343,7 +338,7 @@ In the meantime, the Optimist's individual components are independently portable
 | **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
 | **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
 
-See [datavloot.nl/vaarroute](https://datavloot.nl/vaarroute) for the full vessel roadmap.
+See [datavloot.nl/over](https://datavloot.nl/over) for the full vessel roadmap.
 
 ---
 
