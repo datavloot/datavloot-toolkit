@@ -21,6 +21,16 @@ dependencies = [
 #
 # pandas is the live one: pandas 3 is released and untested here, which the old
 # unbounded ">=2.0" would have pulled in on any fresh install.
+#
+# dbt-core is held below 1.12, tighter than the policy: from 1.12 it depends on
+# dbt-core-experimental-parser, which PyPI has only as an sdist whose build step
+# downloads a binary from github.com. Behind a proxy that blocks GitHub,
+# `pip install datavloot[optimist]` then fails. Lift the cap once the parser
+# ships wheels on PyPI.
+#
+# There is no `ducklake` dependency: the PyPI package of that name is an empty
+# placeholder. The DuckLake extension is installed by DuckDB itself, see
+# datavloot_platform/extensions.py.
 optimist = [
     "altair>=6.0,<7",
     "dagster>=1.13.6,<1.14",
@@ -28,10 +38,9 @@ optimist = [
     "dagster-dlt>=0.29.6,<0.30",
     "dagster-duckdb>=0.29.6,<0.30",
     "dagster-webserver>=1.13.6,<1.14",
-    "dbt-core>=1.11,<2",
+    "dbt-core>=1.11,<1.12",
     "dbt-duckdb>=1.10,<2",
     "dlt[duckdb]>=1.28,<2",
-    "ducklake>=0.1.1,<0.2",
     "elementary-data[duckdb]>=0.24,<0.26",
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
