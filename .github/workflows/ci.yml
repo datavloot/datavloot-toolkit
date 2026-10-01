@@ -89,10 +89,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Every dependency installs from a wheel
         env:
-          # sdist-only, but nothing to compile: ratelimit and grapheme are pure
-          # Python; dbt-core-experimental-parser's build step downloads a
-          # prebuilt binary (which needs github.com reachable at install time).
-          ALLOWED_SDISTS: ratelimit grapheme dbt-core-experimental-parser
+          # sdist-only, but pure Python: nothing to compile. Keep this list to
+          # what the resolution needs today; an entry nothing needs would let
+          # a returning sdist through unnoticed.
+          ALLOWED_SDISTS: ratelimit grapheme
           # Known and documented in the README's Intel Mac note.
           ALLOWED_SDISTS_INTEL_MAC: cryptography
         run: |
