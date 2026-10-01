@@ -22,28 +22,33 @@ def _copy_template(source: pathlib.Path, dest: pathlib.Path) -> None:
     shutil.copytree(source, dest, ignore=_IGNORE)
 
 
-def _preinstall_extensions() -> None:
+def _preinstall_extensions(dest: pathlib.Path) -> None:
     """
-    Install the DuckDB extensions now, while the user is here to read a failure.
+    Install the DuckDB extensions now, while the user is here to read a failure,
+    then create the project's empty lake so readers find one before the first run.
 
     Best effort: a failed download prints the manual route and the project is
-    still created. Without the optimist extra there is no duckdb to install
-    into, and nothing that would load an extension either.
+    still created; the lake is then created by whatever attaches it first.
+    Without the optimist extra there is no duckdb to install into, and nothing
+    that would load an extension either.
     """
     try:
         import duckdb
     except ImportError:
         return
 
-    from datavloot_platform import extensions
+    from datavloot_platform import extensions, storage
 
     print(f"Installing DuckDB extensions ({', '.join(extensions.REQUIRED)})…", flush=True)
     conn = duckdb.connect()
     try:
-        for message in extensions.install(conn):
-            print(f"Warning: {message}\n", file=sys.stderr)
+        failures = extensions.install(conn)
     finally:
         conn.close()
+    for message in failures:
+        print(f"Warning: {message}\n", file=sys.stderr)
+    if not failures:
+        storage.create(dest)
 
 
 def _warn_about_location(path: pathlib.Path, project_name: str) -> None:
@@ -95,7 +100,7 @@ def cmd_new(args: argparse.Namespace) -> None:
 
     _copy_template(TEMPLATES_DIR / "scaffold", dest)
     _substitute(dest, project_name)
-    _preinstall_extensions()
+    _preinstall_extensions(dest)
 
     _warn_about_location(dest, project_name)
     print(f"Project '{project_name}' created at '{dest}'.\n")
@@ -116,7 +121,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
         else pathlib.Path.cwd() / "optimist-demo"
     )
     _copy_template(TEMPLATES_DIR / "demo", dest)
-    _preinstall_extensions()
+    _preinstall_extensions(dest)
     # The demo keeps its own name (noaa), unlike a scaffolded project.
     _warn_about_location(dest, "noaa")
     print(f"NOAA demo project created at '{dest}'.\n")
@@ -146,7 +151,10 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
 
     config = get_config()
     print(f"Starting Crows Nest on http://{args.host}:{args.port}")
-    print(f"  DuckDB:  {config.duckdb_path}")
+    if config.ducklake_catalog_path:
+        print(f"  Lake:    {config.ducklake_catalog_path} (as {config.ducklake_alias})")
+    else:
+        print(f"  DuckDB:  {config.duckdb_path}")
     print(f"  Dagster: {config.dagster_graphql_url}")
     print(f"  Marimo:  {config.marimo_url}")
     from datavloot_platform.crowsnest.auth import get_auth_token

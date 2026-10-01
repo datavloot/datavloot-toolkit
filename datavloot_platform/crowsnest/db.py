@@ -2,19 +2,20 @@
 DuckDB connection helper for the Crows Nest.
 
 Supports two modes:
-  Standard:  plain DuckDB file connection (default)
-  DuckLake:  in-memory connection with ducklake extension and catalog attached
-             (enabled by setting CROWSNEST_DUCKLAKE_CATALOG_PATH)
+  DuckLake:  in-memory connection with the project's lake attached, the default
+             once the project has one (see config.py and storage.py)
+  Standard:  plain DuckDB file connection, for projects still on a .duckdb file
 
 Every connection is sandboxed before it is handed out -- see _harden().
 """
 
+import pathlib
 import time
 
 import duckdb
 from fastapi import HTTPException
 
-from datavloot_platform import extensions
+from datavloot_platform import extensions, storage
 from datavloot_platform.crowsnest.config import get_config
 
 
@@ -35,6 +36,15 @@ from datavloot_platform.crowsnest.config import get_config
 #   lock_configuration      neither of the above can be turned back on by a query
 #
 # lock_configuration must come last, since it freezes the others.
+#
+# A DuckLake reads its Parquet files through the local file system, so there the
+# file system cannot be disabled: every query would fail. Instead,
+# allowed_directories opens exactly the lake's data directory, and
+# enable_external_access keeps everything else shut (checked: reading or writing
+# outside it, re-enabling access and installing extensions all stay blocked).
+# What this gives up: a COPY ... TO into the data directory itself would be
+# allowed. No route lets one through -- the query route accepts only SELECT and
+# EXPLAIN -- so only this second line of defence is narrower.
 _HARDENING = (
     "SET enable_external_access=false",
     "SET disabled_filesystems='LocalFileSystem'",
@@ -42,15 +52,25 @@ _HARDENING = (
 )
 
 
-def _harden(conn: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
+def _harden(
+    conn: duckdb.DuckDBPyConnection, lake_data: str | None = None
+) -> duckdb.DuckDBPyConnection:
     """
     Lock a connection down to reading what is already attached.
 
     Applied after any ATTACH, which must happen while external access is still
-    permitted. Verified not to affect DuckLake: its parquet data files still
-    resolve after the filesystem is disabled.
+    permitted. With `lake_data`, the file system stays open for that directory
+    only, as a DuckLake needs.
     """
-    for statement in _HARDENING:
+    statements = _HARDENING
+    if lake_data:
+        allowed = pathlib.Path(lake_data).as_posix().rstrip("/") + "/"
+        statements = (
+            f"SET allowed_directories=['{allowed}']",
+            "SET enable_external_access=false",
+            "SET lock_configuration=true",
+        )
+    for statement in statements:
         conn.execute(statement)
     return conn
 
@@ -64,16 +84,18 @@ def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
                 conn = duckdb.connect()
                 # Not a bare INSTALL: offline, that fails with only a download
                 # error. This says how to install it by hand.
-                extensions.ensure_loaded(conn, "ducklake")
-                catalog_path = config.ducklake_catalog_path.strip().replace("\\", "/")
-                # read_only was previously accepted and then ignored on this path,
-                # so a DuckLake deployment had no read-only mode at all.
-                options = "TYPE ducklake, READ_ONLY" if read_only else "TYPE ducklake"
+                for name in extensions.REQUIRED:
+                    extensions.ensure_loaded(conn, name)
                 conn.execute(
-                    f"ATTACH '{catalog_path}' AS {config.ducklake_alias} ({options})"
+                    storage.attach_statement(
+                        pathlib.Path(config.ducklake_catalog_path),
+                        pathlib.Path(config.ducklake_data_path),
+                        config.ducklake_alias,
+                        read_only=read_only,
+                    )
                 )
                 conn.execute(f"USE {config.ducklake_alias}")
-                return _harden(conn)
+                return _harden(conn, lake_data=config.ducklake_data_path)
             else:
                 return _harden(
                     duckdb.connect(config.duckdb_path, read_only=read_only)

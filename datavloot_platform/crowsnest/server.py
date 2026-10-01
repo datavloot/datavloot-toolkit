@@ -7,13 +7,13 @@ Both run on the same port so no CORS configuration is needed.
 
 import pathlib
 
-import duckdb
 import httpx
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -162,14 +162,10 @@ def create_app() -> FastAPI:
         except Exception:
             results["dagster"] = "offline"
 
-        # DuckDB: try opening the file
+        # DuckDB: open a connection the way the routes do, lake or file
         try:
-            if config.duckdb_path == ":memory:":
-                results["duckdb"] = "ok"
-            else:
-                conn = duckdb.connect(config.duckdb_path, read_only=True)
-                conn.close()
-                results["duckdb"] = "ok"
+            get_conn(read_only=True).close()
+            results["duckdb"] = "ok"
         except Exception:
             results["duckdb"] = "offline"
 

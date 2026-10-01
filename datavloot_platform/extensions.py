@@ -17,8 +17,10 @@ duckdb is imported lazily, so the CLI and the fast test tier work without the
 optimist extra.
 """
 
-# What scaffolded and demo projects, and the Crows Nest, may load.
-REQUIRED = ("ducklake",)
+# What attaching a project's lake loads (see storage.py): DuckLake itself, and
+# the SQLite extension for its catalog. `sqlite_scanner` is the canonical name;
+# `sqlite` is an alias that duckdb_extensions() does not list.
+REQUIRED = ("ducklake", "sqlite_scanner")
 
 # DuckDB's default repository. The CDN rejects Python's default User-Agent, so
 # the manual route below goes through a browser or curl, not urllib.

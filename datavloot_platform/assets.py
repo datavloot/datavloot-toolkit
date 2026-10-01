@@ -41,14 +41,14 @@ def optimist_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #
 #   import dlt
 #   from dagster_dlt import DagsterDltResource, dlt_assets
+#   from datavloot_platform import storage
 #
 #   @dlt_assets(
 #       dlt_source=my_source(),          # any dlt source or verified source
 #       dlt_pipeline=dlt.pipeline(
 #           pipeline_name="my_pipeline",
-#           dataset_name="source",       # → lakehouse.source schema
-#           destination="duckdb",
-#           credentials="data/lakehouse.duckdb",
+#           dataset_name="source",       # → the `source` schema in the project's lake
+#           destination=storage.dlt_destination(),
 #       ),
 #       group_name="source",
 #   )

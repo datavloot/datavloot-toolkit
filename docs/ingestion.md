@@ -63,6 +63,8 @@ from dagster import AssetExecutionContext
 from dagster_dlt import DagsterDltResource, dlt_assets
 from dlt.sources.rest_api import rest_api_source
 
+from datavloot_platform import storage
+
 @dlt_assets(
     dlt_source=rest_api_source(
         {
@@ -86,9 +88,8 @@ from dlt.sources.rest_api import rest_api_source
     ),
     dlt_pipeline=dlt.pipeline(
         pipeline_name="example_api",
-        dataset_name="source",          # → lakehouse.source schema
-        destination="duckdb",
-        credentials="data/lakehouse.duckdb",
+        dataset_name="source",          # → the `source` schema in the project's lake
+        destination=storage.dlt_destination(),  # finds the project from the current directory
     ),
     group_name="source",
 )

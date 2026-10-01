@@ -144,7 +144,7 @@ def test_the_long_paths_setting_can_be_read():
 @pytest.fixture(autouse=True)
 def no_extension_download(monkeypatch):
     """`new` also installs DuckDB extensions; keep that off the network here."""
-    monkeypatch.setattr(cli, "_preinstall_extensions", lambda: None)
+    monkeypatch.setattr(cli, "_preinstall_extensions", lambda dest: None)
 
 
 def test_new_in_onedrive_warns_and_still_creates_the_project(
