@@ -326,9 +326,9 @@ Schedules and sensors are defined in `definitions.py` alongside the existing ass
 
 ## Scaling up
 
-The Optimist runs entirely on a local machine. When you're ready for team scale, the goal is to change a config flag — not rewrite your pipelines. The pipelines, dbt models, and orchestration logic you build on the Optimist are designed to carry forward unchanged.
+The Optimist runs entirely on a local machine. When you're ready for team scale, you move your data, not rewrite your pipelines. The dlt sources and dbt models you build on the Optimist are plain Python and SQL, and carry forward.
 
-The **Falcon** tier (on the roadmap) formalises this: switching `vessel: optimist` to `vessel: falcon` in `datavloot.yml` moves your platform to production-grade lakehouse storage on infrastructure of your choice, without starting over.
+The **Falcon** tier (on the roadmap) is a separate, larger platform with production-grade lakehouse storage and per-user roles. Moving up to it is a data migration: your catalog and data files move into the Falcon's storage, with the same schema and table names, so you don't start over.
 
 In the meantime, the Optimist's individual components are independently portable:
 
@@ -369,6 +369,7 @@ dbt deps
 - [Source layer — auto-staging and audit columns](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/business-layer.md)
 - [Architecture — Optimist single-node setup (proposed)](docs/architecture.md)
+- [Architecture decision records](docs/adr/README.md)
 
 ---
 
