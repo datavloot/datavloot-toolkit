@@ -31,8 +31,10 @@ pytestmark = [
 
 # Expected for a project with no sources yet: the source layer config matches no
 # resources because the user has not added a model. Anything else is a template bug.
+# Matched on the [WARNING] line itself; the "unused configuration paths" detail
+# follows on the next line, which the filter below never sees.
 EXPECTED_WARNINGS = [
-    re.compile(r"unused configuration paths?", re.I),
+    re.compile(r"Configuration paths exist in your dbt_project\.yml file which do not apply to any resources", re.I),
 ]
 
 
