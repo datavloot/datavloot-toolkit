@@ -1,6 +1,6 @@
 # Optimist architecture (single node)
 
-> **Status: proposed.** This describes the target architecture, not the current implementation: scaffolded projects currently write to a single DuckDB file, without a DuckLake catalog or maintenance jobs. The reasoning is in [ADR 0001](adr/0001-optimist-single-node-single-writer.md).
+> **Status: proposed.** This describes the target architecture; parts of it are not built yet (see the issues labelled `optimist`). The reasoning is in [ADR 0001](adr/0001-optimist-single-node-single-writer.md).
 
 The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory.
 
@@ -22,8 +22,8 @@ flowchart LR
         end
 
         subgraph LAKE["DuckLake (one directory)"]
-            CAT[("Catalog: metadata.sqlite")]
-            PQ["Parquet files in DATA_PATH"]
+            CAT[("Catalog: lake/catalog.sqlite (WAL)")]
+            PQ["Parquet files in lake/data/"]
         end
 
         DEV["dbt dev target (separate schema)"]
@@ -48,12 +48,12 @@ flowchart LR
 
 ## 2. How a write works
 
-The heavy work (writing Parquet) happens outside the catalog. The catalog lock is held only for the short metadata commit, which is why several local processes can write side by side.
+The heavy work (writing Parquet) happens outside the catalog; the catalog is locked only for the short metadata commit. Readers are never blocked: the catalog runs in WAL mode, so they keep reading the last committed snapshot. Commits are taken one at a time. A second process that commits at the same moment fails instead of waiting, even when it writes another table, so writers take turns: one at a time in Dagster.
 
 ```mermaid
 sequenceDiagram
     participant W as Writer (Dagster run)
-    participant P as Parquet files (DATA_PATH)
+    participant P as Parquet files (lake/data/)
     participant C as Catalog (SQLite)
     participant R as Reader (Marimo / Crows Nest)
 
@@ -62,9 +62,9 @@ sequenceDiagram
     R->>P: Read those files
     W->>P: Write new Parquet files (no lock)
     W->>C: Commit: register files as snapshot N+1 (short lock)
-    alt Conflict on same table
-        C-->>W: Conflict
-        W->>C: Retry or report
+    alt Another process is committing
+        C-->>W: database is locked
+        W->>C: Rerun or report
     else No conflict
         C-->>W: Committed
     end

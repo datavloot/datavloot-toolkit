@@ -13,19 +13,19 @@ The rest of the organisation only reads. It needs the platform reachable beyond 
 
 ## Decision
 
-- **Technically multi-client, organisationally single-writer.** Several local processes may read and write at once. Production data is written only by Dagster; development writes go to a separate schema.
-- **DuckLake with a SQLite catalog and Parquet files on local disk.** Both live under the project directory, referenced by relative paths. That directory is the full state, and the unit of backup.
+- **Technically multi-client, organisationally single-writer.** Several local processes may read while one writes; writes are committed one at a time. Production data is written only by Dagster; development writes go to a separate schema.
+- **DuckLake with a SQLite catalog and Parquet files on local disk.** Both live in `lake/` in the project directory, with the catalog in WAL mode. The catalog stores file paths relative to the data directory, so the directory can be moved. It is the full state, and the unit of backup.
 - **One package, two ways of running.** Laptop mode: `pip install datavloot[optimist]` and `datavloot start`. VM mode: the same package in a Docker image under Docker Compose.
 - **Access, not authorisation.** In VM mode every service sits behind Traefik, with optional oauth2-proxy against the customer's identity provider, or basic auth. Whoever is let in sees everything.
 - **Out of scope:** per-user data authorisation, writers on more than one machine, streaming, Kubernetes.
 
 ## Consequences
 
-- dbt development, a scheduled run and a notebook no longer lock each other out, and readers never see a half-written state.
+- A notebook or the Crows Nest can read while a pipeline writes, and readers never see a half-written state. Without WAL mode on the catalog, readers and a writer lock each other out.
 - Parquet files accumulate: compaction and snapshot expiry must run on a schedule, and backups must copy the catalog before the files and not overlap with cleanup.
 - Existing projects on a `.duckdb` file need a migration path.
 - The project directory must be on a local disk: sync folders and network drives do not honour the file locks SQLite and DuckDB rely on.
-- Concurrent writes to the same table can conflict at commit time and must be retried or reported. Whether the SQLite catalog holds up under the expected load is tested, not assumed.
+- Writers take turns. A second process committing at the same moment fails with `database is locked`, also when it writes another table, instead of waiting. Dagster therefore runs one writer at a time, and a dbt run by hand next to a running job may fail a model that then has to be rerun. No data is lost or left half-written.
 
 Follow-up work is tracked in the issues labelled `optimist`.
 
