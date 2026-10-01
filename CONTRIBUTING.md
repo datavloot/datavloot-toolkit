@@ -111,6 +111,8 @@ Read `developer-instructions.md` for the repo layout and `toolkit-developer-stan
 
 Branch off `main` and keep the branch to one change. If `main` moves under you, rebase rather than merge it into your branch.
 
+CI runs on pull requests, not on every branch push. To get it on a branch before it is ready for review, open the pull request as a draft.
+
 Commit messages follow the existing history: a short imperative subject line that says what the change does and, where the "what" is not self-explanatory, why. Look at `git log --oneline` for the register. There is no prefix convention (no `feat:`, `fix:`) and none is wanted. If a commit needs explanation beyond the subject, put it in the body, and put the reasoning that would otherwise get lost into a code comment next to the thing it explains; this codebase leans on comments to record why a bound, an exclusion or a workaround exists.
 
 A pull request should state what changed, why, and which test tiers you ran. Link the issue if there is one. Keep it reviewable: a pull request that reworks one thing gets merged, one that reworks four things gets a request to split it.
