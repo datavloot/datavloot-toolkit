@@ -5,7 +5,7 @@
 
 ## Context
 
-The Optimist targets an organisation of 20–200 people with a data team of one, and runs the whole platform on one machine.
+The Optimist targets an small organisation with a data team of one, and runs the whole platform on one machine.
 
 That team of one still runs several writing processes at once: a scheduled Dagster run, dbt during development, a dlt load. Projects write to a single DuckDB file, and DuckDB lets only one process open a file for writing; while it does, no other process can open it, not even read-only. Runs collide on the lock, and a Marimo notebook cannot open during a Dagster run.
 
