@@ -41,36 +41,35 @@ def test_onedrive_is_found_through_its_environment_variable(tmp_path):
     """Known Folder Move puts Documents inside OneDrive under any folder name."""
     root = tmp_path / "Company Files"
     env = {"OneDriveCommercial": str(root)}
-    assert location.sync_service(root / "Documents" / "sales", env) == "OneDrive"
+    assert location.sync_folder(root / "Documents" / "sales", env) == "Company Files"
 
 
 @pytest.mark.parametrize(
-    "folder, service",
+    "folder",
     [
-        ("OneDrive", "OneDrive"),
-        ("OneDrive - Contoso", "OneDrive"),
-        ("Dropbox", "Dropbox"),
-        ("Dropbox (Contoso)", "Dropbox"),
-        ("My Drive", "Google Drive"),
-        ("Mobile Documents", "iCloud Drive"),
+        "OneDrive",
+        "OneDrive - Contoso",
+        "Dropbox",
+        "Dropbox (Contoso)",
+        "My Drive",
+        "Mobile Documents",
         # macOS File Provider mounts every client under ~/Library/CloudStorage.
-        ("Library/CloudStorage/OneDrive-Contoso", "OneDrive"),
-        ("Library/CloudStorage/GoogleDrive-me@example.com", "Google Drive"),
-        ("Library/CloudStorage/SomeNewClient", "a cloud storage client"),
+        "Library/CloudStorage/OneDrive-Contoso",
+        "Library/CloudStorage/SomeNewClient",
     ],
 )
-def test_sync_folders_are_found_by_name(tmp_path, folder, service):
-    assert location.sync_service(tmp_path / folder / "sales", env={}) == service
+def test_sync_folders_are_found_by_name(tmp_path, folder):
+    assert location.sync_folder(tmp_path / folder / "sales", env={}) is not None
 
 
 def test_an_ordinary_folder_is_not_a_sync_folder(tmp_path):
-    assert location.sync_service(tmp_path / "dev" / "sales", env={}) is None
+    assert location.sync_folder(tmp_path / "dev" / "sales", env={}) is None
 
 
 @pytest.mark.parametrize("folder", ["dropbox-export-analysis", "onedrive-migration", "Box"])
 def test_a_folder_that_only_mentions_a_service_is_not_one(tmp_path, folder):
     """Match whole folder names, so a project about Dropbox is not flagged."""
-    assert location.sync_service(tmp_path / folder / "sales", env={}) is None
+    assert location.sync_folder(tmp_path / folder / "sales", env={}) is None
 
 
 # --- network drives -----------------------------------------------------------

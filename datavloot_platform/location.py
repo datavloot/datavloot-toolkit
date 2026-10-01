@@ -27,12 +27,15 @@ import sys
 # Known Folder Move, whatever the folder happens to be called.
 _ONEDRIVE_ENV_VARS = ("OneDrive", "OneDriveCommercial", "OneDriveConsumer")
 
-_CLOUDSTORAGE_PREFIXES = (
-    ("onedrive", "OneDrive"),
-    ("dropbox", "Dropbox"),
-    ("googledrive", "Google Drive"),
-    ("box", "Box"),
-)
+# Root folder names of sync clients that set no variable, matched whole and
+# case-insensitively, so a project called "dropbox-export" is not mistaken for
+# a sync folder. Plus the account-suffixed forms ("OneDrive - Contoso",
+# "Dropbox (Contoso)").
+_SYNC_FOLDER_NAMES = frozenset({
+    "onedrive", "dropbox", "google drive", "my drive",
+    "icloud drive", "mobile documents", "com~apple~clouddocs",
+})
+_SYNC_FOLDER_PREFIXES = ("onedrive - ", "dropbox (")
 
 # Linux file system types that live on another machine.
 _NETWORK_FS_TYPES = frozenset({
@@ -54,35 +57,24 @@ _PROJECT_TARGET_DEPTH = 134
 _MARGIN = 10
 
 
-def sync_service(path: pathlib.Path, env=None) -> str | None:
-    """The name of the sync service whose folder contains `path`, or None."""
+def sync_folder(path: pathlib.Path, env=None) -> str | None:
+    """The sync client's folder that contains `path`, as it is named on disk, or None."""
     env = os.environ if env is None else env
 
     for var in _ONEDRIVE_ENV_VARS:
         root = env.get(var)
         if root and _is_within(path, pathlib.Path(root)):
-            return "OneDrive"
+            return pathlib.Path(root).name
 
-    # By folder name, for clients that set no variable. Whole names only, so a
-    # project called "dropbox-export" is not mistaken for a sync folder.
-    parts = [p.lower() for p in pathlib.Path(path).parts]
-    for i, name in enumerate(parts):
-        # macOS File Provider: every client mounts under ~/Library/CloudStorage,
-        # as <Client>-<account> (OneDrive-Contoso, GoogleDrive-me@example.com).
-        if name == "cloudstorage" and i > 0 and parts[i - 1] == "library":
-            provider = parts[i + 1] if i + 1 < len(parts) else ""
-            for prefix, service in _CLOUDSTORAGE_PREFIXES:
-                if provider.startswith(prefix):
-                    return service
-            return "a cloud storage client"
-        if name == "onedrive" or name.startswith("onedrive - "):
-            return "OneDrive"
-        if name == "dropbox" or name.startswith("dropbox ("):
-            return "Dropbox"
-        if name in ("google drive", "my drive"):
-            return "Google Drive"
-        if name in ("icloud drive", "mobile documents", "com~apple~clouddocs"):
-            return "iCloud Drive"
+    parts = pathlib.Path(path).parts
+    for i, part in enumerate(parts):
+        name = part.lower()
+        # macOS File Provider mounts every client under ~/Library/CloudStorage,
+        # whatever the client: anything below it is synced.
+        if name == "cloudstorage" and i > 0 and parts[i - 1].lower() == "library":
+            return parts[i + 1] if i + 1 < len(parts) else part
+        if name in _SYNC_FOLDER_NAMES or name.startswith(_SYNC_FOLDER_PREFIXES):
+            return part
     return None
 
 
@@ -157,11 +149,11 @@ def project_warnings(path: pathlib.Path, project_name: str, env=None) -> list[st
     warnings = []
     suggestion = _suggested_location(project_name)
 
-    service = sync_service(path, env)
-    if service:
+    folder = sync_folder(path, env)
+    if folder:
         warnings.append(
-            f"'{path}' is inside {service}. Sync clients do not honour the file "
-            "locks DuckDB relies on, which can lock you out of the database or "
+            f"'{path}' is inside a synced folder ({folder}). Sync clients do not "
+            "honour the file locks DuckDB relies on, which can lock you out of the database or "
             "corrupt it. Keep the project in a local folder that is not synced, "
             f"for example {suggestion}."
         )
