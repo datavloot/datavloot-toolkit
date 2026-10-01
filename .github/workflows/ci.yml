@@ -37,7 +37,8 @@ jobs:
       - run: uv run --with pytest --with pyyaml python -m pytest tests/ -m "not slow and not package" -v
 
   # The Crows Nest tests importorskip fastapi/duckdb, so `lint` silently skips
-  # them. This job installs the web stack so the security assertions actually run.
+  # them. This job installs the web stack so the security assertions actually run,
+  # and runs the extension tests that need a real DuckDB alongside them.
   crowsnest:
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +50,8 @@ jobs:
       - run: >
           uv run --with pytest --with pyyaml --with duckdb
           --with fastapi --with httpx
-          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py -v
+          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py
+          tests/test_extensions.py -v
 
   smoke:
     runs-on: ubuntu-latest

@@ -14,6 +14,7 @@ import time
 import duckdb
 from fastapi import HTTPException
 
+from datavloot_platform import extensions
 from datavloot_platform.crowsnest.config import get_config
 
 
@@ -61,8 +62,9 @@ def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
         try:
             if config.ducklake_catalog_path:
                 conn = duckdb.connect()
-                conn.execute("INSTALL ducklake")
-                conn.execute("LOAD ducklake")
+                # Not a bare INSTALL: offline, that fails with only a download
+                # error. This says how to install it by hand.
+                extensions.ensure_loaded(conn, "ducklake")
                 catalog_path = config.ducklake_catalog_path.strip().replace("\\", "/")
                 # read_only was previously accepted and then ignored on this path,
                 # so a DuckLake deployment had no read-only mode at all.

@@ -20,6 +20,30 @@ def _copy_template(source: pathlib.Path, dest: pathlib.Path) -> None:
     shutil.copytree(source, dest, ignore=_IGNORE)
 
 
+def _preinstall_extensions() -> None:
+    """
+    Install the DuckDB extensions now, while the user is here to read a failure.
+
+    Best effort: a failed download prints the manual route and the project is
+    still created. Without the optimist extra there is no duckdb to install
+    into, and nothing that would load an extension either.
+    """
+    try:
+        import duckdb
+    except ImportError:
+        return
+
+    from datavloot_platform import extensions
+
+    print(f"Installing DuckDB extensions ({', '.join(extensions.REQUIRED)})…", flush=True)
+    conn = duckdb.connect()
+    try:
+        for message in extensions.install(conn):
+            print(f"Warning: {message}\n", file=sys.stderr)
+    finally:
+        conn.close()
+
+
 def _to_identifier(name: str) -> str:
     """Convert a directory name to a valid Python identifier."""
     return name.replace("-", "_").replace(" ", "_").lower()
@@ -62,6 +86,7 @@ def cmd_new(args: argparse.Namespace) -> None:
 
     _copy_template(TEMPLATES_DIR / "scaffold", dest)
     _substitute(dest, project_name)
+    _preinstall_extensions()
 
     print(f"Project '{project_name}' created at '{dest}'.\n")
     print("Next steps:")
@@ -81,6 +106,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
         else pathlib.Path.cwd() / "optimist-demo"
     )
     _copy_template(TEMPLATES_DIR / "demo", dest)
+    _preinstall_extensions()
     print(f"NOAA demo project created at '{dest}'.\n")
     print("Next steps:")
     print(f"  1. cd {dest}")
