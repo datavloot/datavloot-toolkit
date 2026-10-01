@@ -36,27 +36,6 @@ def scaffold(tmp_path: pathlib.Path) -> pathlib.Path:
     return _scaffold(tmp_path / "probe", "probe")
 
 
-def use_local_optimist(project: pathlib.Path) -> None:
-    """
-    Point the project's packages.yml at this checkout instead of the published
-    revision.
-
-    Without this the smoke test installs `revision: 0.1.x` from GitLab, so it
-    would validate the last release rather than the branch under review -- a
-    change to dbt/optimist would pass CI while being broken.
-    """
-    local_pkg = (REPO_ROOT / "dbt" / "optimist").as_posix()
-    (project / "packages.yml").write_text(
-        "packages:\n"
-        f"  - local: \"{local_pkg}\"\n"
-        "  - package: dbt-labs/dbt_utils\n"
-        "    version: [\">=1.4.0\", \"<2.0.0\"]\n"
-        "  - package: elementary-data/elementary\n"
-        "    version: [\">=0.25.0\", \"<0.26.0\"]\n",
-        encoding="utf-8",
-    )
-
-
 def run_dbt(*args: str, cwd: pathlib.Path) -> subprocess.CompletedProcess:
     """
     Run dbt in `cwd` with that directory as the profiles dir.

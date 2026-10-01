@@ -194,19 +194,19 @@ For simpler cases (reading a local file, calling a small API), a plain Dagster a
 
 ### 2. Define your sources in dbt
 
-Copy the templates from `dbt/optimist/models/source/` and fill in your source tables.
+Copy the templates from `dbt_packages/optimist/models/source/` into your project's `models/source/` and fill in your source tables.
 
 ### 3. Stage with one line
 
 ```sql
--- dbt/optimist/models/source/stg_harbor__vessels.sql
+-- models/source/stg_harbor__vessels.sql
 {{ optimist.stage_source('harbor', 'vessels') }}
 ```
 
 ### 4. Build business models
 
 ```sql
--- dbt/optimist/models/business/dimensions/dim_vessel.sql
+-- models/business/dimensions/dim_vessel.sql
 {{ optimist.build_dimension(
     source_model = 'stg_harbor__vessels',
     natural_key  = 'vessel_id',
@@ -215,7 +215,7 @@ Copy the templates from `dbt/optimist/models/source/` and fill in your source ta
 ```
 
 ```sql
--- dbt/optimist/models/business/facts/fct_port_call.sql
+-- models/business/facts/fct_port_call.sql
 {{ optimist.build_fact(
     source_model   = 'stg_harbor__port_calls',
     natural_key    = 'port_call_id',
@@ -351,9 +351,8 @@ If you already have a dbt project and only want the standardized macros, install
 ```yaml
 # packages.yml
 packages:
-  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
-    subdirectory: "dbt/optimist"
-    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) for reproducible builds
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.0
 ```
 
 Then install:

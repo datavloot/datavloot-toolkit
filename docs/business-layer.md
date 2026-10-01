@@ -46,7 +46,7 @@ single source of truth behind this convention, not because you need it day to da
 
 ## Quickstart
 
-Dimension configs live in a single file — [`models/business/_dim_configs.yml`](../dbt/optimist/models/business/_dim_configs.yml).
+Dimension configs live in a single file — [`models/business/_dim_configs.yml`](../datavloot_platform/templates/scaffold/models/business/_dim_configs.yml).
 The model SQL file only needs the data source and a bare macro call.
 
 **Step 1 — add an entry to `_dim_configs.yml`:**

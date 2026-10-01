@@ -11,6 +11,9 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+on-run-end:
+  - "{{ elementary.upload_dbt_artifacts() }}"
+
 seeds:
   <project_name>:
     +schema: seeds

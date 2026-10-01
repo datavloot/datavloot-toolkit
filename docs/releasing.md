@@ -1,27 +1,18 @@
 # Releasing
 
-Two independently versioned things ship from this repo:
+This repo releases the **`datavloot` Python package**, installed via PyPI (`pip install`).
 
-- the **`dbt/optimist` package**, installed via git (`dbt deps`)
-- the **`datavloot` Python package**, installed via PyPI (`pip install`)
-
-They version and release differently — a git-installed dbt package needs a moving ref because
-git has no equivalent of `pip`'s version-range operators, while a PyPI package doesn't need
-that machinery at all. This doc covers both.
+The **`optimist` dbt package** that the templates install is released from its own repo,
+[datavloot/dbt-datavloot-optimist](https://github.com/datavloot/dbt-datavloot-optimist), with bare `X.Y.Z` tags there.
 
 ---
 
-## Releasing the optimist dbt package
-
-How `dbt/optimist` is versioned and tagged, so consuming projects can pin to a moving
-"current minor version" ref instead of `main` — picking up patch releases without silently
-picking up breaking changes.
+## The optimist dbt package
 
 ### Versioning
 
-SemVer, scoped to `dbt/optimist` only — independent of the `datavloot` PyPI package version.
-`version:` in [`dbt/optimist/dbt_project.yml`](../dbt/optimist/dbt_project.yml) is the source of
-truth.
+SemVer, independent of the `datavloot` PyPI package version. `version:` in the package repo's
+`dbt_project.yml` is the source of truth.
 
 - **PATCH** (`0.1.0` → `0.1.1`) — bug fixes, no consumer-facing change.
 - **MINOR** (`0.1.0` → `0.2.0`) — backwards-compatible additions: new macros, new optional
@@ -35,102 +26,41 @@ truth.
   breaking changes into one deliberate major bump rather than shipping them piecemeal — a
   consumer should have to read one migration note, not four.
 
-### Git refs
+### Shipping a release to new projects
 
-- **Immutable release tags:** bare `X.Y.Z`, one per release. Never moved once pushed.
-- **Moving minor branches:** `0.1.x`, `0.2.x`, … — each points at the latest released commit
-  within that minor version. Fast-forwarded on every patch release. Frozen permanently the
-  moment the next minor version ships.
-- Unprefixed: a bare `X.Y.Z` tag in this repo always means the dbt package. The `datavloot`
-  PyPI package uses `datavloot-vX.Y.Z` instead, so the two series never collide.
-
-A consuming project's `packages.yml` references either:
+The scaffold and demo templates pin an exact tag:
 
 ```yaml
-# floats within the current minor — picks up 0.1.1, 0.1.2, ... automatically
-revision: 0.1.x
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.0
 ```
+
+After tagging a release in the package repo, update `revision:` in
+[`datavloot_platform/templates/scaffold/packages.yml`](../datavloot_platform/templates/scaffold/packages.yml)
+and
+[`datavloot_platform/templates/demo/packages.yml`](../datavloot_platform/templates/demo/packages.yml)
+on a feature branch here, then release `datavloot` so `datavloot new` scaffolds with it. Existing
+projects keep their pin until they edit their own `packages.yml`.
+
+Once the package is listed on dbt Package Hub, the templates can switch to
+`package: datavloot/optimist` with a version range (e.g. `[">=0.1.0", "<0.2.0"]`), which picks up
+patch releases without any moving branch.
+
+### Projects created before the package moved out
+
+Older projects install the package from this repo:
 
 ```yaml
-# pinned to one exact release for full reproducibility
-revision: 0.1.0
+  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
+    subdirectory: "dbt/optimist"
+    revision: 0.1.x
 ```
 
-Moving from `0.1.x` to `0.2.x` is always a manual, deliberate edit in the consumer's
-`packages.yml` — never automatic. Floating is deliberately scoped to patches rather than to a
-whole major: while the package is pre-1.0, a minor bump is allowed to change behaviour, so
-picking those up silently would defeat the point.
-
-Two rules keep this scheme working. Both fail silently if broken:
-
-- **Never create a tag named `X.Y.x`.** dbt resolves a `revision:` by preferring a tag over a
-  branch of the same name, so such a tag would shadow the moving branch permanently — every
-  consumer would freeze on it, with no error and no warning.
-- **Pushing the moving branch is what ships the release.** The tag alone changes nothing for
-  consumers; they track the branch. A release where step 5 was skipped looks complete from the
-  repo and leaves everyone on the previous version.
-
-### Cutting a release
-
-1. Decide the bump type (see Versioning above) based only on what changed under
-   `dbt/optimist/` since the last release.
-2. On a feature branch off `main`, update `version:` in `dbt/optimist/dbt_project.yml` to
-   match, and commit.
-3. Push the branch and open a merge request against `main`. **`main` is protected — it cannot
-   be pushed to directly, and the release must not be merged locally.** The tag in the next
-   step has to point at the merge commit GitLab itself creates, which does not exist until the
-   MR is accepted.
-   ```bash
-   git push origin feature/<name> \
-     -o merge_request.create \
-     -o merge_request.target=main \
-     -o merge_request.title="Release X.Y.Z"
-   ```
-   Then accept the MR in the GitLab UI. (`glab mr create` does the same thing if the CLI is
-   installed; the push options above need no extra tooling.)
-4. Pull the resulting merge commit and tag it:
-   ```bash
-   git switch main
-   git pull origin main
-   git tag -a X.Y.Z -m "optimist dbt package X.Y.Z"
-   git push origin X.Y.Z
-   ```
-5. Fast-forward the moving minor branch (patch release):
-   ```bash
-   git branch -f 0.1.x 0.1.1
-   git push origin 0.1.x --force-with-lease
-   ```
-   Or, on a minor/major bump, create the new branch instead and stop touching the old one:
-   ```bash
-   git branch 0.2.x 0.2.0
-   git push origin 0.2.x
-   # 0.1.x is now frozen — do not push to it again
-   ```
-6. On a minor or major bump, `revision:` in
-   [`datavloot_platform/templates/scaffold/packages.yml`](../datavloot_platform/templates/scaffold/packages.yml)
-   and
-   [`datavloot_platform/templates/demo/packages.yml`](../datavloot_platform/templates/demo/packages.yml)
-   must point at the new minor branch, so newly scaffolded projects get the new default. Make
-   this edit on the **same feature branch as step 2**, not afterwards — it goes through the
-   protected-branch MR like any other change, and doing it as a follow-up MR just widens the
-   window described in the note below.
-
-> **Ordering hazard.** Between the MR merging (step 3) and the branch push (step 5), the
-> templates reference a ref that does not exist yet, so `dbt deps` in a freshly scaffolded
-> project fails to resolve. Run steps 4 and 5 promptly after accepting the MR.
->
-> **Protected refs.** GitLab protects tags and branches by pattern, separately from protected
-> branches. If `git push origin X.Y.Z` or the `0.1.x` push is rejected, the ref pattern needs
-> allowing under *Settings → Repository → Protected tags / Protected branches*, or someone with
-> Maintainer rights has to push it.
-
-### Release history
-
-- **`0.1.0`** — first release. `dbt/optimist/dbt_project.yml` previously declared
-  `version: '1.0.0'`, a stale default from `dbt init` rather than an actual release; corrected
-  to `'0.1.0'` to match reality. This release also replaced `revision: main` (and its
-  `dbt deps` warning) with `revision: 0.1.x` in the scaffold and demo `packages.yml` templates,
-  and established the unprefixed-tag / `X.Y.x` moving-branch scheme described above.
+The `0.1.x` branch and the bare `0.1.0` and `0.1.2` tags in this repo still contain the package,
+so those projects keep working. **Do not delete or move them.** To switch an older project to the
+new repo, replace that entry with the snippet above. Macro names and the
+`dbt_packages/optimist/` paths are unchanged. The package no longer brings in elementary or its
+`on-run-end` hook, so add both to the project as the current templates do.
 
 ---
 
@@ -143,7 +73,7 @@ How the `datavloot` Python package (the CLI + Crows Nest + everything under
 
 SemVer, `version` in [`pyproject.toml`](../pyproject.toml) — the single source of truth (not
 dynamic; there's no `[tool.hatch.version]` source, so this field must be bumped by hand before
-every release). Independent of the `dbt/optimist` version above.
+every release). Independent of the optimist dbt package version.
 
 - **PATCH** — bug fixes, no consumer-facing change.
 - **MINOR** — backwards-compatible additions: new CLI commands/flags, new optional
@@ -152,24 +82,26 @@ every release). Independent of the `dbt/optimist` version above.
   an extra (e.g. `[optimist]`), dropping support for a Python version, changing the scaffolded
   project structure in a way that breaks existing projects on upgrade.
 
-No moving-branch scheme is needed here, unlike the dbt package above — PyPI itself is the
+No moving-branch scheme is needed — PyPI itself is the
 distribution point, and `pip`'s own version specifiers (e.g. `datavloot[optimist]<1.0`) already
 give consumers a "stay within a major" option without any extra git machinery on our side.
 
 ### Git refs
 
 One immutable tag per release: `datavloot-vX.Y.Z`, matching the version just published to PyPI.
-Prefixed with `datavloot-` (as opposed to the dbt package's bare `X.Y.Z` tags) so the two tag
-series never collide in the same repo.
+Prefixed with `datavloot-` because the bare `X.Y.Z` tags in this repo belong to the dbt package
+releases made before it moved out.
 
 ### Cutting a release
 
-1. Decide the bump type (see Versioning above) based on what changed outside `dbt/optimist/`
-   since the last release.
+1. Decide the bump type (see Versioning above) based on what changed since the last release.
 2. On a feature branch off `main`, update `version` in `pyproject.toml` to match, and commit.
 3. Push the branch, open a merge request against `main`, and accept it in the GitLab UI —
-   `main` is protected and cannot be pushed to directly. Same flow and same push options as
-   [step 3 of the dbt package procedure](#cutting-a-release) above; do not merge locally.
+   `main` is protected and cannot be pushed to directly, and the release must not be merged
+   locally: the tag in step 7 has to point at the merge commit GitLab creates.
+   ```bash
+   git push origin feature/<name>      -o merge_request.create      -o merge_request.target=main      -o merge_request.title="Release datavloot X.Y.Z"
+   ```
 4. Pull the merge commit and build from it, so the uploaded artifact matches the commit that
    gets tagged in step 7:
    ```bash
@@ -203,7 +135,8 @@ series never collide in the same repo.
    git tag -a datavloot-vX.Y.Z -m "datavloot X.Y.Z"
    git push origin datavloot-vX.Y.Z
    ```
-   If the push is rejected, see the protected-refs note in the dbt package procedure above.
+   If the push is rejected, the tag pattern needs allowing under *Settings → Repository →
+   Protected tags*, or someone with Maintainer rights has to push it.
 8. Check whether the install snippet on the marketing site (`html/production/index.html`) needs
    updating to match — see the open item in [`docs/backlog.md`](backlog.md).
 

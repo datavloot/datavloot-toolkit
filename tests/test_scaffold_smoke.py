@@ -17,7 +17,7 @@ import subprocess
 
 import pytest
 
-from .conftest import _scaffold, run_dbt, use_local_optimist
+from .conftest import _scaffold, run_dbt
 
 # Imported here rather than at the top so the fast suite can be collected and run
 # without the optimist extras installed -- the lint job installs only pytest and
@@ -40,9 +40,13 @@ EXPECTED_WARNINGS = [
 
 @pytest.fixture(scope="module")
 def built(tmp_path_factory) -> pathlib.Path:
-    """A scaffolded project taken all the way through `dbt run`."""
+    """
+    A scaffolded project taken all the way through `dbt run`.
+
+    packages.yml is used as scaffolded, so this installs the optimist release the
+    template pins. Changes to the package itself are tested in its own repo.
+    """
     project = _scaffold(tmp_path_factory.mktemp("smoke") / "probe", "probe")
-    use_local_optimist(project)
 
     deps = run_dbt("deps", cwd=project)
     assert deps.returncode == 0, f"dbt deps failed:\n{deps.stdout[-3000:]}"

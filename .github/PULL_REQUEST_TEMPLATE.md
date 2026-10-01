@@ -9,7 +9,6 @@
 <!-- Tick what you touched. This decides which release train the change rides. -->
 
 - [ ] `datavloot` Python package (CLI, Crows Nest, Dagster layer, templates)
-- [ ] `optimist` dbt package (`dbt/optimist/`)
 - [ ] Docs only
 
 ## Tests run locally
@@ -18,14 +17,13 @@
 
 - [ ] Fast tier (`-m "not slow and not package"`)
 - [ ] Crows Nest tests, with fastapi and duckdb installed (required for changes under `crowsnest/`)
-- [ ] Smoke tier (`-m slow`; required for changes to `dbt/optimist/` or the templates)
+- [ ] Smoke tier (`-m slow`; required for changes to the templates)
 - [ ] Packaging tier (`tests/test_packaging.py`; required for changes to `pyproject.toml` or what ships)
 
 ## Checklist
 
-- [ ] No version bump in `pyproject.toml` or `dbt/optimist/dbt_project.yml`
-- [ ] New or changed macro is documented in `docs/`
-- [ ] Convention changes are made in `dbt/optimist/data-instructions.md` only, not copied into the templates
+- [ ] No version bump in `pyproject.toml`
+- [ ] Templates do not copy conventions from the optimist package's `data-instructions.md`
 - [ ] Scaffold and demo templates are kept in step
 - [ ] Frontend source change comes with a rebuilt and committed `crowsnest/static/`
 - [ ] Widened dependency bound is explained above

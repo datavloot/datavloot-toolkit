@@ -4,12 +4,9 @@ Thanks for taking the time. This document covers how to set up a working copy, w
 
 ## What this repository ships
 
-Two independently versioned things live in this repo:
+This repo ships the `datavloot` Python package on PyPI: the CLI (`datavloot new`, `demo`, `crowsnest`, `start`), the Crows Nest dashboard, the Dagster platform layer and the project templates, all under `datavloot_platform/`.
 
-- the `datavloot` Python package on PyPI: the CLI (`datavloot new`, `demo`, `crowsnest`, `start`), the Crows Nest dashboard, the Dagster platform layer and the project templates, all under `datavloot_platform/`
-- the `optimist` dbt package under `dbt/optimist/`, installed by consuming projects through `dbt deps` with a git reference
-
-They release on different schedules and with different tag series. If your change touches both, say so in the pull request, because it affects how the change ships.
+The `optimist` dbt package that the templates install lives in its own repo, [datavloot/dbt-datavloot-optimist](https://github.com/datavloot/dbt-datavloot-optimist). Macro and modelling-convention changes go there.
 
 ## License
 
@@ -23,8 +20,6 @@ For a small fix (a typo, a broken link, an obvious bug with a clear fix) open a 
 
 Changes that need an issue before code:
 
-- new macros or changes to a macro's signature or output columns in `dbt/optimist/`
-- changes to the modelling conventions in `dbt/optimist/data-instructions.md`
 - changes to the scaffolded project structure
 - new CLI commands or new dependencies in `pyproject.toml`
 
@@ -77,7 +72,7 @@ Crows Nest auth and query-API security tests. These `importorskip` on fastapi an
 pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py
 ```
 
-Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, checks that a real warehouse file appears, and then has Dagster materialize every asset, as the first run from the UI would. Needs git and network access for the hub packages; the Dagster step is skipped when the `[optimist]` extra is not installed. The dbt package is installed from your checkout, not from the published branch, so a change under `dbt/optimist/` is actually exercised here. Run this for any change to the dbt package or the templates:
+Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, checks that a real warehouse file appears, and then has Dagster materialize every asset, as the first run from the UI would. Needs git and network access for the hub packages; the Dagster step is skipped when the `[optimist]` extra is not installed. The dbt package is installed at the release the templates pin. Run this for any change to the templates:
 
 ```bash
 pytest -m slow
@@ -112,8 +107,7 @@ Commit the regenerated `static/` together with the source change, in the same co
 
 Read `developer-instructions.md` for the repo layout and `toolkit-developer-standards.md` for the structural rules and the checklists. The short version of what reviewers check:
 
-- A new or changed macro in `dbt/optimist/macros/` is documented in `docs/` (`source-layer.md` or `business-layer.md`) in the same pull request.
-- Modelling or workflow conventions are changed in one place only: `dbt/optimist/data-instructions.md`. The `data-instructions.md` files inside the two templates reference it and must not grow copies of it.
+- Modelling or workflow conventions live in one place only: `data-instructions.md` in the optimist package repo. The `data-instructions.md` files inside the two templates reference it and must not grow copies of it.
 - The scaffold template (`datavloot_platform/templates/scaffold/`) and the demo (`datavloot_platform/templates/demo/`) are kept in step. A change to the scaffold's structure almost always needs the same change in the demo.
 - `datavloot_platform/` at the root is a template for consuming projects. Example-specific assets (the NOAA ingestion, for instance) belong inside the example's own directory under `templates/`, never at the root.
 - Dependency bounds in `pyproject.toml` follow the policy written in the comments there: cap 1.x packages below the next major, 0.x packages below the next minor, and keep the dagster core and companion series in lockstep. Do not widen a bound without saying why in the pull request.
@@ -132,10 +126,10 @@ A pull request should state what changed, why, and which test tiers you ran. Lin
 
 Things that will get a pull request bounced:
 
-- a version bump in `pyproject.toml` or `dbt/optimist/dbt_project.yml`; versions are bumped by maintainers as part of a release, not in feature pull requests
+- a version bump in `pyproject.toml`; versions are bumped by maintainers as part of a release, not in feature pull requests
 - committed `.duckdb` files, `dist/`, `target/`, `dbt_packages/`, `.env`, or anything else `.gitignore` already lists
 - edits to `uv.lock` unrelated to a dependency you changed
-- a new tag or branch named `X.Y.x`; that naming is reserved for the moving release branches of the dbt package, and a tag with that name silently shadows the branch for every consumer
+- a new tag or branch named `X.Y.x`; the frozen `0.1.x` branch still serves projects created before the dbt package moved out, and a tag with that name would silently shadow it
 
 ## Releases
 
