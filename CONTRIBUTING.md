@@ -32,21 +32,34 @@ Changes that need an issue before code:
 
 Prerequisites are the same as for using the toolkit (see the README): Python 3.10 to 3.13 and git. No C compiler is needed, except on Intel Macs (see the note in the README).
 
-Clone your fork, create a virtual environment, and install the package in editable mode with the full stack and the test dependencies:
+The recommended route is [uv](https://docs.astral.sh/uv/). Clone your fork and let uv create the virtual environment and install the package in editable mode, with the full stack and the test dependencies, at the versions in `uv.lock`:
 
 ```bash
 git clone https://github.com/<you>/datavloot-toolkit.git
 cd datavloot-toolkit
+uv sync --all-extras
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+
+The `[optimist]` extra pulls in Dagster, dbt, dlt, DuckDB, Elementary, FastAPI and the rest, close to 200 packages; uv installs them in a fraction of the time pip takes. Editable mode means the `datavloot` command on your PATH runs the code in your checkout, so changes to the CLI or the templates are live without reinstalling.
+
+Without uv, plain pip works too. It installs the newest versions the bounds in `pyproject.toml` allow rather than the locked ones, takes several minutes, and leaves you without `uv build` for the packaging tier (`pip install uv` inside the venv adds it):
+
+```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[optimist,dev]"
 ```
 
-The `[optimist]` extra pulls in Dagster, dbt, dlt, DuckDB, Elementary, FastAPI and the rest; the first install takes several minutes. Editable mode means the `datavloot` command on your PATH runs the code in your checkout, so changes to the CLI or the templates are live without reinstalling.
+If you only want to run the fast tests and touch nothing else, the `[dev]` extra alone is enough (`uv sync --extra dev`, or `pip install -e ".[dev]"`); everything below assumes the full install.
 
-If you only want to run the fast tests and touch nothing else, `pip install -e ".[dev]"` is enough; everything below assumes the full install.
+### Dependencies and `uv.lock`
 
-The packaging tests shell out to `uv build`, so [uv](https://docs.astral.sh/uv/) has to be installed for that one tier (`pip install uv` inside the venv works). It is not needed for anything else.
+`uv.lock` pins the exact versions of the development environment, so everyone working on the toolkit runs the same ones and an upgrade happens on purpose rather than on the day someone reinstalls. It only affects this repository: users install from the published wheel, which resolves from the bounds in `pyproject.toml` and never sees the lock.
+
+- **Changed a dependency in `pyproject.toml`?** Run `uv lock` and commit `uv.lock` with it. The `lint` job runs `uv lock --check` and fails a pull request whose lock does not match.
+- **Upgrading.** `uv sync` keeps you on the locked versions. To move to newer releases within the bounds, run `uv lock --upgrade` in a pull request of its own, for example before a release, so the diff shows what moves and CI tests it.
+- **What users get is tested separately.** The `smoke` job installs with pip, not from the lock, so a new release of a dependency that breaks users fails CI even while the lock still holds the older version.
 
 ## Running the tests
 
@@ -70,7 +83,7 @@ Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `db
 pytest -m slow
 ```
 
-Packaging test: builds a wheel and sdist and asserts that build inputs (the frontend source, dbt `target/` directories, `.uv-cache`, `.duckdb` files) are excluded and the wheel stays small. Needs uv (see above). Run this if you touch `pyproject.toml`, add files under `datavloot_platform/`, or change anything about what ships:
+Packaging test: builds a wheel and sdist and asserts that build inputs (the frontend source, dbt `target/` directories, `.uv-cache`, `.duckdb` files) are excluded and the wheel stays small. Needs uv, for `uv build` (see above). Run this if you touch `pyproject.toml`, add files under `datavloot_platform/`, or change anything about what ships:
 
 ```bash
 pytest tests/test_packaging.py
