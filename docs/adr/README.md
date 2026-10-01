@@ -1,25 +1,24 @@
 # Architecture decision records
 
-An ADR records one architectural decision: the problem it answers, what was chosen, what was rejected and why. `docs/architecture.md` describes the target; the ADRs explain why it looks that way, so a later change can check whether the reasons still hold.
+An ADR records one architectural decision: the problem, what was chosen, and what was rejected and why. `docs/architecture.md` describes the target; the ADRs explain why.
 
 ## Process
 
 - One decision per file, numbered in order: `NNNN-short-title.md`.
-- A new ADR starts as **Proposed** and is opened as a pull request. It becomes **Accepted** when a maintainer approves and it is merged with that status.
-- An accepted ADR is not rewritten. If a decision changes, write a new ADR and mark the old one **Superseded by NNNN**.
+- A new ADR is proposed as a pull request. Approving and merging it is accepting it, so every ADR on `main` is in force.
+- An ADR on `main` is not rewritten. If a decision changes, write a new ADR and add a line to the top of the old one pointing to it: `Superseded by [NNNN](NNNN-short-title.md).`
 
 ## Index
 
-| ADR | Title | Status |
-|---|---|---|
-| [0001](0001-optimist-single-node-single-writer.md) | Optimist as a single-node, single-writer architecture | Proposed |
+| ADR | Title |
+|---|---|
+| [0001](0001-optimist-single-node-single-writer.md) | Optimist as a single-node, single-writer architecture |
 
 ## Template
 
 ```markdown
 # NNNN. Title
 
-- **Status:** Proposed | Accepted | Superseded by NNNN
 - **Date:** YYYY-MM-DD
 - **Issue:** #n
 
@@ -29,7 +28,7 @@ The problem and the forces at play: what is true today, and why it is not good e
 
 ## Decision
 
-What we will do, stated as decisions ("we will …").
+What we will do.
 
 ## Consequences
 

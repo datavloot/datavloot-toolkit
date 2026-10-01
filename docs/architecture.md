@@ -1,8 +1,8 @@
 # Optimist architecture (single node)
 
-> **Status: proposed.** This describes the target architecture, not the current implementation: scaffolded projects currently write to a single DuckDB file, without a DuckLake catalog or maintenance jobs. The reasoning is in [ADR 0001](adr/0001-optimist-single-node-single-writer.md); this document stays "proposed" until that ADR is accepted.
+> **Status: proposed.** This describes the target architecture, not the current implementation: scaffolded projects currently write to a single DuckDB file, without a DuckLake catalog or maintenance jobs. The reasoning is in [ADR 0001](adr/0001-optimist-single-node-single-writer.md).
 
-The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory. It stands on its own: the larger Falcon is built separately on SRDP, and moving up to it is a data migration (section 6).
+The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory.
 
 ## 1. Component overview
 
@@ -126,26 +126,6 @@ flowchart LR
     FILECOPY --> SNAP["Consistent copy of the directory"]
     SNAP --> LOCAL["Local backup"]
     SNAP -. "optional" .-> BUCKET["S3-compatible bucket (restic / rclone)"]
-```
-
-## 6. Moving up
-
-An organisation that outgrows the Optimist moves its data into a larger DuckLake, such as the Falcon on SRDP: the catalog into PostgreSQL, the Parquet files onto a volume or into S3-compatible storage. Schema and table names stay the same, so dbt models and dlt sources carry over; how the project connects to its storage is set up anew on the target platform. The Optimist shares no code with the Falcon, so neither has to wait on the other.
-
-```mermaid
-flowchart LR
-    subgraph OPT["Optimist"]
-        O1[("SQLite catalog")]
-        O2["Parquet on local disk"]
-    end
-
-    subgraph TARGET["Larger DuckLake (e.g. the Falcon on SRDP)"]
-        T1[("PostgreSQL catalog")]
-        T2["Parquet on a volume or in S3-compatible storage"]
-    end
-
-    O1 -- "migrate metadata" --> T1
-    O2 -- "copy files, update data path" --> T2
 ```
 
 ## Component summary
