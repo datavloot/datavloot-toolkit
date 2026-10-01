@@ -7,6 +7,8 @@ import subprocess
 import sys
 import time
 
+from datavloot_platform import location
+
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
 _IGNORE = shutil.ignore_patterns(
@@ -42,6 +44,13 @@ def _preinstall_extensions() -> None:
             print(f"Warning: {message}\n", file=sys.stderr)
     finally:
         conn.close()
+
+
+def _warn_about_location(path: pathlib.Path, project_name: str) -> None:
+    """Print warnings about where the project and this environment live; never stop."""
+    warnings = location.project_warnings(path, project_name) + location.environment_warnings()
+    for warning in warnings:
+        print(f"Warning: {warning}\n", file=sys.stderr)
 
 
 def _to_identifier(name: str) -> str:
@@ -88,6 +97,7 @@ def cmd_new(args: argparse.Namespace) -> None:
     _substitute(dest, project_name)
     _preinstall_extensions()
 
+    _warn_about_location(dest, project_name)
     print(f"Project '{project_name}' created at '{dest}'.\n")
     print("Next steps:")
     print(f"  1. cd {dest}")
@@ -107,6 +117,8 @@ def cmd_demo(args: argparse.Namespace) -> None:
     )
     _copy_template(TEMPLATES_DIR / "demo", dest)
     _preinstall_extensions()
+    # The demo keeps its own name (noaa), unlike a scaffolded project.
+    _warn_about_location(dest, "noaa")
     print(f"NOAA demo project created at '{dest}'.\n")
     print("Next steps:")
     print(f"  1. cd {dest}")
@@ -284,6 +296,11 @@ def cmd_start(args: argparse.Namespace) -> None:
     from datavloot_platform.crowsnest.config import get_config
 
     graphql_url = get_config().dagster_graphql_url
+
+    # `start` runs from the project directory, which may have been created or
+    # moved without going through `new`.
+    project_dir = pathlib.Path.cwd()
+    _warn_about_location(project_dir, _to_identifier(project_dir.name))
 
     print("Starting Dagster…")
     # POSIX: own session, so the whole tree can be signalled as one group.
