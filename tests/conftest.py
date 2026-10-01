@@ -64,7 +64,16 @@ def run_dbt(*args: str, cwd: pathlib.Path) -> subprocess.CompletedProcess:
     Returns the completed process rather than raising, so a test can assert on
     stdout as well as the exit code.
     """
-    env = {**os.environ, "DBT_PROFILES_DIR": str(cwd), "NO_COLOR": "1"}
+    # dbt ignores NO_COLOR. Whether it colors depends on the platform and the
+    # console, and a colored "[WARNING]" never matches a plain-text search, so a
+    # test filtering for warnings found none and passed on every platform but
+    # the Windows runner. DBT_USE_COLORS makes the output the same everywhere.
+    env = {
+        **os.environ,
+        "DBT_PROFILES_DIR": str(cwd),
+        "NO_COLOR": "1",
+        "DBT_USE_COLORS": "false",
+    }
     return subprocess.run(
         [shutil.which("dbt") or "dbt", *args],
         cwd=cwd,

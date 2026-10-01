@@ -1,17 +1,21 @@
 # Datavloot CI — GitHub Actions port of .gitlab-ci.yml
 #
-# Same four checks, fastest-to-fail first:
+# Checks, fastest-to-fail first:
 #
 #   lint       - the templates parse and declare nothing that does not exist
 #   crowsnest  - the Crows Nest security/auth tests, which need the web stack
-#   smoke      - a fresh `datavloot new` project builds a real warehouse on disk
+#   wheels     - every dependency of the optimist extra installs from a wheel
+#   smoke      - on Linux, Windows and macOS: a clean install, `datavloot new`,
+#                and a fresh project built by dbt and by Dagster
 #   package    - the built wheel contains no build inputs
 #
 # The `release` step (fast-forward the moving X.Y.x branch on a bare X.Y.Z tag)
 # lives in release.yml, because tag pushes do not match this workflow's trigger.
 #
-# Deps are pulled ephemerally with `uv run --with ...`, exactly as on GitLab, so
-# a change under dbt/optimist is tested against *this checkout*.
+# lint, crowsnest and package pull deps ephemerally with `uv run --with ...`, so
+# a test cannot pass because something unrelated happened to be installed.
+# smoke instead installs the optimist extra the way a user does. In both cases
+# the dbt package under dbt/optimist is tested from *this checkout*.
 
 name: CI
 
@@ -51,20 +55,73 @@ jobs:
           --with fastapi --with httpx
           python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py -v
 
-  smoke:
+  # The runners have compilers, so a real install there succeeds even when a
+  # user's laptop would need Rust or a C compiler (cryptography 49+ on Intel Macs
+  # did exactly that). Instead, resolve the newest versions the bounds allow for
+  # each platform -- what `pip install` picks -- then require a wheel for every
+  # one of them. Pinning first matters: asked for wheels only, the resolver
+  # quietly falls back to older versions and the check proves nothing.
+  wheels:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - name: Every dependency installs from a wheel
+        env:
+          # sdist-only, but nothing to compile: ratelimit and grapheme are pure
+          # Python; dbt-core-experimental-parser's build step downloads a
+          # prebuilt binary (which needs github.com reachable at install time).
+          ALLOWED_SDISTS: ratelimit grapheme dbt-core-experimental-parser
+          # Known and documented in the README's Intel Mac note.
+          ALLOWED_SDISTS_INTEL_MAC: cryptography
+        run: |
+          allowed="$ALLOWED_SDISTS"
+          if [ "${{ matrix.platform }}" = x86_64-apple-darwin ]; then
+            allowed="$allowed $ALLOWED_SDISTS_INTEL_MAC"
+          fi
+          no_binary=$(printf -- '--no-binary %s ' $allowed)
+          # Oldest and newest supported Python: wheels are built per version.
+          for py in 3.10 3.13; do
+            echo "::group::${{ matrix.platform }}, Python $py"
+            uv pip compile pyproject.toml --extra optimist \
+              --python-platform ${{ matrix.platform }} --python-version $py \
+              --quiet --output-file pins.txt
+            uv pip compile pins.txt --only-binary :all: $no_binary \
+              --python-platform ${{ matrix.platform }} --python-version $py \
+              --quiet > /dev/null
+            echo "::endgroup::"
+          done
+
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      # Plain pip rather than uv: this job installs the way the README tells a
+      # user to, so it resolves the newest versions the bounds allow, not the
+      # lock file.
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          enable-cache: true
-      # git is preinstalled on ubuntu-latest, and `dbt deps` needs it to resolve
-      # the hub packages' metadata.
-      - run: >
-          uv run --with pytest --with pyyaml --with duckdb
-          --with dbt-core --with dbt-duckdb
-          python -m pytest tests/ -m slow -v
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install ".[optimist]" pytest
+      # The console script itself, not just the functions behind it.
+      - run: datavloot new "${{ runner.temp }}/probe"
+      # git is preinstalled on all three runners, and `dbt deps` needs it to
+      # resolve the hub packages' metadata.
+      - run: python -m pytest tests/ -m slow -v
 
   package:
     runs-on: ubuntu-latest

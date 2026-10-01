@@ -105,3 +105,23 @@ def test_no_placeholder_model_is_declared(scaffold: pathlib.Path):
     sql_models = {p.stem for p in (scaffold / "models").rglob("*.sql")}
     orphans = declared - sql_models
     assert orphans == set(), f"declared in YAML but no .sql file exists: {orphans}"
+
+
+def test_no_placeholder_source_is_declared(scaffold: pathlib.Path):
+    """
+    Templates must not declare sources that do not exist.
+
+    `_sources.yml` shipped an active <source_name>.<table_name> with unique and
+    not_null tests. `dbt run` skips tests, so it passed; `dbt build` -- which is
+    what Dagster runs on the first materialization -- executed them and failed
+    on `select <primary_key_column>`. On Windows it failed even earlier: the
+    test names contain < and >, which are not allowed in file names.
+    """
+    text = (scaffold / "models/source/_sources.yml").read_text(encoding="utf-8")
+    doc = yaml.safe_load(text)
+
+    assert doc["sources"] == [], f"_sources.yml declares sources: {doc['sources']}"
+    assert "remove the []" in text, (
+        "_sources.yml has an empty sources list with no note telling the reader "
+        "to remove it before uncommenting the example below"
+    )

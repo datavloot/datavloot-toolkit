@@ -64,7 +64,7 @@ Crows Nest auth and query-API security tests. These `importorskip` on fastapi an
 pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py
 ```
 
-Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, and checks that a real warehouse file appears. Needs git and network access for the hub packages. The dbt package is installed from your checkout, not from the published branch, so a change under `dbt/optimist/` is actually exercised here. Run this for any change to the dbt package or the templates:
+Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, checks that a real warehouse file appears, and then has Dagster materialize every asset, as the first run from the UI would. Needs git and network access for the hub packages; the Dagster step is skipped when the `[optimist]` extra is not installed. The dbt package is installed from your checkout, not from the published branch, so a change under `dbt/optimist/` is actually exercised here. Run this for any change to the dbt package or the templates:
 
 ```bash
 pytest -m slow
@@ -78,7 +78,7 @@ pytest tests/test_packaging.py
 
 To run everything at once, `pytest` with no arguments.
 
-CI runs the same tests but installs dependencies per job with `uv run --with ...` instead of a venv, so it also catches a test that only passes because something unrelated happened to be installed locally. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
+CI runs the same tests. The fast, Crows Nest and packaging jobs install dependencies per job with `uv run --with ...` instead of a venv, so they also catch a test that only passes because something unrelated happened to be installed locally. The smoke job runs on Linux, Windows and macOS and installs the `[optimist]` extra with pip, the way a user does. A separate `wheels` job checks that every dependency of the extra installs from a wheel on each platform, so a release that suddenly needs a compiler on users' machines fails CI instead of their install. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
 
 ## Working on the Crows Nest frontend
 
