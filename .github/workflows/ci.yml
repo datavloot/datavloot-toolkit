@@ -15,9 +15,16 @@
 
 name: CI
 
+# Pull requests, plus `main` after a merge. Not every branch push: a push to a
+# branch with an open pull request fires both `push` and `pull_request`, and the
+# two runs land in different concurrency groups (refs/heads/<branch> versus
+# refs/pull/<n>/merge), so every job ran twice. The pull_request run is the one
+# worth keeping -- it tests the branch merged into the current main. Open a
+# draft pull request to get CI on a branch early. Tag pushes match neither
+# trigger, so releases are excluded.
 on:
   push:
-    branches: ['**']       # every branch; tag pushes do NOT match, so releases are excluded
+    branches: [main]
   pull_request:
     branches: [main]
 
