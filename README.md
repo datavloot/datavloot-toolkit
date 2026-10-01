@@ -1,4 +1,4 @@
-# optimist-toolkit
+# datavloot-toolkit
 
 A self-hosted data platform for data engineers who want to own their stack rather than be trained on someone else's.
 
