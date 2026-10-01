@@ -26,7 +26,8 @@ dependencies = [
 # dbt-core-experimental-parser, which PyPI has only as an sdist whose build step
 # downloads a binary from github.com. Behind a proxy that blocks GitHub,
 # `pip install datavloot[optimist]` then fails. Lift the cap once the parser
-# ships wheels on PyPI.
+# ships wheels on PyPI; until then the `wheels` CI job fails on it, so lifting
+# the cap early does not go unnoticed.
 #
 # There is no `ducklake` dependency: the PyPI package of that name is an empty
 # placeholder. The DuckLake extension is installed by DuckDB itself, see
