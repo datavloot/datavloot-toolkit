@@ -9,9 +9,11 @@ tables built and writes nothing to disk).
 Marked `slow`: it runs dbt deps/parse/run and takes a few minutes.
 """
 
+import os
 import pathlib
 import re
 import shutil
+import subprocess
 
 import pytest
 
@@ -129,4 +131,47 @@ def test_parse_emits_no_unexpected_warnings(built: pathlib.Path):
 
     assert unexpected == [], (
         "unexpected warnings from a fresh scaffold:\n  " + "\n  ".join(unexpected)
+    )
+
+
+@pytest.mark.skipif(shutil.which("dagster") is None, reason="dagster is not installed")
+def test_dagster_materializes_the_scaffold(built: pathlib.Path, tmp_path: pathlib.Path):
+    """
+    The first pipeline run a user does: Dagster loads the project and builds every asset.
+
+    dbt alone passing says nothing about the platform layer -- the definitions
+    module has to import, find the manifest and drive dbt through dagster-dbt.
+    This is what `dagster dev` does behind the UI, so it is the step that breaks
+    when a Dagster release or a platform quirk (paths, process spawning on
+    Windows) does not agree with the template.
+    """
+    # The module `dagster dev` would load, read from the scaffold rather than
+    # hard-coded: the template directory is renamed per project.
+    module = re.search(
+        r'^module_name\s*=\s*"([^"]+)"', (built / "pyproject.toml").read_text(), re.M
+    ).group(1)
+    env = {
+        **os.environ,
+        "DBT_PROFILES_DIR": str(built),
+        # A throwaway instance, so the run never touches a real ~/.dagster.
+        "DAGSTER_HOME": str(tmp_path),
+        "NO_COLOR": "1",
+    }
+    result = subprocess.run(
+        [
+            shutil.which("dagster"), "asset", "materialize",
+            # Not a bare `*`: on Windows click expands that against the files in
+            # the working directory before Dagster sees it.
+            "--select", 'key:"*"',
+            "-m", module,
+            "--working-directory", str(built),
+        ],
+        cwd=built,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    assert result.returncode == 0, (
+        f"dagster asset materialize failed:\n{(result.stdout + result.stderr)[-3000:]}"
     )
