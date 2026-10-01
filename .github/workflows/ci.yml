@@ -45,6 +45,10 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+      # uv.lock once drifted so far that it still described the project under its
+      # old name, and every `uv sync` rewrote it on contributors' machines. Fail
+      # when pyproject.toml changes without the lock.
+      - run: uv lock --check
       - run: uv run --with pytest --with pyyaml python -m pytest tests/ -m "not slow and not package" -v
 
   # The Crows Nest tests importorskip fastapi/duckdb, so `lint` silently skips
