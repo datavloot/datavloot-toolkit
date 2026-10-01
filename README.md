@@ -34,13 +34,10 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 - Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
 - Git
-- A C compiler (required to build some dependencies from source)
 
-  | OS | What you need | How to get it |
-  |---|---|---|
-  | **Windows** | Microsoft C++ Build Tools | Download from [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/), select **Desktop development with C++** |
-  | **macOS** | Xcode Command Line Tools | Run `xcode-select --install` in a terminal |
-  | **Linux** | GCC | Run `sudo apt install build-essential` (Debian/Ubuntu) or `sudo yum install gcc` (RHEL/Fedora) |
+No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
+
+> **Intel Macs:** `cryptography` has no Intel wheel from version 49 on. Run `pip install "cryptography<49"` before installing datavloot, or pip will try to build it from source (needs Rust and a C compiler).
 
 ### 1. Create your own repository
 
@@ -60,9 +57,7 @@ If `pip` is not recognised (common on Windows), use:
 python -m pip install datavloot[optimist]
 ```
 
-If you see a `Failed to build cffi` error, ensure a C Compiler is installed (see Prerequisites above), then retry.
-
-> **Note:** The first install downloads and builds a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
+> **Note:** The first install downloads and installs a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
 
 
 ### 3. Scaffold a new project
@@ -357,7 +352,7 @@ Beyond the Valk, the components stay independently portable:
 | **Cloud storage** | Point DuckLake at an S3-compatible bucket instead of a local volume | All dbt models and Dagster assets |
 | **Cloud warehouse** | Swap `dbt-duckdb` for another dbt adapter | All models and macros (mostly portable SQL) |
 
-See [datavloot.nl/vaarroute](https://datavloot.nl/vaarroute) for the full vessel roadmap.
+See [datavloot.nl/over](https://datavloot.nl/over) for the full vessel roadmap.
 
 ---
 
@@ -387,6 +382,7 @@ dbt deps
 - [Ingestion layer — loading data with dlt](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/ingestion.md)
 - [Source layer — auto-staging and audit columns](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/business-layer.md)
+- [Architecture — Optimist single-node setup (proposed)](docs/architecture.md)
 
 ---
 

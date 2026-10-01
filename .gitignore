@@ -23,3 +23,6 @@ data/*.csv
 
 # Environment
 .env
+
+# Temp — lokale werkbestanden
+temp/
