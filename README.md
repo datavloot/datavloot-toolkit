@@ -39,6 +39,8 @@ No C compiler is needed: every dependency installs from a prebuilt wheel or is p
 
 > **Intel Macs:** `cryptography` has no Intel wheel from version 49 on. Run `pip install "cryptography<49"` before installing datavloot, or pip will try to build it from source (needs Rust and a C compiler).
 
+> **Where to put a project:** on a local disk, outside OneDrive, Dropbox, Google Drive, iCloud and network drives. DuckDB relies on file locks that sync clients and network file systems do not honour. On Windows, `Documents` and `Desktop` are often synced to OneDrive; a folder like `C:\dev\` is not. Keep the path short on Windows too: unless [long paths are enabled](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation), a project folder longer than about 100 characters runs into the 260-character limit. `datavloot new`, `demo` and `start` warn when they detect either.
+
 ### 1. Create your own repository
 
 Create a new repository on GitHub or GitLab (empty is fine), then clone it and navigate into it.

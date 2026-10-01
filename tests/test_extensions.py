@@ -91,6 +91,13 @@ def test_ensure_loaded_raises_with_the_manual_route():
 
 # --- the CLI ------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def no_location_warnings(monkeypatch):
+    """`new` also warns about where the project lives; a deep or synced temp dir
+    on the test machine must not show up as an extension warning."""
+    monkeypatch.setattr(cli, "_warn_about_location", lambda *args: None)
+
+
 @pytest.fixture
 def fake_duckdb(monkeypatch):
     """Put a stand-in duckdb module in place; returns the connection it hands out."""
