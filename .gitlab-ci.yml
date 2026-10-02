@@ -7,8 +7,9 @@
 #   package   - the built wheel contains no build inputs
 #   release   - on a bare X.Y.Z tag, fast-forward the moving X.Y.x branch
 #
-# The smoke job installs the dbt package from *this checkout*, not from the
-# published 0.1.x branch, so a change under dbt/optimist is actually tested.
+# The smoke job installs the optimist dbt package at the release the templates
+# pin. The package itself is tested in its own repo,
+# github.com/datavloot/dbt-datavloot-optimist.
 
 stages: [test, package, release]
 

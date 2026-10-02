@@ -11,9 +11,8 @@ Add the package to your project's `packages.yml`:
 
 ```yaml
 packages:
-  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
-    subdirectory: "dbt/optimist"
-    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) in production
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.0
 ```
 
 Then install it:

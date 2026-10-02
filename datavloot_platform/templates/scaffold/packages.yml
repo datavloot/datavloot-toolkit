@@ -1,4 +1,5 @@
 packages:
-  - git: "https://gitlab.com/datavloot/datavloot-toolkit.git"
-    subdirectory: "dbt/optimist"
-    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) for reproducible builds
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.0
+  - package: elementary-data/elementary
+    version: [">=0.25.0", "<0.26.0"]   # match the elementary-data CLI range in the datavloot package
