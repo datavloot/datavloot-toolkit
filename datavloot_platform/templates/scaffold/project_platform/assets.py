@@ -15,9 +15,13 @@ project_dbt_project.prepare_if_dev()
 
 
 class LayerGroupTranslator(DagsterDbtTranslator):
-    """Groups dbt assets by their folder layer (source / business)."""
+    """Groups dbt assets by their folder layer (source / business); a package's assets by package."""
 
     def get_group_name(self, dbt_resource_props: dict) -> str:
+        # By folder, Elementary's models would land in one group per subfolder.
+        package = dbt_resource_props.get("package_name")
+        if package and package != project_dbt_project.name:
+            return package
         fqn = dbt_resource_props.get("fqn", [])
         if len(fqn) >= 2:
             return fqn[-2]
