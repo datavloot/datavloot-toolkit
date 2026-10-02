@@ -410,6 +410,7 @@ dbt deps
 - [Source layer — auto-staging and audit columns](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](https://gitlab.com/datavloot/datavloot-toolkit/-/blob/main/docs/business-layer.md)
 - [Architecture — Optimist single-node setup (proposed)](docs/architecture.md)
+- [Architecture decision records](docs/adr/README.md)
 
 ---
 
