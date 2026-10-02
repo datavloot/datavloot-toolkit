@@ -53,7 +53,7 @@ URL = "http://extensions.duckdb.org/v1.5.6/windows_amd64/ducklake.duckdb_extensi
 
 
 def test_an_installed_extension_is_not_downloaded_again():
-    conn = FakeConn(installed={"ducklake"})
+    conn = FakeConn(installed=set(extensions.REQUIRED))
     assert extensions.install(conn) == []
     assert not any(s.startswith("INSTALL") for s in conn.statements)
 
@@ -65,7 +65,7 @@ def test_a_missing_extension_is_installed():
 
 
 def test_a_failed_download_explains_the_manual_route():
-    [message] = extensions.install(FakeConn(fail_install=True))
+    [message] = extensions.install(FakeConn(fail_install=True), names=("ducklake",))
     assert URL in message, "the message must name the exact file for this DuckDB and platform"
     assert "INSTALL '<path to the downloaded file>'" in message
     assert "Failed to download extension" in message, "keep DuckDB's own reason"
@@ -74,7 +74,7 @@ def test_a_failed_download_explains_the_manual_route():
 
 def test_the_manual_route_follows_a_configured_mirror():
     conn = FakeConn(fail_install=True, repository="https://mirror.example.com/duckdb/")
-    [message] = extensions.install(conn)
+    [message] = extensions.install(conn, names=("ducklake",))
     assert "https://mirror.example.com/duckdb/v1.5.6/windows_amd64/ducklake.duckdb_extension.gz" in message
 
 
@@ -154,7 +154,7 @@ def test_an_unreachable_repository_gives_the_manual_route(tmp_path):
     conn = duckdb.connect(config={"extension_directory": os.path.realpath(tmp_path)})
     conn.execute("SET custom_extension_repository='http://127.0.0.1:9'")
 
-    [message] = extensions.install(conn)
+    [message] = extensions.install(conn, names=("ducklake",))
 
     assert "http://127.0.0.1:9/v" in message and "ducklake.duckdb_extension.gz" in message
     assert not extensions.is_installed(conn, "ducklake")

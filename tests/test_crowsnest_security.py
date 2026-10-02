@@ -18,13 +18,35 @@ from fastapi.testclient import TestClient  # noqa: E402
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", params=["file", "lake"])
 def client(tmp_path_factory, request) -> TestClient:
-    """A Crows Nest wired to a small throwaway warehouse."""
-    workdir = tmp_path_factory.mktemp("crowsnest")
-    db = workdir / "probe.duckdb"
+    """
+    A Crows Nest wired to a small throwaway warehouse: a .duckdb file, or a lake.
 
-    con = duckdb.connect(str(db))
+    Every test below runs against both. The lake cannot have its file system
+    disabled -- DuckLake reads Parquet through it -- so it is sandboxed with
+    allowed_directories instead (see db.py), and has to refuse the same attacks.
+    """
+    import os
+
+    from datavloot_platform import storage
+
+    workdir = tmp_path_factory.mktemp("crowsnest")
+    if request.param == "file":
+        db = workdir / "probe.duckdb"
+        con = duckdb.connect(str(db))
+        env = {"CROWSNEST_DUCKDB_PATH": str(db)}
+    else:
+        lake = workdir / "lake"
+        lake.mkdir()
+        con = duckdb.connect()
+        con.execute(storage.attach_statement(lake / "catalog.sqlite", lake / "data", "probe"))
+        con.execute("USE probe")
+        # With the prefix, as the variable used to need it: it is accepted and dropped.
+        env = {
+            "CROWSNEST_DUCKLAKE_CATALOG_PATH": f"ducklake:sqlite:{lake / 'catalog.sqlite'}",
+            "CROWSNEST_DUCKLAKE_ALIAS": "probe",
+        }
     con.execute("CREATE SCHEMA probe_business")
     con.execute(
         "CREATE TABLE probe_business.dim_vessel AS "
@@ -32,15 +54,15 @@ def client(tmp_path_factory, request) -> TestClient:
     )
     con.close()
 
-    import os
-    os.environ["CROWSNEST_DUCKDB_PATH"] = str(db)
+    os.environ.update(env)
     os.environ.pop("CROWSNEST_AUTH_TOKEN", None)
     cn_config.reset_config()
 
     from datavloot_platform.crowsnest.server import create_app
     yield TestClient(create_app())
 
-    os.environ.pop("CROWSNEST_DUCKDB_PATH", None)
+    for name in env:
+        os.environ.pop(name, None)
     cn_config.reset_config()
 
 

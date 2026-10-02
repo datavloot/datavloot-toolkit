@@ -7,22 +7,24 @@ app = marimo.App(width="medium", app_title="NOAA AIS — Guam 2025")
 @app.cell
 def _():
     import marimo as mo
-    import duckdb
     import altair as alt
     from pathlib import Path
+    from datavloot_platform import storage
 
-    DB_PATH = Path(__file__).parent.parent / "noaa.duckdb"
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    mo.md(f"Connected to `{DB_PATH.name}` — {DB_PATH.stat().st_size // 1_000_000} MB")
-    return DB_PATH, alt, con, mo
+    # Read-only, so the notebook can stay open while a pipeline writes.
+    PROJECT_DIR = Path(__file__).parent.parent
+    con = storage.connect(PROJECT_DIR, read_only=True)
+    mo.md(f"Connected to the lake in `{storage.lake_dir(PROJECT_DIR)}`")
+    return PROJECT_DIR, alt, con, mo
 
 
 @app.cell
 def _(con, mo):
+    # current_database(): the lake, not DuckLake's own metadata tables
     schemas = con.sql("""
         SELECT table_schema AS schema_name, COUNT(*) AS tables
         FROM information_schema.tables
-        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+        WHERE table_catalog = current_database()
         GROUP BY table_schema
         ORDER BY table_schema
     """).df()

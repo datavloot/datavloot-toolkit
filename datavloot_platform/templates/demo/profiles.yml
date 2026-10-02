@@ -3,5 +3,25 @@ noaa:
   outputs:
     dev:
       type: duckdb
-      path: "noaa.duckdb"
+      # The data lives in a DuckLake (lake/catalog.sqlite plus Parquet files in
+      # lake/data/), attached below under the project name. The DuckDB database
+      # itself only holds the session.
+      path: ":memory:"
+      database: noaa
       schema: noaa
+      extensions: [ducklake, sqlite_scanner]
+      # Same options as datavloot_platform/storage.py, which explains them. Paths
+      # are relative to the project directory, which is where dbt runs.
+      attach:
+        - path: "ducklake:sqlite:{{ env_var('DATAVLOOT_LAKE_DIR', 'lake') }}/catalog.sqlite"
+          alias: noaa
+          options:
+            data_path: "{{ env_var('DATAVLOOT_LAKE_DIR', 'lake') }}/data/"
+            override_data_path: true
+            meta_journal_mode: "WAL"
+      # The lake takes one commit at a time; a statement that collides with
+      # another process's commit is retried. A model whose own commit collides
+      # still fails and needs a rerun.
+      retries:
+        query_attempts: 5
+        retryable_exceptions: ["TransactionException", "IOException"]

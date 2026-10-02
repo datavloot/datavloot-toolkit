@@ -3,7 +3,6 @@ from dagster import AssetExecutionContext
 from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_assets
 
 PROJECT_DIR = Path(__file__).parent.parent
-DB_PATH = PROJECT_DIR / "<project_name>.duckdb"
 
 project_dbt_project = DbtProject(project_dir=PROJECT_DIR)
 project_dbt_project.prepare_if_dev()
@@ -36,14 +35,14 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #
 #   import dlt
 #   from dagster_dlt import DagsterDltResource, dlt_assets
-#   from dlt.destinations import duckdb as duckdb_destination
+#   from datavloot_platform import storage
 #
 #   @dlt_assets(
 #       dlt_source=my_source(),
 #       dlt_pipeline=dlt.pipeline(
 #           pipeline_name="my_pipeline",
 #           dataset_name="source",
-#           destination=duckdb_destination(credentials=str(DB_PATH)),
+#           destination=storage.dlt_destination(PROJECT_DIR),  # the project's lake
 #       ),
 #       group_name="source",
 #   )

@@ -12,7 +12,7 @@ conventions, and captain/crew guide. Run `dbt deps` if the file is not yet prese
 
 - **Sources**: NOAA AIS broadcasts (CSV → DuckDB via Dagster asset) and Open-Meteo atmospheric hourly
   (dlt pipeline — incremental by date cursor)
-- **Warehouse**: DuckDB (`noaa.duckdb`)
+- **Warehouse**: DuckLake in `lake/` (SQLite catalog, Parquet files), attached as `noaa`
 - **Orchestration**: Dagster via `noaa_platform/`; run `dagster dev` from the project root
 - **Source subfolders**: `source/ais/` (incremental) and `source/open_meteo/` (ephemeral) —
   materializations set by folder in `dbt_project.yml`
