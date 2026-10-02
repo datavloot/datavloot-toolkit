@@ -39,13 +39,24 @@ Rules:
 - **Never pass `--target prod` by hand.** To get a change into production, materialise the
   assets in Dagster. A manual prod run bypasses the concurrency limit below and can collide with
   a running pipeline.
-- **Every Dagster asset that writes to the lake sets `pool=LAKE_POOL`** (`assets.py`): dbt
-  assets, dlt assets and any asset that writes through `storage.connect`. `dagster.yaml` limits
-  the pool to one asset at a time, because the lake accepts one commit at a time; without the
-  pool, two writers committing together fail with `database is locked`. `dagster dev` and
+- **Every Dagster asset or op that writes to the lake sets `pool=LAKE_POOL`** (`assets.py`):
+  dbt assets, dlt assets, lake maintenance and any asset that writes through `storage.connect`.
+  `dagster.yaml` limits the pool to one at a time, because the lake accepts one commit at a time;
+  without the pool, two writers committing together fail with `database is locked`. `dagster dev` and
   `datavloot start` read that file only when `DAGSTER_HOME` is unset. If you set `DAGSTER_HOME`,
   copy `dagster.yaml` into that directory.
 - Readers (notebooks, the Crows Nest) open the lake read-only and can run at any time.
 
 A dev build can still collide with a Dagster commit at the same moment. dbt retries the statement
 (`retries` in `profiles.yml`). If a model still fails on a lock, rerun it.
+
+### Lake maintenance
+
+Every write adds Parquet files, and old snapshots keep old files alive. The `lake_maintenance`
+job (`lake_maintenance.py`) runs daily at 03:00 while Dagster runs: it merges small files, expires
+snapshots older than seven days (`keep_snapshots_days` in the job's config) and deletes files
+nothing refers to any more. Files are deleted only after a margin of days, so a reader on an old
+snapshot can finish; the reasons are in `datavloot_platform/maintenance.py`.
+
+Deleting files waits for the lake's file lock (`lake/files.lock`), which a backup also holds. If
+the lock is taken, the job skips deleting and the next run catches up.

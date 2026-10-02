@@ -134,18 +134,22 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
     assert pools["default_limit"] == 1
     assert pools["granularity"] == "op", "with run granularity, steps within one run still overlap"
 
-    tree = ast.parse((_platform_dir(template, scaffold) / "assets.py").read_text(encoding="utf-8"))
+    # Ops too: lake maintenance commits to the lake like any asset.
     decorators = [
-        dec for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+        dec
+        for module in sorted(_platform_dir(template, scaffold).glob("*.py"))
+        for node in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef)
         for dec in node.decorator_list
-        if isinstance(dec, ast.Call)
-        and getattr(dec.func, "id", None) in {"asset", "multi_asset", "dbt_assets", "dlt_assets"}
+        if getattr(dec.func if isinstance(dec, ast.Call) else dec, "id", None)
+        in {"asset", "multi_asset", "dbt_assets", "dlt_assets", "op"}
     ]
 
-    assert decorators, "no assets found in assets.py"
+    assert decorators, "no assets found in the platform module"
     outside = [
-        ast.unparse(dec.func) for dec in decorators
-        if not (isinstance(_keyword(dec, "pool"), ast.Name) and _keyword(dec, "pool").id == "LAKE_POOL")
+        ast.unparse(dec) for dec in decorators
+        if not isinstance(dec, ast.Call)
+        or not (isinstance(_keyword(dec, "pool"), ast.Name) and _keyword(dec, "pool").id == "LAKE_POOL")
     ]
     assert outside == [], f"assets that write outside the lake pool: {outside}"
 

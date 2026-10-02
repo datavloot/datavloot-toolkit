@@ -152,6 +152,7 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── <project_name>_platform/          # Dagster layer (ready to run)
 │   ├── __init__.py
 │   ├── assets.py                     # dbt assets + commented dlt ingestion pattern
+│   ├── lake_maintenance.py           # daily job: merge small files, expire old snapshots
 │   └── definitions.py
 ├── seeds/
 │   ├── _seeds.yml
@@ -173,6 +174,8 @@ Run `dbt deps` after scaffolding, then follow `data-instructions.md`.
 All data is in `lake/`: a [DuckLake](https://ducklake.select) with its catalog in `lake/catalog.sqlite` and the tables as Parquet files under `lake/data/`. That directory is the whole state of the platform; copy it and you have a backup, move the project and it keeps working. Set `DATAVLOOT_LAKE_DIR` to keep it somewhere else.
 
 dbt, dlt, Dagster, the notebooks and the Crows Nest all attach the same lake, so a notebook can stay open while a pipeline writes, and readers only ever see finished commits. Writes are taken one commit at a time: two processes committing at the same moment means one of them fails with `database is locked` and has to be rerun.
+
+Every write adds files, so Dagster also runs a `lake_maintenance` job daily at 03:00: it merges small files, expires snapshots older than seven days and deletes files nothing refers to any more. See `datavloot_platform/maintenance.py` for the steps and their safety margins.
 
 There is one production path: Dagster. It builds dbt's `prod` target, into `<project>_source`, `<project>_business` and so on, and `dagster.yaml` lets only one writing asset run at a time. dbt by hand uses the default `dev` target and writes to `dev_source`, `dev_business` and so on in the same lake, so you can develop while Dagster runs without touching production. See "Development and production" in the project's `data-instructions.md`.
 

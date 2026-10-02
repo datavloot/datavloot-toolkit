@@ -26,9 +26,11 @@ duckdb and dlt are imported lazily, so the CLI and the fast test tier work
 without the optimist extra.
 """
 
+import contextlib
 import os
 import pathlib
 import re
+import time
 
 from datavloot_platform import extensions
 
@@ -68,6 +70,68 @@ def catalog_path(project_dir: pathlib.Path) -> pathlib.Path:
 
 def data_path(project_dir: pathlib.Path) -> pathlib.Path:
     return lake_dir(project_dir) / "data"
+
+
+def lock_path(project_dir: pathlib.Path) -> pathlib.Path:
+    return lake_dir(project_dir) / "files.lock"
+
+
+@contextlib.contextmanager
+def file_lock(project_dir: pathlib.Path, *, timeout: float | None = None):
+    """
+    Hold the lake's file lock: whoever holds it may delete files from the lake,
+    or rely on none being deleted.
+
+    Cleanup deletes files the catalog no longer references; a backup copies the
+    catalog first and its files after, so a cleanup in between deletes a file
+    the copied catalog still needs. Both take this lock, whether they run from
+    Dagster or the command line. It is an operating-system lock on a file, so
+    it is released when the holder exits, crashes included.
+
+    `timeout`: seconds to wait, None to wait as long as it takes, 0 not to wait.
+    Raises TimeoutError when the lock is still held after that.
+    """
+    path = lock_path(project_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = None if timeout is None else time.monotonic() + timeout
+    with open(path, "a+b") as handle:
+        while not _try_lock(handle):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError(f"{path} is held by another process")
+            time.sleep(0.2)
+        try:
+            yield
+        finally:
+            _unlock(handle)
+
+
+if os.name == "nt":
+    import msvcrt
+
+    def _try_lock(handle) -> bool:
+        handle.seek(0)
+        try:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(handle) -> None:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+else:
+    import fcntl
+
+    def _try_lock(handle) -> bool:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(handle) -> None:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def attach_statement(
