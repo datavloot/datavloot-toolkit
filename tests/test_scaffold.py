@@ -28,27 +28,37 @@ def test_placeholders_are_substituted(scaffold: pathlib.Path):
     assert (scaffold / "probe_platform").is_dir(), "module dir was not renamed"
 
 
-def test_profile_writes_to_a_file_not_memory(scaffold: pathlib.Path):
+def test_profile_writes_to_the_lake_not_memory(scaffold: pathlib.Path):
     """
     The scaffold must persist to disk.
 
-    It shipped with `path: ":memory:"`, so `dbt run` reported tables built and
-    left nothing behind -- a silent failure, and worse than the parse error it
-    replaced.
+    It once shipped with `path: ":memory:"` and nothing attached, so `dbt run`
+    reported tables built and left nothing behind -- a silent failure. The
+    session database is still in memory, so what persists is the attached lake:
+    dbt's `database` has to be that attach, or every model lands in memory again.
     """
     profile = yaml.safe_load((scaffold / "profiles.yml").read_text(encoding="utf-8"))
-    path = profile["probe"]["outputs"]["dev"]["path"]
+    dev = profile["probe"]["outputs"]["dev"]
+    attaches = {a["alias"]: a for a in dev.get("attach", [])}
 
-    assert path != ":memory:", "scaffold would persist nothing"
-    assert path == "probe.duckdb"
+    assert dev["database"] in attaches, "dbt writes to the in-memory session, not the lake"
+    lake = attaches[dev["database"]]
+    assert lake["path"].startswith("ducklake:sqlite:") and lake["path"].endswith("/catalog.sqlite")
+
+    # The two options the lake does not work without (see storage.py): WAL, or
+    # readers and writers lock each other out; the override, or a relative data
+    # path follows the current directory.
+    options = lake["options"]
+    assert options["meta_journal_mode"] == "WAL"
+    assert options["override_data_path"] is True
 
 
 def test_every_model_layer_sets_a_custom_schema(scaffold: pathlib.Path):
     """
     No layer may fall back to the bare target schema.
 
-    The target schema is named after the project, and so is the DuckDB file, so
-    the catalog and that schema collide. DuckDB then refuses two-part names:
+    The target schema is named after the project, and so is the catalog the
+    lake is attached as, so the catalog and that schema collide. DuckDB then refuses two-part names:
     `Ambiguous reference to catalog or schema "probe"`. dbt is unaffected (it
     emits three-part names); it breaks what a person types.
     """

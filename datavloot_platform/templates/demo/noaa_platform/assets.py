@@ -1,15 +1,14 @@
 from pathlib import Path
 from datetime import date
-import duckdb
 import dlt
 from dlt.sources.helpers import requests as dlt_requests
-from dlt.destinations import duckdb as duckdb_destination
 from dagster import AssetExecutionContext, AssetKey, asset
 from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_assets
 from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 
+from datavloot_platform import storage
+
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
-DB_PATH = PROJECT_DIR / "noaa.duckdb"
 CSV_PATH = PROJECT_DIR / "data" / "guam_2025.csv"
 
 noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR)
@@ -41,7 +40,7 @@ class OpenMeteoDltTranslator(DagsterDltTranslator):
     group_name="noaa_ingest",
 )
 def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
-    """Load Guam 2025 AIS CSV into noaa.duckdb raw.guam_2025."""
+    """Load Guam 2025 AIS CSV into the lake as raw.guam_2025."""
     if not CSV_PATH.exists():
         raise FileNotFoundError(
             f"AIS data not found at {CSV_PATH}. "
@@ -49,7 +48,7 @@ def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
             "and save as data/guam_2025.csv in the project root."
         )
 
-    con = duckdb.connect(str(DB_PATH))
+    con = storage.connect(PROJECT_DIR)
     try:
         con.execute("CREATE SCHEMA IF NOT EXISTS raw")
         context.log.info(f"Loading {CSV_PATH.name} → raw.guam_2025 (may take a minute)...")
@@ -132,7 +131,7 @@ def open_meteo_source():
     dlt_pipeline=dlt.pipeline(
         pipeline_name="open_meteo_marine",
         dataset_name="source",
-        destination=duckdb_destination(credentials=str(DB_PATH)),
+        destination=storage.dlt_destination(PROJECT_DIR),
     ),
     group_name="noaa_ingest",
     name="open_meteo",

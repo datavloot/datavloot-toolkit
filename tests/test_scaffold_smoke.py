@@ -17,6 +17,8 @@ import subprocess
 
 import pytest
 
+from datavloot_platform import storage
+
 from .conftest import _scaffold, run_dbt, use_local_optimist
 
 # Imported here rather than at the top so the fast suite can be collected and run
@@ -53,30 +55,49 @@ def built(tmp_path_factory) -> pathlib.Path:
     return project
 
 
-def test_the_warehouse_file_exists(built: pathlib.Path):
+def test_the_lake_is_on_disk(built: pathlib.Path):
     """
-    The whole point. `dbt run` must leave a database on disk.
+    The whole point. `dbt run` must leave data on disk, in the project's lake.
 
-    With `path: ":memory:"` this ran to "Completed successfully", reported two
-    tables built, and left nothing behind -- after which the Crows Nest showed an
-    empty catalog with no error explaining why.
+    With `path: ":memory:"` and nothing attached this ran to "Completed
+    successfully", reported two tables built, and left nothing behind -- after
+    which the Crows Nest showed an empty catalog with no error explaining why.
     """
-    db = built / "probe.duckdb"
-    assert db.is_file(), (
-        f"no probe.duckdb in {built}; the project persisted nothing. "
+    catalog = storage.catalog_path(built)
+    assert catalog.is_file(), (
+        f"no {catalog.relative_to(built)} in {built}; the project persisted nothing. "
         f"Files present: {sorted(p.name for p in built.iterdir())}"
     )
-    assert db.stat().st_size > 0
+    parquet = list(storage.data_path(built).rglob("*.parquet"))
+    assert parquet, "the catalog exists but no data file was written"
+
+
+def test_the_lake_is_in_wal_mode(built: pathlib.Path):
+    """
+    Created by dbt's attach, the catalog must still be in WAL mode.
+
+    Without it a notebook and a pipeline lock each other out for seconds per
+    query. The mode is set by the attach options, so a profile that drops them
+    builds fine and only fails once two processes meet.
+    """
+    import sqlite3
+
+    con = sqlite3.connect(storage.catalog_path(built))
+    try:
+        assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    finally:
+        con.close()
 
 
 def test_the_builtin_dimensions_have_rows(built: pathlib.Path):
     """dim_date and dim_time are built by macros; confirm they materialised."""
-    con = duckdb.connect(str(built / "probe.duckdb"), read_only=True)
+    con = storage.connect(built, read_only=True)
     try:
         found = {
             name: schema
             for schema, name in con.execute(
-                "SELECT table_schema, table_name FROM information_schema.tables"
+                "SELECT table_schema, table_name FROM information_schema.tables "
+                "WHERE table_catalog = current_database()"
             ).fetchall()
         }
         for model in ("dim_date", "dim_time"):
@@ -95,7 +116,7 @@ def test_no_layer_landed_in_the_bare_catalog_schema(built: pathlib.Path):
     `Ambiguous reference to catalog or schema "probe"`. dbt itself is fine, since
     it emits three-part names -- this breaks the query editor and notebooks.
     """
-    con = duckdb.connect(str(built / "probe.duckdb"), read_only=True)
+    con = storage.connect(built, read_only=True)
     try:
         schemas = {
             r[0] for r in con.execute(

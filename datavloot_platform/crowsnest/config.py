@@ -3,9 +3,11 @@ Auto-discovers configuration from the project directory where `datavloot launch`
 is invoked, with environment variable overrides.
 
 Discovery order:
-  1. profiles.yml  → DuckDB file path (outputs.dev.path) and target schema
-  2. Defaults       → Dagster on localhost:3000, Marimo on localhost:2718
-  3. Env vars       → CROWSNEST_* overrides
+  1. The project's lake → <project>/lake/catalog.sqlite (see storage.py), when it exists
+  2. profiles.yml       → DuckDB file path (outputs.dev.path) and target schema, for
+                          projects still on a single .duckdb file
+  3. Defaults           → Dagster on localhost:3000, Marimo on localhost:2718
+  4. Env vars           → CROWSNEST_* overrides
 
 Elementary schema:
   dbt's default generate_schema_name produces <target_schema>_<custom_schema>, so a
@@ -36,6 +38,7 @@ class CrowsnestConfig:
         marimo_url: str,
         ducklake_catalog_path: Optional[str],
         ducklake_alias: str,
+        ducklake_data_path: Optional[str] = None,
     ):
         self.duckdb_path = duckdb_path
         self.dagster_graphql_url = dagster_graphql_url
@@ -43,6 +46,7 @@ class CrowsnestConfig:
         self.marimo_url = marimo_url
         self.ducklake_catalog_path = ducklake_catalog_path
         self.ducklake_alias = ducklake_alias
+        self.ducklake_data_path = ducklake_data_path
 
     @classmethod
     def discover(cls) -> "CrowsnestConfig":
@@ -64,16 +68,16 @@ class CrowsnestConfig:
             or "elementary"
         )
         marimo_url = os.environ.get("CROWSNEST_MARIMO_URL") or "http://127.0.0.1:2718"
-        ducklake_catalog_path = os.environ.get("CROWSNEST_DUCKLAKE_CATALOG_PATH") or None
-        ducklake_alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS") or "lakehouse"
+        catalog, data, alias = _discover_lake()
 
         return cls(
             duckdb_path=duckdb_path,
             dagster_graphql_url=dagster_graphql_url,
             elementary_schema=elementary_schema,
             marimo_url=marimo_url,
-            ducklake_catalog_path=ducklake_catalog_path,
-            ducklake_alias=ducklake_alias,
+            ducklake_catalog_path=catalog,
+            ducklake_alias=alias,
+            ducklake_data_path=data,
         )
 
 
@@ -88,6 +92,44 @@ def reset_config() -> None:
     """Force re-discovery on next get_config() call (useful for testing)."""
     global _config
     _config = None
+
+
+def _discover_lake() -> tuple[Optional[str], Optional[str], str]:
+    """
+    (catalog, data directory, alias) of the lake to serve, or (None, None, alias).
+
+    CROWSNEST_DUCKLAKE_CATALOG_PATH points at a SQLite catalog file; a
+    `ducklake:sqlite:` or `sqlite:` prefix is accepted and dropped, since the
+    attach adds its own. Its data directory defaults to `data/` next to the
+    catalog, as storage.py lays it out. Without the variable, the lake of the
+    project in the current directory is used once it exists.
+    """
+    import os
+
+    from datavloot_platform import storage
+
+    alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS")
+    configured = os.environ.get("CROWSNEST_DUCKLAKE_CATALOG_PATH")
+    if configured:
+        for prefix in ("ducklake:", "sqlite:"):
+            if configured.startswith(prefix):
+                configured = configured[len(prefix):]
+        catalog = pathlib.Path(configured).resolve()
+        data = os.environ.get("CROWSNEST_DUCKLAKE_DATA_PATH") or str(catalog.parent / "data")
+        return str(catalog), str(pathlib.Path(data).resolve()), alias or "lakehouse"
+
+    # An explicit .duckdb file wins over a lake found by looking around.
+    if os.environ.get("CROWSNEST_DUCKDB_PATH"):
+        return None, None, alias or "lakehouse"
+
+    project = storage.find_project_dir()
+    if project is not None and storage.catalog_path(project).is_file():
+        return (
+            str(storage.catalog_path(project)),
+            str(storage.data_path(project)),
+            alias or storage.project_name(project),
+        )
+    return None, None, alias or "lakehouse"
 
 
 def _read_profiles() -> Optional[dict]:
