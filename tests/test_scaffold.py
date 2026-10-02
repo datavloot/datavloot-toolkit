@@ -134,20 +134,65 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
     assert pools["default_limit"] == 1
     assert pools["granularity"] == "op", "with run granularity, steps within one run still overlap"
 
-    tree = ast.parse((_platform_dir(template, scaffold) / "assets.py").read_text(encoding="utf-8"))
+    # Ops too: lake maintenance commits to the lake like any asset.
     decorators = [
-        dec for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+        dec
+        for module in sorted(_platform_dir(template, scaffold).glob("*.py"))
+        for node in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef)
         for dec in node.decorator_list
-        if isinstance(dec, ast.Call)
-        and getattr(dec.func, "id", None) in {"asset", "multi_asset", "dbt_assets", "dlt_assets"}
+        if getattr(dec.func if isinstance(dec, ast.Call) else dec, "id", None)
+        in {"asset", "multi_asset", "dbt_assets", "dlt_assets", "op"}
     ]
 
-    assert decorators, "no assets found in assets.py"
+    assert decorators, "no assets found in the platform module"
     outside = [
-        ast.unparse(dec.func) for dec in decorators
-        if not (isinstance(_keyword(dec, "pool"), ast.Name) and _keyword(dec, "pool").id == "LAKE_POOL")
+        ast.unparse(dec) for dec in decorators
+        if not isinstance(dec, ast.Call)
+        or not (isinstance(_keyword(dec, "pool"), ast.Name) and _keyword(dec, "pool").id == "LAKE_POOL")
     ]
     assert outside == [], f"assets that write outside the lake pool: {outside}"
+
+
+@pytest.mark.parametrize(
+    "value, on",
+    [(None, True), ("", True), ("on", True), ("off", False), (" OFF ", False)],
+)
+def test_lake_maintenance_can_be_switched_off(monkeypatch, value, on):
+    """A project chooses whether maintenance runs on its own; unset means on."""
+    from datavloot_platform import maintenance
+
+    if value is None:
+        monkeypatch.delenv(maintenance.SCHEDULE_ENV, raising=False)
+    else:
+        monkeypatch.setenv(maintenance.SCHEDULE_ENV, value)
+    assert maintenance.scheduled() is on
+
+
+def test_a_mistyped_switch_is_an_error(monkeypatch):
+    """`of` or `false` must not silently leave maintenance running."""
+    from datavloot_platform import maintenance
+
+    monkeypatch.setenv(maintenance.SCHEDULE_ENV, "of")
+    with pytest.raises(ValueError, match=maintenance.SCHEDULE_ENV):
+        maintenance.scheduled()
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_the_maintenance_schedule_follows_the_switch(scaffold: pathlib.Path, template: str):
+    """The schedule's starting state comes from the switch, not a fixed RUNNING."""
+    tree = ast.parse(
+        (_platform_dir(template, scaffold) / "lake_maintenance.py").read_text(encoding="utf-8")
+    )
+    schedules = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "ScheduleDefinition"
+    ]
+
+    assert schedules, "no ScheduleDefinition in lake_maintenance.py"
+    for schedule in schedules:
+        status = _keyword(schedule, "default_status")
+        assert status is not None and "maintenance.scheduled()" in ast.unparse(status)
 
 
 def test_every_model_layer_sets_a_custom_schema(scaffold: pathlib.Path):
