@@ -144,7 +144,8 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── data-instructions.md              # AI agent workflow guide (captain/crew model)
 ├── packages.yml                      # points to this toolkit's dbt package
 ├── dbt_project.yml                   # project config
-├── profiles.yml                      # dbt connection: attaches the lake
+├── profiles.yml                      # dbt connection: attaches the lake; dev (default) and prod targets
+├── dagster.yaml                      # Dagster instance settings: one lake writer at a time
 ├── lake/                             # the data: catalog.sqlite + Parquet files (git-ignored)
 ├── notebooks/
 │   └── explore.py                    # Marimo notebook for querying results
@@ -171,7 +172,9 @@ Run `dbt deps` after scaffolding, then follow `data-instructions.md`.
 
 All data is in `lake/`: a [DuckLake](https://ducklake.select) with its catalog in `lake/catalog.sqlite` and the tables as Parquet files under `lake/data/`. That directory is the whole state of the platform; copy it and you have a backup, move the project and it keeps working. Set `DATAVLOOT_LAKE_DIR` to keep it somewhere else.
 
-dbt, dlt, Dagster, the notebooks and the Crows Nest all attach the same lake, so a notebook can stay open while a pipeline writes, and readers only ever see finished commits. Writes are taken one commit at a time: two processes committing at the same moment means one of them fails with `database is locked` and has to be rerun. Avoid running dbt by hand while a Dagster job is writing.
+dbt, dlt, Dagster, the notebooks and the Crows Nest all attach the same lake, so a notebook can stay open while a pipeline writes, and readers only ever see finished commits. Writes are taken one commit at a time: two processes committing at the same moment means one of them fails with `database is locked` and has to be rerun.
+
+There is one production path: Dagster. It builds dbt's `prod` target, into `<project>_source`, `<project>_business` and so on, and `dagster.yaml` lets only one writing asset run at a time. dbt by hand uses the default `dev` target and writes to `dev_source`, `dev_business` and so on in the same lake, so you can develop while Dagster runs without touching production. See "Development and production" in the project's `data-instructions.md`.
 
 In your own code, `datavloot_platform.storage` attaches the lake the same way the toolkit does:
 
@@ -200,6 +203,14 @@ for schema, table in con.execute("""
 ```
 
 Views are not copied; `dbt run` recreates them.
+
+### Upgrading a project to separate development from production
+
+In older projects `profiles.yml` has one target, `dev`, that writes to the production schemas, and Dagster runs writers side by side. To move one over, take these from a freshly scaffolded project:
+
+- `profiles.yml`: `dev` now writes to `dev_*` schemas and a new `prod` target writes to `<project>_*`, where your data already is. No data has to move.
+- `dagster.yaml`, placed in the project directory.
+- In `<project>_platform/assets.py`, add `target="prod"` to `DbtProject(...)` and `pool="lake"` to every asset that writes to the lake: the dbt assets, dlt assets and any asset that writes through `storage.connect`.
 
 ---
 
@@ -324,7 +335,7 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml`; for a project still on a single `.duckdb` file, and takes precedence over a lake found in the project |
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
 | `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
-| `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
+| `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`

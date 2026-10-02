@@ -133,6 +133,33 @@ def test_no_layer_landed_in_the_bare_catalog_schema(built: pathlib.Path):
     )
 
 
+def _schemas(project: pathlib.Path) -> set[str]:
+    con = storage.connect(project, read_only=True)
+    try:
+        return {
+            r[0] for r in con.execute(
+                "SELECT schema_name FROM information_schema.schemata "
+                "WHERE catalog_name = current_database()"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+
+def _production_schemas(project: pathlib.Path) -> set[str]:
+    return {s for s in _schemas(project) if s.startswith("probe_")}
+
+
+def test_dbt_by_hand_builds_dev(built: pathlib.Path):
+    """
+    `dbt run` without a target builds the dev schemas. That it leaves production
+    alone is checked in the Dagster test, the only point where nothing else has
+    written to production yet.
+    """
+    schemas = _schemas(built)
+    assert "dev_business" in schemas, f"dbt run built no dev schemas: {sorted(schemas)}"
+
+
 def test_parse_emits_no_unexpected_warnings(built: pathlib.Path):
     """
     A fresh project's first output should be clean.
@@ -173,10 +200,19 @@ def test_dagster_materializes_the_scaffold(built: pathlib.Path, tmp_path: pathli
     module = re.search(
         r'^module_name\s*=\s*"([^"]+)"', (built / "pyproject.toml").read_text(), re.M
     ).group(1)
+
+    # Only `dbt run` by hand has run so far, and that is dev's: the scaffold's
+    # single target used to write here, overwriting what Dagster had built.
+    assert _production_schemas(built) == set(), (
+        f"dbt by hand wrote to production: {sorted(_production_schemas(built))}"
+    )
+
+    # A throwaway instance, so the run never touches a real ~/.dagster, with the
+    # scaffold's own instance settings, so a dagster.yaml Dagster rejects fails here.
+    shutil.copy(built / "dagster.yaml", tmp_path / "dagster.yaml")
     env = {
         **os.environ,
         "DBT_PROFILES_DIR": str(built),
-        # A throwaway instance, so the run never touches a real ~/.dagster.
         "DAGSTER_HOME": str(tmp_path),
         "NO_COLOR": "1",
     }
@@ -197,4 +233,7 @@ def test_dagster_materializes_the_scaffold(built: pathlib.Path, tmp_path: pathli
     )
     assert result.returncode == 0, (
         f"dagster asset materialize failed:\n{(result.stdout + result.stderr)[-3000:]}"
+    )
+    assert "probe_business" in _production_schemas(built), (
+        f"Dagster did not build production; schemas: {sorted(_schemas(built))}"
     )

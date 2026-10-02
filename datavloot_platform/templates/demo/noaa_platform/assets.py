@@ -11,7 +11,13 @@ from datavloot_platform import storage
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
 CSV_PATH = PROJECT_DIR / "data" / "guam_2025.csv"
 
-noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR)
+# Every asset that writes to the lake runs in this pool. dagster.yaml limits each
+# pool to one at a time, because the lake takes one commit at a time.
+LAKE_POOL = "lake"
+
+# Dagster is the only production writer: it builds the prod target, while a
+# plain `dbt run` builds dev (see profiles.yml). The dbt resource inherits it.
+noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod")
 noaa_dbt_project.prepare_if_dev()
 
 
@@ -38,6 +44,7 @@ class OpenMeteoDltTranslator(DagsterDltTranslator):
 @asset(
     key=AssetKey(["noaa", "guam_2025"]),
     group_name="noaa_ingest",
+    pool=LAKE_POOL,
 )
 def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
     """Load Guam 2025 AIS CSV into the lake as raw.guam_2025."""
@@ -136,6 +143,7 @@ def open_meteo_source():
     group_name="noaa_ingest",
     name="open_meteo",
     dagster_dlt_translator=OpenMeteoDltTranslator(),
+    pool=LAKE_POOL,
 )
 def open_meteo_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
     yield from dlt.run(context=context)
@@ -148,6 +156,7 @@ def open_meteo_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
 @dbt_assets(
     manifest=noaa_dbt_project.manifest_path,
     dagster_dbt_translator=LayerGroupTranslator(),
+    pool=LAKE_POOL,
 )
 def noaa_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()

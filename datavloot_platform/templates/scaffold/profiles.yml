@@ -1,14 +1,18 @@
 <project_name>:
+  # dev is the default, so a plain `dbt run` or `dbt build` writes to the dev_*
+  # schemas (dev_source, dev_business, ...) and never to production. Production
+  # is the prod target, which only Dagster uses. See "Development and
+  # production" in data-instructions.md.
   target: dev
   outputs:
-    dev:
+    dev: &lake
       type: duckdb
       # The data lives in a DuckLake (lake/catalog.sqlite plus Parquet files in
       # lake/data/), attached below under the project name. The DuckDB database
       # itself only holds the session.
       path: ":memory:"
       database: <project_name>
-      schema: <project_name>
+      schema: dev
       extensions: [ducklake, sqlite_scanner]
       # Same options as datavloot_platform/storage.py, which explains them. Paths
       # are relative to the project directory, which is where dbt runs.
@@ -25,3 +29,8 @@
       retries:
         query_attempts: 5
         retryable_exceptions: ["TransactionException", "IOException"]
+    # The same lake; only the schema differs, so models land in
+    # <project_name>_source, <project_name>_business, ...
+    prod:
+      <<: *lake
+      schema: <project_name>
