@@ -4,7 +4,13 @@ from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_as
 
 PROJECT_DIR = Path(__file__).parent.parent
 
-project_dbt_project = DbtProject(project_dir=PROJECT_DIR)
+# Every asset that writes to the lake runs in this pool. dagster.yaml limits each
+# pool to one at a time, because the lake takes one commit at a time.
+LAKE_POOL = "lake"
+
+# Dagster is the only production writer: it builds the prod target, while a
+# plain `dbt run` builds dev (see profiles.yml). The dbt resource inherits it.
+project_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod")
 project_dbt_project.prepare_if_dev()
 
 
@@ -21,6 +27,7 @@ class LayerGroupTranslator(DagsterDbtTranslator):
 @dbt_assets(
     manifest=project_dbt_project.manifest_path,
     dagster_dbt_translator=LayerGroupTranslator(),
+    pool=LAKE_POOL,
 )
 def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()
@@ -45,6 +52,7 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #           destination=storage.dlt_destination(PROJECT_DIR),  # the project's lake
 #       ),
 #       group_name="source",
+#       pool=LAKE_POOL,                  # it writes to the lake
 #   )
 #   def my_source_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
 #       yield from dlt.run(context=context)

@@ -175,6 +175,9 @@ def _infer_elementary_schema() -> Optional[str]:
 
     A project with `schema: noaa` in profiles.yml and `models: elementary: +schema: elementary`
     in dbt_project.yml will have Elementary tables in `noaa_elementary`.
+
+    The prod output wins: it is what Dagster builds, while the default dev output
+    writes to dev_elementary. Projects without one use their first duckdb output.
     """
     profiles = _read_profiles()
     if not isinstance(profiles, dict):
@@ -185,7 +188,8 @@ def _infer_elementary_schema() -> Optional[str]:
         outputs = profile_data.get("outputs", {})
         if not isinstance(outputs, dict):
             continue
-        for output_config in outputs.values():
+        candidates = [outputs.get("prod"), *outputs.values()]
+        for output_config in candidates:
             if not isinstance(output_config, dict):
                 continue
             if output_config.get("type") == "duckdb":
