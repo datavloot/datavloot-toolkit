@@ -184,7 +184,9 @@ def test_parse_emits_no_unexpected_warnings(built: pathlib.Path):
     )
 
 
-def _dagster(built: pathlib.Path, dagster_home: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
+def _dagster(
+    built: pathlib.Path, dagster_home: pathlib.Path, *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     """
     Run the dagster CLI against the scaffold's platform module, as `dagster dev` would load it.
 
@@ -197,16 +199,17 @@ def _dagster(built: pathlib.Path, dagster_home: pathlib.Path, *args: str) -> sub
         r'^module_name\s*=\s*"([^"]+)"', (built / "pyproject.toml").read_text(), re.M
     ).group(1)
     shutil.copy(built / "dagster.yaml", dagster_home / "dagster.yaml")
-    env = {
+    full_env = {
         **os.environ,
         "DBT_PROFILES_DIR": str(built),
         "DAGSTER_HOME": str(dagster_home),
         "NO_COLOR": "1",
+        **(env or {}),
     }
     return subprocess.run(
         [shutil.which("dagster"), *args, "-m", module, "--working-directory", str(built)],
         cwd=built,
-        env=env,
+        env=full_env,
         capture_output=True,
         text=True,
         timeout=900,
@@ -248,3 +251,19 @@ def test_dagster_maintains_the_lake(built: pathlib.Path, tmp_path: pathlib.Path)
     assert result.returncode == 0, (
         f"dagster job execute failed:\n{(result.stdout + result.stderr)[-3000:]}"
     )
+
+
+@pytest.mark.skipif(shutil.which("dagster") is None, reason="dagster is not installed")
+@pytest.mark.parametrize("switch, state", [("on", "--running"), ("off", "--stopped")])
+def test_the_maintenance_schedule_can_be_switched_off(
+    built: pathlib.Path, tmp_path: pathlib.Path, switch: str, state: str
+):
+    """DATAVLOOT_LAKE_MAINTENANCE decides whether the daily schedule starts running."""
+    result = _dagster(
+        built, tmp_path, "schedule", "list", state, "--name",
+        env={"DATAVLOOT_LAKE_MAINTENANCE": switch},
+    )
+    assert result.returncode == 0, (
+        f"dagster schedule list failed:\n{(result.stdout + result.stderr)[-3000:]}"
+    )
+    assert "lake_maintenance_schedule" in result.stdout

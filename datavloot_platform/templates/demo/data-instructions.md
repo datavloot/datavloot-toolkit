@@ -60,3 +60,8 @@ snapshot can finish; the reasons are in `datavloot_platform/maintenance.py`.
 
 Deleting files waits for the lake's file lock (`lake/files.lock`), which a backup also holds. If
 the lock is taken, the job skips deleting and the next run catches up.
+
+To switch the schedule off, set `DATAVLOOT_LAKE_MAINTENANCE=off` in a `.env` file in the project
+directory (or in the environment) and restart Dagster. The job then runs only when you start it in
+Dagster; `on`, the default, switches it back. With `DAGSTER_HOME` set, Dagster remembers a schedule
+you switched on or off in its UI, and that wins over the variable.

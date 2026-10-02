@@ -33,9 +33,13 @@ they are skipped and the next run deletes what this one left.
 
 Steps 1-4 commit to the catalog like any other writer, so in Dagster the job
 runs in the same pool as the other writers.
+
+A project can switch the daily schedule off with DATAVLOOT_LAKE_MAINTENANCE=off;
+see `scheduled`.
 """
 
 import datetime
+import os
 import pathlib
 
 from datavloot_platform import storage
@@ -43,6 +47,20 @@ from datavloot_platform import storage
 KEEP_SNAPSHOTS = datetime.timedelta(days=7)
 FILE_GRACE = datetime.timedelta(days=2)
 ORPHAN_GRACE = datetime.timedelta(days=7)
+
+SCHEDULE_ENV = "DATAVLOOT_LAKE_MAINTENANCE"
+
+
+def scheduled() -> bool:
+    """
+    Whether the daily maintenance schedule starts switched on: DATAVLOOT_LAKE_MAINTENANCE
+    is `on` (the default when unset or empty) or `off`. Anything else is an error, so a
+    typo does not leave maintenance running when it was meant to be off.
+    """
+    value = (os.environ.get(SCHEDULE_ENV) or "on").strip().lower()
+    if value not in ("on", "off"):
+        raise ValueError(f"{SCHEDULE_ENV} must be 'on' or 'off', not {value!r}")
+    return value == "on"
 
 
 def maintain(

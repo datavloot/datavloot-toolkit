@@ -2,8 +2,10 @@
 Lake maintenance: merges small files, expires old snapshots and deletes files
 nothing refers to any more, so the lake does not grow without bound.
 
-Runs daily at 03:00 while Dagster runs. What each step does, and why its
-margins are what they are: datavloot_platform/maintenance.py.
+Runs daily at 03:00 while Dagster runs, unless DATAVLOOT_LAKE_MAINTENANCE=off
+(in .env or the environment): then the schedule starts stopped and the job
+runs only when started by hand. What each step does, and why its margins are
+what they are: datavloot_platform/maintenance.py.
 """
 
 import datetime
@@ -39,5 +41,5 @@ def lake_maintenance():
 lake_maintenance_schedule = ScheduleDefinition(
     job=lake_maintenance,
     cron_schedule="0 3 * * *",
-    default_status=DefaultScheduleStatus.RUNNING,
+    default_status=DefaultScheduleStatus.RUNNING if maintenance.scheduled() else DefaultScheduleStatus.STOPPED,
 )
