@@ -5,10 +5,14 @@ Every assertion here is a regression guard for something that actually shipped
 broken -- see the docstrings.
 """
 
+import ast
 import pathlib
+import types
 
 import pytest
 import yaml
+
+from datavloot_platform import cli
 
 
 def test_placeholders_are_substituted(scaffold: pathlib.Path):
@@ -135,3 +139,50 @@ def test_no_placeholder_source_is_declared(scaffold: pathlib.Path):
         "_sources.yml has an empty sources list with no note telling the reader "
         "to remove it before uncommenting the example below"
     )
+
+
+def _translator(assets_py: pathlib.Path, project_name: str):
+    """
+    The LayerGroupTranslator class from an assets.py, without importing it:
+    the module needs dagster and a compiled dbt manifest.
+    """
+    tree = ast.parse(assets_py.read_text(encoding="utf-8"))
+    cls = next(
+        n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "LayerGroupTranslator"
+    )
+    project = types.SimpleNamespace(name=project_name)
+    namespace = {"DagsterDbtTranslator": object}
+    namespace.update(
+        {n.id: project for n in ast.walk(cls) if isinstance(n, ast.Name) and n.id.endswith("_dbt_project")}
+    )
+    exec(compile(ast.Module(body=[cls], type_ignores=[]), str(assets_py), "exec"), namespace)
+    return namespace["LayerGroupTranslator"]()
+
+
+@pytest.mark.parametrize(
+    "where, project_name",
+    [("scaffold", "probe"), ("demo", "noaa"), ("toolkit", "optimist")],
+)
+def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, project_name: str):
+    """
+    Elementary's models are grouped as `elementary`, the project's by folder.
+
+    Grouped by folder, Elementary showed up as seven groups (alerts,
+    data_monitoring, system, ...) between the project's own source and
+    business, looking like part of the project.
+    """
+    assets_py = {
+        "scaffold": scaffold / "probe_platform" / "assets.py",
+        "demo": cli.TEMPLATES_DIR / "demo" / "noaa_platform" / "assets.py",
+        "toolkit": pathlib.Path(cli.__file__).parent / "assets.py",
+    }[where]
+    translator = _translator(assets_py, project_name)
+
+    elementary = {
+        "package_name": "elementary",
+        "fqn": ["elementary", "edr", "data_monitoring", "anomaly_detection", "metrics_anomaly_score"],
+    }
+    own = {"package_name": project_name, "fqn": [project_name, "business", "dim_date"]}
+
+    assert translator.get_group_name(elementary) == "elementary"
+    assert translator.get_group_name(own) == "business"
