@@ -32,6 +32,9 @@ services:
     build:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
+      args:
+        OPTIMIST_UID: ${OPTIMIST_UID:-1000}
+        OPTIMIST_GID: ${OPTIMIST_GID:-1000}
     pull_policy: build
     restart: "no"
     working_dir: /srv/optimist

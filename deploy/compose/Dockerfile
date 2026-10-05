@@ -12,8 +12,12 @@ RUN apt-get update \
 
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 
-# uid 1000: the deploy user that owns /srv/optimist on the VM (see deploy/thalassa).
-RUN useradd --create-home --uid 1000 optimist
+# The same uid and gid as the owner of the project directory on the host, so the
+# services can write to it and files they create stay the owner's (see .env).
+ARG OPTIMIST_UID=1000
+ARG OPTIMIST_GID=1000
+RUN groupadd --gid "$OPTIMIST_GID" optimist \
+ && useradd --create-home --uid "$OPTIMIST_UID" --gid "$OPTIMIST_GID" optimist
 
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_COMPILE_BYTECODE=1 \

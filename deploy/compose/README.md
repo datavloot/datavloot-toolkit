@@ -37,6 +37,8 @@ cd datavloot-toolkit/deploy/compose
 
 cp .env.example .env
 nano .env               # DOMAIN, ACME_EMAIL; OPTIMIST_DEMO=1 for the NOAA demo
+# The services run as the owner of /srv/optimist:
+sed -i "s/^OPTIMIST_UID=.*/OPTIMIST_UID=$(id -u)/; s/^OPTIMIST_GID=.*/OPTIMIST_GID=$(id -g)/" .env
 
 # A user for the sign-in; the password is asked for, not typed on the command line.
 read -rsp 'Password: ' pw; echo
@@ -70,4 +72,6 @@ reliable on a directory shared from Windows or macOS into a container.
 
 - `docker compose logs prepare`: the demo, `dbt deps` and `dbt parse` run here, once per start.
 - `docker compose logs traefik`: certificate and routing errors.
+- `PermissionError` in `prepare`: `OPTIMIST_UID`/`OPTIMIST_GID` in `.env` do not match the owner of
+  `OPTIMIST_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).
