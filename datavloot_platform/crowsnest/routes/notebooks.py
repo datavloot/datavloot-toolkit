@@ -10,6 +10,8 @@ import sys
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from datavloot_platform.crowsnest.config import get_config
+
 router = APIRouter()
 
 _marimo_process: "subprocess.Popen | None" = None
@@ -79,6 +81,11 @@ async def launch_notebook(req: LaunchRequest):
     if not notebook_path.exists():
         raise HTTPException(404, f"Notebook '{name}' not found in notebooks/")
 
+    # Marimo runs as its own service (VM mode): nothing to start, only where to go.
+    public_url = get_config().marimo_public_url
+    if public_url:
+        return {"launched": name, "url": f"{public_url}/?file={name}"}
+
     # Kill any existing marimo instance before launching a fresh one.
     if _marimo_process is not None:
         try:
@@ -118,6 +125,9 @@ async def launch_notebook(req: LaunchRequest):
 async def stop_notebook():
     """Kill the running Marimo server."""
     global _marimo_process
+    if get_config().marimo_public_url:
+        # Not ours to stop: the Marimo service serves everyone.
+        return {"stopped": False}
     if _marimo_process is not None:
         try:
             _marimo_process.kill()

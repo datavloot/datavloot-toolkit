@@ -1,0 +1,115 @@
+# VM mode: the Optimist behind Traefik, over HTTPS, behind a sign-in.
+#
+#   dagster.<DOMAIN>     Dagster UI       (dagster-webserver; dagster-daemon runs schedules)
+#   crowsnest.<DOMAIN>   Crows Nest
+#   marimo.<DOMAIN>      Marimo notebooks
+#
+# Only Traefik publishes ports. Every router goes through the `auth` middleware
+# (traefik/dynamic.yml): basic auth for now, a single sign-on later (#20).
+# Settings come from .env, see .env.example. Run from this directory:
+#   docker compose up -d --build
+
+name: optimist
+
+x-optimist: &optimist
+  image: optimist-platform:local
+  pull_policy: never
+  restart: unless-stopped
+  working_dir: /srv/optimist/${PROJECT:-noaa}
+  environment: &environment
+    PROJECT_DIR: /srv/optimist/${PROJECT:-noaa}
+  volumes:
+    - ${OPTIMIST_DIR:-/srv/optimist}:/srv/optimist
+    - dagster_home:/dagster_home
+  depends_on:
+    prepare:
+      condition: service_completed_successfully
+
+services:
+  # One-off: creates the demo if asked, installs dbt packages, builds the manifest.
+  prepare:
+    <<: *optimist
+    build:
+      context: ../..
+      dockerfile: deploy/compose/Dockerfile
+    pull_policy: build
+    restart: "no"
+    working_dir: /srv/optimist
+    environment:
+      <<: *environment
+      OPTIMIST_DEMO: ${OPTIMIST_DEMO:-0}
+    command: optimist-prepare
+    depends_on: {}
+
+  dagster-webserver:
+    <<: *optimist
+    command: dagster-webserver --host 0.0.0.0 --port 3000
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dagster.rule=Host(`dagster.${DOMAIN:?set DOMAIN in .env}`)
+      - traefik.http.routers.dagster.entrypoints=websecure
+      - traefik.http.routers.dagster.middlewares=auth@file
+      - traefik.http.services.dagster.loadbalancer.server.port=3000
+
+  # Runs schedules (lake maintenance) and the run queue, so it shares the
+  # webserver's DAGSTER_HOME.
+  dagster-daemon:
+    <<: *optimist
+    command: dagster-daemon run
+
+  crowsnest:
+    <<: *optimist
+    command: datavloot launch --host 0.0.0.0 --port 8080 --no-open
+    environment:
+      <<: *environment
+      CROWSNEST_DAGSTER_URL: http://dagster-webserver:3000/graphql
+      CROWSNEST_DAGSTER_PUBLIC_URL: https://dagster.${DOMAIN}
+      CROWSNEST_MARIMO_URL: http://marimo:2718
+      CROWSNEST_MARIMO_PUBLIC_URL: https://marimo.${DOMAIN}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.crowsnest.rule=Host(`crowsnest.${DOMAIN}`)
+      - traefik.http.routers.crowsnest.entrypoints=websecure
+      - traefik.http.routers.crowsnest.middlewares=auth@file
+      - traefik.http.services.crowsnest.loadbalancer.server.port=8080
+
+  # Its own service rather than started by the Crows Nest as on a laptop: one
+  # notebook server for everyone, reachable by its own URL. Marimo runs the
+  # notebooks' code on this machine, so it must never be reachable without the
+  # sign-in in front of it.
+  marimo:
+    <<: *optimist
+    command: marimo edit notebooks --host 0.0.0.0 --port 2718 --headless --no-token
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.marimo.rule=Host(`marimo.${DOMAIN}`)
+      - traefik.http.routers.marimo.entrypoints=websecure
+      - traefik.http.routers.marimo.middlewares=auth@file
+      - traefik.http.services.marimo.loadbalancer.server.port=2718
+
+  traefik:
+    image: traefik:v3.7
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=letsencrypt
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik:ro
+      - letsencrypt:/letsencrypt
+
+volumes:
+  dagster_home:
+  letsencrypt:

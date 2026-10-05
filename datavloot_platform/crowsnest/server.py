@@ -184,8 +184,8 @@ def create_app() -> FastAPI:
         """Return live service URLs for the frontend to use."""
         config = get_config()
         return {
-            "dagster_url": "http://localhost:3000",
-            "marimo_url": config.marimo_url,
+            "dagster_url": config.dagster_public_url,
+            "marimo_url": config.marimo_public_url or config.marimo_url,
             "duckdb_path": config.duckdb_path,
         }
 
