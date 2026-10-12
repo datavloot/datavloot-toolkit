@@ -19,6 +19,14 @@ choice to build on SRDP rather than beside it lives outside the repo
 vessel: valk
 ```
 
+> **Status, 2026-10-12.** Main now keeps every project's data in a DuckLake in
+> `lake/` (#33) and splits dev from prod writes (#34). That overlaps with the
+> switching mechanism described in the table below, which is being replaced by "the
+> same lake, with its catalog in Postgres". Until step 1 of
+> [valk-plan.md](valk-plan.md) lands, dbt and dlt on the Valk write to the SQLite
+> lake inside the container, not to the shared catalog. The access, configuration
+> and command sections below are current.
+
 Nothing in `models/`, `seeds/` or the Dagster assets changes between vessels.
 Four things make that literally true, and they are the whole design:
 
@@ -84,7 +92,7 @@ datavloot valk up              # docker compose up -d --build
 
 Then the one-time Zitadel step in `deploy/valk/README.md`: create the OIDC
 application, paste its client id and secret into `deploy/valk/.env`, run
-`datavloot valk up` again. `datavloot valk up --prod` adds SRDP's Let's Encrypt
+`datavloot valk up` again. `datavloot valk --prod up` adds SRDP's Let's Encrypt
 override and needs `ACME_EMAIL` in `.env`.
 
 Day to day: `datavloot valk compose logs -f crowsnest`, `datavloot valk compose ps`,
@@ -113,21 +121,101 @@ trust the `X-Auth-Request-*` headers that come out of that flow. Any container o
 the internal network could send them. It validates the access token itself on
 every request (SRDP's ADR-0008 rule), then reads roles from it.
 
-| Role (SRDP ADR-0005 names) | Can |
+| Role (SRDP ADR-0005 names) | In the Crows Nest |
 |---|---|
 | `reader` | browse the catalog, quality results and run history; run read-only SQL |
-| `writer` | reader, plus anything that changes state: trigger runs, start or stop notebooks |
-| `admin` | writer; reserved for a settings surface that does not exist yet |
+| `writer` | reader, plus start and stop notebooks (`POST /api/notebooks/...`) |
+| `admin` | the same as writer; reserved for a settings surface that does not exist yet |
 
-Roles are Zitadel project roles with exactly those names. A signed-in user without
-one gets `valk.access.default_role` (`reader` by default; `none` to deny). The
-Zitadel switches that make this fast are in `deploy/valk/README.md` step 3:
-without them the access token is opaque and the Crows Nest asks Zitadel's userinfo
-endpoint who it belongs to (cached one minute per token).
+Roles are Zitadel project roles with exactly those names. A user with several gets
+the highest. A signed-in user without one gets `valk.access.default_role`
+(`reader` by default; `none` to deny). The Zitadel switches that make this fast
+are in `deploy/valk/README.md` step 3: without them the access token is opaque
+and the Crows Nest asks Zitadel's userinfo endpoint who it belongs to (cached one
+minute per token).
 
 For the Optimist on a VM, `CROWSNEST_AUTH_TOKEN` still works as before. When an
 issuer is configured it is ignored, so one deployment never has two password
 prompts.
+
+### Who does what
+
+| Piece | Job |
+|---|---|
+| Zitadel (`auth.<domain>`) | Stores users, the project, its three roles and who holds which. **This is where people are added and roles granted.** |
+| oauth2-proxy + Traefik | Send anyone without a session to the Zitadel login; pass the access token on. They check "signed in", not roles. |
+| Crows Nest | Validates the token (signature, issuer, expiry, and audience when `CROWSNEST_OIDC_AUDIENCE` is set), reads the roles from it, allows or refuses each request. It does not log anyone in and has no screen for managing users or roles. |
+
+### Adding a person
+
+Done in the Zitadel console at `https://auth.<domain>`, as an organization owner
+(the first-boot admin, or someone they made owner):
+
+1. **Users → New**: name, e-mail, and an initial password or an invitation e-mail.
+   Zitadel needs SMTP set up (Default settings → SMTP) to send invitations;
+   without it, set a password and hand it over yourself.
+2. **Projects → `<project>` → Authorizations → New**: pick the user, tick one
+   role (`reader`, `writer` or `admin`).
+3. The person signs in at `https://crowsnest.<domain>`. A role change applies at
+   their next token: sign out and in, or wait for the access token to expire
+   (Zitadel's default is 12 hours). Removing an authorization works the same
+   way, so a token issued earlier keeps working until it expires.
+
+To take someone out completely, deactivate or delete the user in Zitadel. No new
+token is issued to them after that. The Crows Nest validates tokens offline (the
+ADR-0008 pattern), so a token they already hold keeps working there until it
+expires; the token lifetime is the revocation delay. Shorten it in Zitadel
+(Default settings → OIDC token lifetimes) if that is too long.
+
+### What the roles do not cover
+
+- **SRDP's own services.** The Dagster UI, Marimo, the DuckDB UI, the API and the
+  hub are gated on "signed in", not on a role. ADR-0005 plans role checks at the
+  edge; SRDP has not built them yet. In production SRDP runs the Dagster UI
+  read-only, so a signed-in user can look but not launch.
+- **Anyone in the Zitadel instance is "signed in".** With
+  `default_role: reader`, that is also enough to read the catalog in the Crows
+  Nest. Set `default_role: none` to require an explicit grant, and check that
+  self-registration is off in Zitadel (Default settings → Login behavior and
+  security) unless you want it.
+
+## Configuration: the `valk:` block
+
+Everything the Valk reads from `datavloot.yml`. Only `domain` is required.
+Secrets never go here; they live in `deploy/valk/.env`, which `datavloot valk
+render` generates once and git ignores.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `vessel` | `optimist` | `valk` switches the project to the Valk |
+| `valk.domain` | (required) | Bare host name. Services are published as `crowsnest.<domain>`, `dagster.<domain>`, `auth.<domain>`, ... Zitadel records it at first boot, so changing it later means a fresh Zitadel. |
+| `valk.acme_email` | empty | Let's Encrypt contact for `datavloot valk --prod up`. Empty means local mkcert certificates, and the Crows Nest then accepts Zitadel's mkcert certificate. |
+| `valk.catalog.metadata_schema` | `ducklake_<project>` | Schema in the shared Postgres that holds this project's DuckLake metadata |
+| `valk.catalog.alias` | `ducklake` | Name the catalog is attached as. Goes away in [valk-plan.md](valk-plan.md) step 1, where the alias becomes the project name as on the Optimist. |
+| `valk.storage.kind` | `local` | `local`: Parquet on a Docker volume. `s3`: any S3-compatible bucket. |
+| `valk.storage.data_path` | `/data/ducklake` | `local` only: where the volume is mounted |
+| `valk.storage.bucket`, `endpoint` | | `s3`: required |
+| `valk.storage.prefix` | project name | `s3`: key prefix inside the bucket |
+| `valk.storage.region`, `url_style` | none, `path` | `s3`: as the provider needs |
+| `valk.access.default_role` | `reader` | Role for a signed-in user without a Zitadel role: `reader` or `none` |
+| `valk.srdp.repo`, `ref` | SRDP on GitHub, the toolkit's pin | The SRDP checkout the overlay is rendered against; see below |
+
+The S3 key pair goes in `.env` as `DATAVLOOT_S3_KEY_ID` and `DATAVLOOT_S3_SECRET`.
+
+## Commands
+
+All of them read `datavloot.yml` from the current directory, or from
+`datavloot valk --project <dir> ...`, and print every `git` and `docker compose` command before
+running it, so each step can be repeated by hand.
+
+| Command | Does |
+|---|---|
+| `datavloot valk render [--datavloot-source <spec>]` | Writes `deploy/valk/` (compose overlay, Dockerfiles, Dagster config, runbook), creates `.env` with random secrets if it does not exist, adds `.srdp/` and `deploy/valk/.env` to `.gitignore`. Safe to rerun; `.env` is never overwritten. `--datavloot-source` sets what the image installs: a PyPI version, or `git+https://...@ref` for an unreleased toolkit. |
+| `datavloot valk fetch` | Checks SRDP out at the pinned commit into `.srdp/` (shallow, exact SHA) |
+| `datavloot valk certs` | mkcert certificates for the domain, into `.srdp/deploy/docker/certs/`. Zitadel serves TLS itself and needs them in production too. |
+| `datavloot valk [--prod] up [--no-build]` | `docker compose up -d --build`, SRDP's files first and our overlay last. `--prod` adds SRDP's production override (Let's Encrypt, read-only Dagster UI). |
+| `datavloot valk [--prod] down` | `docker compose down`; volumes, and with them the data, stay |
+| `datavloot valk compose <args>` | Any other `docker compose` command against the same files, for example `logs -f crowsnest` or `ps` |
 
 ## What is pinned, and how to move it
 

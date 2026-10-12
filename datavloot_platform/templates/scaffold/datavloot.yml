@@ -1,6 +1,6 @@
 # datavloot.yml -- which vessel this project sails on.
 #
-#   optimist   everything on this machine: one DuckDB file, no login (the default)
+#   optimist   everything on this machine: a DuckLake in lake/, no login (the default)
 #   valk       the same project on an SRDP stack: shared DuckLake catalog on
 #              Postgres, Parquet on a volume or S3 bucket, Zitadel single sign-on
 #
@@ -14,7 +14,7 @@ vessel: optimist
 
 # valk:
 #   domain: valk.example.nl        # services become crowsnest.<domain>, dagster.<domain>, auth.<domain>, ...
-#   acme_email: ""                 # Let's Encrypt contact for `datavloot valk up --prod`; empty = local mkcert certs
+#   acme_email: ""                 # Let's Encrypt contact for `datavloot valk --prod up`; empty = local mkcert certs
 #   catalog:
 #     metadata_schema: ducklake_<project_name>   # DuckLake metadata schema in the shared Postgres (SRDP ADR-0006 style)
 #   storage:

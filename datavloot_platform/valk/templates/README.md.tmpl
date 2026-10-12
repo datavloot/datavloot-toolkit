@@ -27,7 +27,7 @@ datavloot valk certs           # mkcert certificates for *.@@domain
 datavloot valk up              # docker compose up -d --build, both stacks layered
 ```
 
-`datavloot valk up --prod` adds SRDP's Let's Encrypt override. It needs `ACME_EMAIL`
+`datavloot valk --prod up` adds SRDP's Let's Encrypt override. It needs `ACME_EMAIL`
 in `.env`, a public IP, and DNS A records for every host in the table above.
 
 Without `--prod`, point the hostnames at the machine yourself (`/etc/hosts`, or a
