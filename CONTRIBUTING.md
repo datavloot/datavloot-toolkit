@@ -32,21 +32,34 @@ Changes that need an issue before code:
 
 Prerequisites are the same as for using the toolkit (see the README): Python 3.10 to 3.13 and git. No C compiler is needed, except on Intel Macs (see the note in the README).
 
-Clone your fork, create a virtual environment, and install the package in editable mode with the full stack and the test dependencies:
+The recommended route is [uv](https://docs.astral.sh/uv/). Clone your fork and let uv create the virtual environment and install the package in editable mode, with the full stack and the test dependencies, at the versions in `uv.lock`:
 
 ```bash
 git clone https://github.com/<you>/datavloot-toolkit.git
 cd datavloot-toolkit
+uv sync --all-extras
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
+
+The `[optimist]` extra pulls in Dagster, dbt, dlt, DuckDB, Elementary, FastAPI and the rest, close to 200 packages; uv installs them in a fraction of the time pip takes. Editable mode means the `datavloot` command on your PATH runs the code in your checkout, so changes to the CLI or the templates are live without reinstalling.
+
+Without uv, plain pip works too. It installs the newest versions the bounds in `pyproject.toml` allow rather than the locked ones, takes several minutes, and leaves you without `uv build` for the packaging tier (`pip install uv` inside the venv adds it):
+
+```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[optimist,dev]"
 ```
 
-The `[optimist]` extra pulls in Dagster, dbt, dlt, DuckDB, Elementary, FastAPI and the rest; the first install takes several minutes. Editable mode means the `datavloot` command on your PATH runs the code in your checkout, so changes to the CLI or the templates are live without reinstalling.
+If you only want to run the fast tests and touch nothing else, the `[dev]` extra alone is enough (`uv sync --extra dev`, or `pip install -e ".[dev]"`); everything below assumes the full install.
 
-If you only want to run the fast tests and touch nothing else, `pip install -e ".[dev]"` is enough; everything below assumes the full install.
+### Dependencies and `uv.lock`
 
-The packaging tests shell out to `uv build`, so [uv](https://docs.astral.sh/uv/) has to be installed for that one tier (`pip install uv` inside the venv works). It is not needed for anything else.
+`uv.lock` pins the exact versions of the development environment, so everyone working on the toolkit runs the same ones and an upgrade happens on purpose rather than on the day someone reinstalls. It only affects this repository: users install from the published wheel, which resolves from the bounds in `pyproject.toml` and never sees the lock.
+
+- **Changed a dependency in `pyproject.toml`?** Run `uv lock` and commit `uv.lock` with it. The `lint` job runs `uv lock --check` and fails a pull request whose lock does not match.
+- **Upgrading.** `uv sync` keeps you on the locked versions. To move to newer releases within the bounds, run `uv lock --upgrade` in a pull request of its own, for example before a release, so the diff shows what moves and CI tests it.
+- **What users get is tested separately.** The `smoke` job installs with pip, not from the lock, so a new release of a dependency that breaks users fails CI even while the lock still holds the older version.
 
 ## Running the tests
 
@@ -64,13 +77,13 @@ Crows Nest auth and query-API security tests. These `importorskip` on fastapi an
 pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py
 ```
 
-Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, and checks that a real warehouse file appears. Needs git and network access for the hub packages. The dbt package is installed from your checkout, not from the published branch, so a change under `dbt/optimist/` is actually exercised here. Run this for any change to the dbt package or the templates:
+Smoke test: scaffolds a fresh project with `datavloot new`, runs `dbt deps`, `dbt parse` and a build, checks that a real warehouse file appears, and then has Dagster materialize every asset, as the first run from the UI would. Needs git and network access for the hub packages; the Dagster step is skipped when the `[optimist]` extra is not installed. The dbt package is installed from your checkout, not from the published branch, so a change under `dbt/optimist/` is actually exercised here. Run this for any change to the dbt package or the templates:
 
 ```bash
 pytest -m slow
 ```
 
-Packaging test: builds a wheel and sdist and asserts that build inputs (the frontend source, dbt `target/` directories, `.uv-cache`, `.duckdb` files) are excluded and the wheel stays small. Needs uv (see above). Run this if you touch `pyproject.toml`, add files under `datavloot_platform/`, or change anything about what ships:
+Packaging test: builds a wheel and sdist and asserts that build inputs (the frontend source, dbt `target/` directories, `.uv-cache`, `.duckdb` files) are excluded and the wheel stays small. Needs uv, for `uv build` (see above). Run this if you touch `pyproject.toml`, add files under `datavloot_platform/`, or change anything about what ships:
 
 ```bash
 pytest tests/test_packaging.py
@@ -78,7 +91,7 @@ pytest tests/test_packaging.py
 
 To run everything at once, `pytest` with no arguments.
 
-CI runs the same tests but installs dependencies per job with `uv run --with ...` instead of a venv, so it also catches a test that only passes because something unrelated happened to be installed locally. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
+CI runs the same tests. The fast, Crows Nest and packaging jobs install dependencies per job with `uv run --with ...` instead of a venv, so they also catch a test that only passes because something unrelated happened to be installed locally. The smoke job runs on Linux, Windows and macOS and installs the `[optimist]` extra with pip, the way a user does. A separate `wheels` job checks that every dependency of the extra installs from a wheel on each platform, so a release that suddenly needs a compiler on users' machines fails CI instead of their install. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
 
 ## Working on the Crows Nest frontend
 
@@ -110,6 +123,8 @@ Read `developer-instructions.md` for the repo layout and `toolkit-developer-stan
 `main` is protected. All changes, including maintainers' own, go through a pull request from a branch. Work on a fork if you are not a maintainer.
 
 Branch off `main` and keep the branch to one change. If `main` moves under you, rebase rather than merge it into your branch.
+
+CI runs on pull requests, not on every branch push. To get it on a branch before it is ready for review, open the pull request as a draft.
 
 Commit messages follow the existing history: a short imperative subject line that says what the change does and, where the "what" is not self-explanatory, why. Look at `git log --oneline` for the register. There is no prefix convention (no `feat:`, `fix:`) and none is wanted. If a commit needs explanation beyond the subject, put it in the body, and put the reasoning that would otherwise get lost into a code comment next to the thing it explains; this codebase leans on comments to record why a bound, an exclusion or a workaround exists.
 

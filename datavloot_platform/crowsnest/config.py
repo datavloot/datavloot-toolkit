@@ -3,12 +3,13 @@ Auto-discovers configuration from the project directory where `datavloot launch`
 is invoked, with environment variable overrides.
 
 Discovery order:
-  1. datavloot.yml  → which vessel (Optimist: a DuckDB file; Valk: the shared DuckLake
-                      catalog described by the DUCKLAKE_* environment, see vessel.py)
-  2. profiles.yml   → DuckDB file path (outputs.<target>.path) and target schema, or a
-                      DuckLake `attach:` entry, when the dbt target already points at one
-  3. Defaults       → Dagster on localhost:3000, Marimo on localhost:2718
-  4. Env vars       → CROWSNEST_* overrides
+  1. datavloot.yml      → on the Valk, the shared DuckLake catalog described by the
+                          DUCKLAKE_* environment (see vessel.py); this wins
+  2. The project's lake → <project>/lake/catalog.sqlite (see storage.py), when it exists
+  3. profiles.yml       → DuckDB file path (outputs.dev.path) and target schema, for
+                          projects still on a single .duckdb file
+  4. Defaults           → Dagster on localhost:3000, Marimo on localhost:2718
+  5. Env vars           → CROWSNEST_* overrides
 
 Elementary schema:
   dbt's default generate_schema_name produces <target_schema>_<custom_schema>, so a
@@ -26,7 +27,6 @@ Authentication (see auth.py):
 
 import os
 import pathlib
-import re
 from typing import Optional
 
 try:
@@ -38,11 +38,6 @@ except ImportError:
 
 _config: Optional["CrowsnestConfig"] = None
 
-# `{{ env_var('NAME') }}` / `{{ env_var('NAME', 'default') }}` as dbt writes them in
-# profiles.yml. Only this one function is rendered; anything else is left as is.
-_ENV_VAR_JINJA = re.compile(
-    r"\{\{\s*env_var\(\s*['\"]([^'\"]+)['\"]\s*(?:,\s*['\"]([^'\"]*)['\"]\s*)?\)\s*\}\}"
-)
 
 
 class CrowsnestConfig:
@@ -55,7 +50,6 @@ class CrowsnestConfig:
         ducklake_catalog_path: Optional[str],
         ducklake_alias: str,
         ducklake_data_path: Optional[str] = None,
-        ducklake_metadata_schema: Optional[str] = None,
         dagster_public_url: str = "http://localhost:3000",
         vessel=None,
     ):
@@ -66,7 +60,6 @@ class CrowsnestConfig:
         self.ducklake_catalog_path = ducklake_catalog_path
         self.ducklake_alias = ducklake_alias
         self.ducklake_data_path = ducklake_data_path
-        self.ducklake_metadata_schema = ducklake_metadata_schema
         self.dagster_public_url = dagster_public_url
         self.vessel = vessel
 
@@ -87,7 +80,7 @@ class CrowsnestConfig:
             db = os.environ.get("DUCKLAKE_PG_DB", "ducklake")
             return f"DuckLake catalog on Postgres {host}/{db} (Valk)"
         if self.ducklake_catalog_path:
-            return f"DuckLake catalog {_redact(self.ducklake_catalog_path)}"
+            return f"Lake {self.ducklake_catalog_path} (as {self.ducklake_alias})"
         return f"DuckDB file {self.duckdb_path}"
 
     @classmethod
@@ -114,26 +107,21 @@ class CrowsnestConfig:
             or "elementary"
         )
         marimo_url = os.environ.get("CROWSNEST_MARIMO_URL") or "http://127.0.0.1:2718"
-
-        attach = _read_ducklake_attach_from_profiles()
-        ducklake_catalog_path = os.environ.get("CROWSNEST_DUCKLAKE_CATALOG_PATH") or attach.get("path")
-        ducklake_alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS") or attach.get("alias") or "lakehouse"
-        ducklake_data_path = os.environ.get("CROWSNEST_DUCKLAKE_DATA_PATH") or attach.get("data_path")
-        ducklake_metadata_schema = (
-            os.environ.get("CROWSNEST_DUCKLAKE_METADATA_SCHEMA") or attach.get("metadata_schema")
-        )
+        catalog, data, alias = _discover_lake()
         if vessel is not None and vessel.is_valk:
-            ducklake_alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS") or vessel.valk.catalog_alias
+            # db.py attaches the Valk catalog through vessel.py; a lake/ folder that
+            # happens to sit in the image must not be picked up instead.
+            catalog, data = None, None
+            alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS") or vessel.valk.catalog_alias
 
         return cls(
             duckdb_path=duckdb_path,
             dagster_graphql_url=dagster_graphql_url,
             elementary_schema=elementary_schema,
             marimo_url=marimo_url,
-            ducklake_catalog_path=ducklake_catalog_path,
-            ducklake_alias=ducklake_alias,
-            ducklake_data_path=ducklake_data_path,
-            ducklake_metadata_schema=ducklake_metadata_schema,
+            ducklake_catalog_path=catalog,
+            ducklake_alias=alias,
+            ducklake_data_path=data,
             dagster_public_url=dagster_public_url,
             vessel=vessel,
         )
@@ -171,23 +159,42 @@ def _load_vessel():
         return None
 
 
-# ---------------------------------------------------------------------------
-# profiles.yml
-# ---------------------------------------------------------------------------
+def _discover_lake() -> tuple[Optional[str], Optional[str], str]:
+    """
+    (catalog, data directory, alias) of the lake to serve, or (None, None, alias).
 
-def _redact(text: str) -> str:
-    return re.sub(r"password=\S+", "password=***", text)
+    CROWSNEST_DUCKLAKE_CATALOG_PATH points at a SQLite catalog file; a
+    `ducklake:sqlite:` or `sqlite:` prefix is accepted and dropped, since the
+    attach adds its own. Its data directory defaults to `data/` next to the
+    catalog, as storage.py lays it out. Without the variable, the lake of the
+    project in the current directory is used once it exists.
+    """
+    import os
 
+    from datavloot_platform import storage
 
-def render_env_var_jinja(text: str) -> str:
-    """Resolve dbt's `{{ env_var(...) }}` calls against the current environment."""
-    def _sub(match: "re.Match[str]") -> str:
-        name, default = match.group(1), match.group(2)
-        value = os.environ.get(name)
-        if value is None:
-            value = default if default is not None else ""
-        return value
-    return _ENV_VAR_JINJA.sub(_sub, text)
+    alias = os.environ.get("CROWSNEST_DUCKLAKE_ALIAS")
+    configured = os.environ.get("CROWSNEST_DUCKLAKE_CATALOG_PATH")
+    if configured:
+        for prefix in ("ducklake:", "sqlite:"):
+            if configured.startswith(prefix):
+                configured = configured[len(prefix):]
+        catalog = pathlib.Path(configured).resolve()
+        data = os.environ.get("CROWSNEST_DUCKLAKE_DATA_PATH") or str(catalog.parent / "data")
+        return str(catalog), str(pathlib.Path(data).resolve()), alias or "lakehouse"
+
+    # An explicit .duckdb file wins over a lake found by looking around.
+    if os.environ.get("CROWSNEST_DUCKDB_PATH"):
+        return None, None, alias or "lakehouse"
+
+    project = storage.find_project_dir()
+    if project is not None and storage.catalog_path(project).is_file():
+        return (
+            str(storage.catalog_path(project)),
+            str(storage.data_path(project)),
+            alias or storage.project_name(project),
+        )
+    return None, None, alias or "lakehouse"
 
 
 def _read_profiles() -> Optional[dict]:
@@ -203,67 +210,27 @@ def _read_profiles() -> Optional[dict]:
         return None
 
 
-def _selected_outputs():
-    """
-    Yield the duckdb output dbt would actually use for each profile.
-
-    dbt picks `DBT_TARGET` if set, else the profile's `target:` key. Iterating
-    every output instead (the old behaviour) made the Crows Nest read whichever
-    target happened to come first, which is wrong the moment a `valk` output sits
-    next to `dev`.
-    """
+def _read_duckdb_path_from_profiles() -> Optional[str]:
     profiles = _read_profiles()
     if not isinstance(profiles, dict):
-        return
+        return None
     for profile_data in profiles.values():
         if not isinstance(profile_data, dict):
             continue
         outputs = profile_data.get("outputs", {})
         if not isinstance(outputs, dict):
             continue
-        target = os.environ.get("DBT_TARGET") or profile_data.get("target")
-        selected = outputs.get(target) if target else None
-        candidates = [selected] if isinstance(selected, dict) else list(outputs.values())
-        for output_config in candidates:
-            if isinstance(output_config, dict) and output_config.get("type") == "duckdb":
-                yield output_config
-
-
-def _read_duckdb_path_from_profiles() -> Optional[str]:
-    for output_config in _selected_outputs():
-        path = output_config.get("path")
-        if path and path != ":memory:":
-            p = pathlib.Path(path)
-            if not p.is_absolute():
-                p = pathlib.Path.cwd() / p
-            return str(p)
+        for output_config in outputs.values():
+            if not isinstance(output_config, dict):
+                continue
+            if output_config.get("type") == "duckdb":
+                path = output_config.get("path")
+                if path and path != ":memory:":
+                    p = pathlib.Path(path)
+                    if not p.is_absolute():
+                        p = pathlib.Path.cwd() / p
+                    return str(p)
     return None
-
-
-def _read_ducklake_attach_from_profiles() -> dict:
-    """
-    A DuckLake `attach:` entry from the selected dbt target, rendered.
-
-    Returns {} when there is none. When there is one, the Crows Nest reads the same
-    catalog dbt writes to without any CROWSNEST_DUCKLAKE_* variable being set.
-    """
-    for output_config in _selected_outputs():
-        for entry in output_config.get("attach") or []:
-            if not isinstance(entry, dict):
-                continue
-            path = str(entry.get("path") or "")
-            if not path.startswith("ducklake:") and entry.get("type") != "ducklake" and not entry.get("is_ducklake"):
-                continue
-            options = entry.get("options") or {}
-            return {
-                "path": render_env_var_jinja(path),
-                "alias": entry.get("alias"),
-                "data_path": render_env_var_jinja(str(options["data_path"])) if options.get("data_path") else None,
-                "metadata_schema": (
-                    render_env_var_jinja(str(options["metadata_schema"])) if options.get("metadata_schema") else None
-                ),
-            }
-    return {}
 
 
 def _infer_elementary_schema() -> Optional[str]:
@@ -273,9 +240,25 @@ def _infer_elementary_schema() -> Optional[str]:
 
     A project with `schema: noaa` in profiles.yml and `models: elementary: +schema: elementary`
     in dbt_project.yml will have Elementary tables in `noaa_elementary`.
+
+    The prod output wins: it is what Dagster builds, while the default dev output
+    writes to dev_elementary. Projects without one use their first duckdb output.
     """
-    for output_config in _selected_outputs():
-        schema = output_config.get("schema")
-        if schema:
-            return f"{schema}_elementary"
+    profiles = _read_profiles()
+    if not isinstance(profiles, dict):
+        return None
+    for profile_data in profiles.values():
+        if not isinstance(profile_data, dict):
+            continue
+        outputs = profile_data.get("outputs", {})
+        if not isinstance(outputs, dict):
+            continue
+        candidates = [outputs.get("prod"), *outputs.values()]
+        for output_config in candidates:
+            if not isinstance(output_config, dict):
+                continue
+            if output_config.get("type") == "duckdb":
+                schema = output_config.get("schema")
+                if schema:
+                    return f"{schema}_elementary"
     return None

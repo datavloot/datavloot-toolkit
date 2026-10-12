@@ -120,7 +120,7 @@ Dagster persists run history, asset metadata, and test results in `noaa_platform
 
 ### Interactive notebook (recommended)
 
-`explore_noaa.py` is a [Marimo](https://marimo.io) reactive notebook that connects directly to `noaa.duckdb` and provides charts and tables for all the key questions this project answers.
+`explore_noaa.py` is a [Marimo](https://marimo.io) reactive notebook that opens the project's lake read-only (so it can stay open while a pipeline runs) and provides charts and tables for all the key questions this project answers.
 
 ```bash
 marimo edit explore_noaa.py
@@ -132,7 +132,7 @@ Open [http://localhost:2718](http://localhost:2718). To share a read-only view, 
 
 ## Querying the results
 
-The warehouse is a single DuckDB file at `noaa.duckdb` in the project root. All business-layer tables land in the `noaa_business` schema.
+The data is a [DuckLake](https://ducklake.select) in `lake/`: the catalog in `lake/catalog.sqlite`, the tables as Parquet files under `lake/data/`. It is attached under the project name, `noaa`, and all business-layer tables land in the `noaa_business` schema.
 
 ### Install the DuckDB CLI
 
@@ -143,17 +143,19 @@ unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb
 ```
 
-### Open the database
+### Open the lake
+
+From the project root:
 
 ```bash
-duckdb noaa.duckdb
+duckdb -cmd "ATTACH 'ducklake:sqlite:lake/catalog.sqlite' AS noaa (DATA_PATH 'lake/data/', OVERRIDE_DATA_PATH true, READ_ONLY); USE noaa;"
 ```
 
 ### Useful queries
 
 ```sql
 -- List all tables
-SHOW ALL TABLES;
+SELECT table_schema, table_name FROM information_schema.tables WHERE table_catalog = 'noaa';
 
 -- Total port events
 SELECT COUNT(*) FROM noaa_business.fct_port_event;

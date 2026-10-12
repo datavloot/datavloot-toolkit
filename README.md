@@ -1,4 +1,4 @@
-# optimist-toolkit
+# datavloot-toolkit
 
 A self-hosted data platform for data engineers who want to own their stack rather than be trained on someone else's.
 
@@ -38,6 +38,8 @@ The Optimist is a fully functional data platform that runs on your local machine
 No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
 
 > **Intel Macs:** `cryptography` has no Intel wheel from version 49 on. Run `pip install "cryptography<49"` before installing datavloot, or pip will try to build it from source (needs Rust and a C compiler).
+
+> **Where to put a project:** on a local disk, outside OneDrive, Dropbox, Google Drive, iCloud and network drives. DuckDB relies on file locks that sync clients and network file systems do not honour. On Windows, `Documents` and `Desktop` are often synced to OneDrive; a folder like `C:\dev\` is not. Keep the path short on Windows too: unless [long paths are enabled](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation), a project folder longer than about 100 characters runs into the 260-character limit. `datavloot new`, `demo` and `start` warn when they detect either.
 
 ### 1. Create your own repository
 
@@ -142,7 +144,9 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── data-instructions.md              # AI agent workflow guide (captain/crew model)
 ├── packages.yml                      # points to this toolkit's dbt package
 ├── dbt_project.yml                   # project config
-├── profiles.yml                      # DuckDB connection config
+├── profiles.yml                      # dbt connection: attaches the lake; dev (default) and prod targets
+├── dagster.yaml                      # Dagster instance settings: one lake writer at a time
+├── lake/                             # the data: catalog.sqlite + Parquet files (git-ignored)
 ├── notebooks/
 │   └── explore.py                    # Marimo notebook for querying results
 ├── <project_name>_platform/          # Dagster layer (ready to run)
@@ -163,6 +167,50 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ```
 
 Run `dbt deps` after scaffolding, then follow `data-instructions.md`.
+
+### Where the data lives
+
+All data is in `lake/`: a [DuckLake](https://ducklake.select) with its catalog in `lake/catalog.sqlite` and the tables as Parquet files under `lake/data/`. That directory is the whole state of the platform; copy it and you have a backup, move the project and it keeps working. Set `DATAVLOOT_LAKE_DIR` to keep it somewhere else.
+
+dbt, dlt, Dagster, the notebooks and the Crows Nest all attach the same lake, so a notebook can stay open while a pipeline writes, and readers only ever see finished commits. Writes are taken one commit at a time: two processes committing at the same moment means one of them fails with `database is locked` and has to be rerun.
+
+There is one production path: Dagster. It builds dbt's `prod` target, into `<project>_source`, `<project>_business` and so on, and `dagster.yaml` lets only one writing asset run at a time. dbt by hand uses the default `dev` target and writes to `dev_source`, `dev_business` and so on in the same lake, so you can develop while Dagster runs without touching production. See "Development and production" in the project's `data-instructions.md`.
+
+In your own code, `datavloot_platform.storage` attaches the lake the same way the toolkit does:
+
+```python
+from datavloot_platform import storage
+
+con = storage.connect(read_only=True)              # finds the project from the current directory
+con.sql("SELECT * FROM <project>_business.dim_date").show()
+```
+
+### Upgrading a project that writes to a single `.duckdb` file
+
+Projects created before the lake write everything to `<project>.duckdb`. To move one over, take `profiles.yml`, the `lake/` directory and the `storage` calls in `<project>_platform/assets.py` and `notebooks/` from a freshly scaffolded project, then either rerun your pipelines from scratch, or copy the existing tables across from the project directory:
+
+```python
+from datavloot_platform import storage
+
+con = storage.connect(".")
+con.execute("ATTACH '<project>.duckdb' AS old (READ_ONLY)")
+for schema, table in con.execute("""
+    SELECT table_schema, table_name FROM information_schema.tables
+    WHERE table_catalog = 'old' AND table_type = 'BASE TABLE'
+""").fetchall():
+    con.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+    con.execute(f'CREATE TABLE "{schema}"."{table}" AS FROM old."{schema}"."{table}"')
+```
+
+Views are not copied; `dbt run` recreates them.
+
+### Upgrading a project to separate development from production
+
+In older projects `profiles.yml` has one target, `dev`, that writes to the production schemas, and Dagster runs writers side by side. To move one over, take these from a freshly scaffolded project:
+
+- `profiles.yml`: `dev` now writes to `dev_*` schemas and a new `prod` target writes to `<project>_*`, where your data already is. No data has to move.
+- `dagster.yaml`, placed in the project directory.
+- In `<project>_platform/assets.py`, add `target="prod"` to `DbtProject(...)` and `pool="lake"` to every asset that writes to the lake: the dbt assets, dlt assets and any asset that writes through `storage.connect`.
 
 ---
 
@@ -275,16 +323,19 @@ Opens [http://localhost:8080](http://localhost:8080) with five panels:
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
 | **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
 
-The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, DuckDB locked by an active Dagster run) return a descriptive message rather than an error.
+The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
 
-The Crows Nest auto-discovers your project's DuckDB path from `profiles.yml` and infers the Elementary schema from your target schema name. No additional configuration is needed for standard projects. You can override any setting with environment variables:
+The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started from the project directory, and infers the Elementary schema from your target schema name. It reads the lake while pipelines write to it. No additional configuration is needed for standard projects. You can override any setting with environment variables:
 
 | Variable | Default |
 |---|---|
-| `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml` |
+| `CROWSNEST_DUCKLAKE_CATALOG_PATH` | The project's `lake/catalog.sqlite` |
+| `CROWSNEST_DUCKLAKE_DATA_PATH` | `data/` next to the catalog |
+| `CROWSNEST_DUCKLAKE_ALIAS` | The dbt project name |
+| `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml`; for a project still on a single `.duckdb` file, and takes precedence over a lake found in the project |
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
 | `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
-| `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
+| `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
@@ -304,7 +355,8 @@ token as the password. Scripts can send `Authorization: Bearer <token>` instead.
 
 The SQL editor is read-only and enforces that by parsing each statement rather
 than by inspecting keywords, and the DuckDB connection is sandboxed so a query
-cannot read or write files, attach another database, or load an extension.
+cannot reach files outside the lake's data directory, attach another database,
+or load an extension.
 Nothing here gives you TLS, so terminate HTTPS at a reverse proxy if the host is
 reachable from anywhere untrusted.
 
@@ -413,6 +465,5 @@ Versions below are what the NOAA example project was built and tested on. Newer 
 | dbt-duckdb | 1.10.1 |
 | dlt | 1.28.0 |
 | duckdb | 1.5.3 |
-| ducklake | 0.1.1 |
 | elementary-data | 0.24.0 |
 | marimo | 0.23.9 |

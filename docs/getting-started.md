@@ -87,7 +87,7 @@ alerts surface here as asset check failures alongside the asset metadata.
 
 ## Querying results
 
-All business-layer tables land in the `main_business` schema of your DuckDB database file.
+All business-layer tables land in the `main_business` schema of your DuckDB database file. In a project created with `datavloot new` the data is in a DuckLake under `lake/` instead; the README's "Where the data lives" shows how to open it.
 
 ### Install the DuckDB CLI
 

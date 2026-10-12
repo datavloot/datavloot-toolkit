@@ -10,9 +10,13 @@ optimist_dbt_project.prepare_if_dev()
 
 
 class LayerGroupTranslator(DagsterDbtTranslator):
-    """Groups dbt assets by their folder layer (source / business)."""
+    """Groups dbt assets by their folder layer (source / business); a package's assets by package."""
 
     def get_group_name(self, dbt_resource_props: dict) -> str:
+        # By folder, Elementary's models would land in one group per subfolder.
+        package = dbt_resource_props.get("package_name")
+        if package and package != optimist_dbt_project.name:
+            return package
         fqn = dbt_resource_props.get("fqn", [])
         # fqn: ["optimist", "source", "stg_orders"] → group "source"
         # fqn: ["optimist", "business", "dim_date"]  → group "business"
@@ -41,14 +45,14 @@ def optimist_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 #
 #   import dlt
 #   from dagster_dlt import DagsterDltResource, dlt_assets
+#   from datavloot_platform import storage
 #
 #   @dlt_assets(
 #       dlt_source=my_source(),          # any dlt source or verified source
 #       dlt_pipeline=dlt.pipeline(
 #           pipeline_name="my_pipeline",
-#           dataset_name="source",       # → lakehouse.source schema
-#           destination="duckdb",
-#           credentials="data/lakehouse.duckdb",
+#           dataset_name="source",       # → the `source` schema in the project's lake
+#           destination=storage.dlt_destination(),
 #       ),
 #       group_name="source",
 #   )

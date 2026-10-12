@@ -187,7 +187,11 @@ def test_templates_ship(wheel: pathlib.Path):
     for required in (
         "datavloot_platform/templates/scaffold/dbt_project.yml",
         "datavloot_platform/templates/scaffold/profiles.yml",
+        # Without it Dagster runs writers side by side and the lake refuses the
+        # second commit.
+        "datavloot_platform/templates/scaffold/dagster.yaml",
         "datavloot_platform/templates/demo/dbt_project.yml",
+        "datavloot_platform/templates/demo/dagster.yaml",
     ):
         assert required in names, f"{required} is missing from the wheel"
 

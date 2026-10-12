@@ -7,13 +7,13 @@ Both run on the same port so no CORS configuration is needed.
 
 import pathlib
 
-import duckdb
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.auth import OidcAuthMiddleware, TokenAuthMiddleware
 from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -165,19 +165,10 @@ def create_app() -> FastAPI:
         except Exception:
             results["dagster"] = "offline"
 
-        # Warehouse: open it the same way the query routes do, so a DuckLake
-        # catalog on Postgres is probed for real instead of "the file exists".
+        # DuckDB: open a connection the way the routes do, lake or file
         try:
-            if config.uses_ducklake:
-                from datavloot_platform.crowsnest.db import get_conn
-                get_conn(read_only=True).close()
-                results["duckdb"] = "ok"
-            elif config.duckdb_path == ":memory:":
-                results["duckdb"] = "ok"
-            else:
-                conn = duckdb.connect(config.duckdb_path, read_only=True)
-                conn.close()
-                results["duckdb"] = "ok"
+            get_conn(read_only=True).close()
+            results["duckdb"] = "ok"
         except Exception:
             results["duckdb"] = "offline"
 

@@ -1,23 +1,24 @@
 """
 DuckDB connection helper for the Crows Nest.
 
-Three modes, decided by config.py:
-  Optimist:  plain DuckDB file connection (default)
-  DuckLake:  in-memory connection with the ducklake extension and a catalog attached,
-             either a local catalog file or a `ducklake:postgres:...` string
-             (CROWSNEST_DUCKLAKE_CATALOG_PATH, or the dbt target's `attach:` entry)
-  Valk:      the shared DuckLake catalog described by the DUCKLAKE_* environment,
-             attached through vessel.attach_ducklake so the Crows Nest, dbt and dlt
-             agree on data path and metadata schema
+Supports three modes:
+  Valk:      the shared DuckLake catalog on Postgres described by the DUCKLAKE_*
+             environment, attached through vessel.attach_ducklake so the Crows Nest,
+             dbt and dlt agree on data path and metadata schema
+  DuckLake:  in-memory connection with the project's lake attached, the default
+             once the project has one (see config.py and storage.py)
+  Standard:  plain DuckDB file connection, for projects still on a .duckdb file
 
 Every connection is sandboxed before it is handed out -- see _harden().
 """
 
+import pathlib
 import time
 
 import duckdb
 from fastapi import HTTPException
 
+from datavloot_platform import extensions, storage
 from datavloot_platform.crowsnest.config import get_config
 
 
@@ -38,6 +39,15 @@ from datavloot_platform.crowsnest.config import get_config
 #   lock_configuration      neither of the above can be turned back on by a query
 #
 # lock_configuration must come last, since it freezes the others.
+#
+# A DuckLake reads its Parquet files through the local file system, so there the
+# file system cannot be disabled: every query would fail. Instead,
+# allowed_directories opens exactly the lake's data directory, and
+# enable_external_access keeps everything else shut (checked: reading or writing
+# outside it, re-enabling access and installing extensions all stay blocked).
+# What this gives up: a COPY ... TO into the data directory itself would be
+# allowed. No route lets one through -- the query route accepts only SELECT and
+# EXPLAIN -- so only this second line of defence is narrower.
 _HARDENING = (
     "SET enable_external_access=false",
     "SET disabled_filesystems='LocalFileSystem'",
@@ -57,80 +67,30 @@ _HARDENING_REMOTE = (
 )
 
 
-def _harden(conn: duckdb.DuckDBPyConnection, *, remote: bool = False) -> duckdb.DuckDBPyConnection:
+def _harden(
+    conn: duckdb.DuckDBPyConnection, lake_data: str | None = None, *, remote: bool = False
+) -> duckdb.DuckDBPyConnection:
     """
     Lock a connection down to reading what is already attached.
 
     Applied after any ATTACH, which must happen while external access is still
-    permitted. Verified not to affect a local DuckLake: its parquet data files
-    still resolve after the filesystem is disabled.
+    permitted. With `lake_data`, the file system stays open for that directory
+    only, as a DuckLake needs. With `remote`, the data is in a bucket and the
+    network stays open instead (see _HARDENING_REMOTE).
     """
-    for statement in (_HARDENING_REMOTE if remote else _HARDENING):
+    statements = _HARDENING
+    if remote:
+        statements = _HARDENING_REMOTE
+    elif lake_data:
+        allowed = pathlib.Path(lake_data).as_posix().rstrip("/") + "/"
+        statements = (
+            f"SET allowed_directories=['{allowed}']",
+            "SET enable_external_access=false",
+            "SET lock_configuration=true",
+        )
+    for statement in statements:
         conn.execute(statement)
     return conn
-
-
-def attach_statement(
-    catalog: str,
-    alias: str,
-    *,
-    read_only: bool,
-    data_path: str | None = None,
-    metadata_schema: str | None = None,
-) -> str:
-    """
-    The ATTACH for a DuckLake catalog, whichever way it was named.
-
-    A `ducklake:` string (a Postgres catalog, `ducklake:postgres:host=...`, or an
-    explicit `ducklake:/path/file.ducklake`) is passed through untouched: it may
-    contain spaces and `=`, and it must never be path-normalised. A bare filename
-    is the legacy form and gets `TYPE ducklake` plus Windows-slash normalisation.
-    """
-    options = []
-    if catalog.startswith("ducklake:"):
-        target = catalog
-    else:
-        target = catalog.strip().replace("\\", "/")
-        options.append("TYPE ducklake")
-    if read_only:
-        options.append("READ_ONLY")
-    if data_path:
-        options.append(f"DATA_PATH '{data_path}'")
-        options.append("OVERRIDE_DATA_PATH true")
-    if metadata_schema:
-        options.append(f"METADATA_SCHEMA '{metadata_schema}'")
-    suffix = f" ({', '.join(options)})" if options else ""
-    return f"ATTACH IF NOT EXISTS '{target}' AS {alias}{suffix}"
-
-
-def _open_ducklake(conn: duckdb.DuckDBPyConnection, config, read_only: bool) -> bool:
-    """Attach the configured DuckLake catalog. Returns True when its data is remote."""
-    from datavloot_platform import vessel
-
-    if config.is_valk:
-        vessel.attach_ducklake(conn, config.vessel, read_only=read_only, alias=config.ducklake_alias)
-        return vessel.is_remote(vessel.data_path())
-
-    conn.execute("INSTALL ducklake")
-    conn.execute("LOAD ducklake")
-    remote = bool(config.ducklake_data_path and vessel.is_remote(config.ducklake_data_path))
-    if remote:
-        conn.execute("INSTALL httpfs")
-        conn.execute("LOAD httpfs")
-        secret = vessel.s3_secret_sql(config.vessel)
-        if secret:
-            conn.execute(secret)
-    conn.execute(
-        attach_statement(
-            config.ducklake_catalog_path,
-            config.ducklake_alias,
-            read_only=read_only,
-            data_path=config.ducklake_data_path,
-            metadata_schema=config.ducklake_metadata_schema,
-        )
-    )
-    conn.execute(f"USE {config.ducklake_alias}")
-    return remote
 
 
 def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
@@ -138,11 +98,37 @@ def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
     last_exc: Exception | None = None
     for attempt in range(3):
         try:
-            if config.uses_ducklake:
+            if config.is_valk:
+                from datavloot_platform import vessel
+
                 conn = duckdb.connect()
-                remote = _open_ducklake(conn, config, read_only)
-                return _harden(conn, remote=remote)
-            return _harden(duckdb.connect(config.duckdb_path, read_only=read_only))
+                vessel.attach_ducklake(
+                    conn, config.vessel, read_only=read_only, alias=config.ducklake_alias
+                )
+                data = vessel.data_path()
+                if vessel.is_remote(data):
+                    return _harden(conn, remote=True)
+                return _harden(conn, lake_data=data)
+            elif config.ducklake_catalog_path:
+                conn = duckdb.connect()
+                # Not a bare INSTALL: offline, that fails with only a download
+                # error. This says how to install it by hand.
+                for name in extensions.REQUIRED:
+                    extensions.ensure_loaded(conn, name)
+                conn.execute(
+                    storage.attach_statement(
+                        pathlib.Path(config.ducklake_catalog_path),
+                        pathlib.Path(config.ducklake_data_path),
+                        config.ducklake_alias,
+                        read_only=read_only,
+                    )
+                )
+                conn.execute(f"USE {config.ducklake_alias}")
+                return _harden(conn, lake_data=config.ducklake_data_path)
+            else:
+                return _harden(
+                    duckdb.connect(config.duckdb_path, read_only=read_only)
+                )
         except Exception as e:
             last_exc = e
             if attempt < 2 and "another process" in str(e).lower():

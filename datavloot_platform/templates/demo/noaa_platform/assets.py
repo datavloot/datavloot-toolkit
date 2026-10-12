@@ -6,24 +6,29 @@ from dagster import AssetExecutionContext, AssetKey, asset
 from dagster_dbt import DbtProject, DbtCliResource, DagsterDbtTranslator, dbt_assets
 from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 
-# Where the warehouse is depends on the vessel in datavloot.yml: the noaa.duckdb
-# file on the Optimist, the shared DuckLake catalog on the Valk. Asking the vessel
-# module instead of calling duckdb.connect() is what keeps this file unchanged
-# when the project moves.
-from datavloot_platform.vessel import connect as vessel_connect, dlt_destination
+from datavloot_platform import storage
 
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
-DB_PATH = PROJECT_DIR / "noaa.duckdb"
 CSV_PATH = PROJECT_DIR / "data" / "guam_2025.csv"
 
-noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR)
+# Every asset that writes to the lake runs in this pool. dagster.yaml limits each
+# pool to one at a time, because the lake takes one commit at a time.
+LAKE_POOL = "lake"
+
+# Dagster is the only production writer: it builds the prod target, while a
+# plain `dbt run` builds dev (see profiles.yml). The dbt resource inherits it.
+noaa_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod")
 noaa_dbt_project.prepare_if_dev()
 
 
 class LayerGroupTranslator(DagsterDbtTranslator):
-    """Groups dbt assets by their folder layer (source / business)."""
+    """Groups dbt assets by their folder layer (source / business); a package's assets by package."""
 
     def get_group_name(self, dbt_resource_props: dict) -> str:
+        # By folder, Elementary's models would land in one group per subfolder.
+        package = dbt_resource_props.get("package_name")
+        if package and package != noaa_dbt_project.name:
+            return package
         fqn = dbt_resource_props.get("fqn", [])
         if len(fqn) >= 2:
             return fqn[-2]
@@ -43,9 +48,10 @@ class OpenMeteoDltTranslator(DagsterDltTranslator):
 @asset(
     key=AssetKey(["noaa", "guam_2025"]),
     group_name="noaa_ingest",
+    pool=LAKE_POOL,
 )
 def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
-    """Load Guam 2025 AIS CSV into noaa.duckdb raw.guam_2025."""
+    """Load Guam 2025 AIS CSV into the lake as raw.guam_2025."""
     if not CSV_PATH.exists():
         raise FileNotFoundError(
             f"AIS data not found at {CSV_PATH}. "
@@ -53,7 +59,7 @@ def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
             "and save as data/guam_2025.csv in the project root."
         )
 
-    con = vessel_connect(PROJECT_DIR, DB_PATH)
+    con = storage.connect(PROJECT_DIR)
     try:
         con.execute("CREATE SCHEMA IF NOT EXISTS raw")
         context.log.info(f"Loading {CSV_PATH.name} → raw.guam_2025 (may take a minute)...")
@@ -136,11 +142,12 @@ def open_meteo_source():
     dlt_pipeline=dlt.pipeline(
         pipeline_name="open_meteo_marine",
         dataset_name="source",
-        destination=dlt_destination(PROJECT_DIR, DB_PATH),
+        destination=storage.dlt_destination(PROJECT_DIR),
     ),
     group_name="noaa_ingest",
     name="open_meteo",
     dagster_dlt_translator=OpenMeteoDltTranslator(),
+    pool=LAKE_POOL,
 )
 def open_meteo_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
     yield from dlt.run(context=context)
@@ -153,6 +160,7 @@ def open_meteo_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
 @dbt_assets(
     manifest=noaa_dbt_project.manifest_path,
     dagster_dbt_translator=LayerGroupTranslator(),
+    pool=LAKE_POOL,
 )
 def noaa_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()
