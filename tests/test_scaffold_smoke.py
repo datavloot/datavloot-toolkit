@@ -184,6 +184,38 @@ def test_parse_emits_no_unexpected_warnings(built: pathlib.Path):
     )
 
 
+def _dagster(
+    built: pathlib.Path, dagster_home: pathlib.Path, *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    """
+    Run the dagster CLI against the scaffold's platform module, as `dagster dev` would load it.
+
+    A throwaway instance, so the run never touches a real ~/.dagster, with the
+    scaffold's own instance settings, so a dagster.yaml Dagster rejects fails here.
+    """
+    # Read from the scaffold rather than hard-coded: the template directory is
+    # renamed per project.
+    module = re.search(
+        r'^module_name\s*=\s*"([^"]+)"', (built / "pyproject.toml").read_text(), re.M
+    ).group(1)
+    shutil.copy(built / "dagster.yaml", dagster_home / "dagster.yaml")
+    full_env = {
+        **os.environ,
+        "DBT_PROFILES_DIR": str(built),
+        "DAGSTER_HOME": str(dagster_home),
+        "NO_COLOR": "1",
+        **(env or {}),
+    }
+    return subprocess.run(
+        [shutil.which("dagster"), *args, "-m", module, "--working-directory", str(built)],
+        cwd=built,
+        env=full_env,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+
+
 @pytest.mark.skipif(shutil.which("dagster") is None, reason="dagster is not installed")
 def test_dagster_materializes_the_scaffold(built: pathlib.Path, tmp_path: pathlib.Path):
     """
@@ -195,45 +227,43 @@ def test_dagster_materializes_the_scaffold(built: pathlib.Path, tmp_path: pathli
     when a Dagster release or a platform quirk (paths, process spawning on
     Windows) does not agree with the template.
     """
-    # The module `dagster dev` would load, read from the scaffold rather than
-    # hard-coded: the template directory is renamed per project.
-    module = re.search(
-        r'^module_name\s*=\s*"([^"]+)"', (built / "pyproject.toml").read_text(), re.M
-    ).group(1)
-
     # Only `dbt run` by hand has run so far, and that is dev's: the scaffold's
     # single target used to write here, overwriting what Dagster had built.
     assert _production_schemas(built) == set(), (
         f"dbt by hand wrote to production: {sorted(_production_schemas(built))}"
     )
 
-    # A throwaway instance, so the run never touches a real ~/.dagster, with the
-    # scaffold's own instance settings, so a dagster.yaml Dagster rejects fails here.
-    shutil.copy(built / "dagster.yaml", tmp_path / "dagster.yaml")
-    env = {
-        **os.environ,
-        "DBT_PROFILES_DIR": str(built),
-        "DAGSTER_HOME": str(tmp_path),
-        "NO_COLOR": "1",
-    }
-    result = subprocess.run(
-        [
-            shutil.which("dagster"), "asset", "materialize",
-            # Not a bare `*`: on Windows click expands that against the files in
-            # the working directory before Dagster sees it.
-            "--select", 'key:"*"',
-            "-m", module,
-            "--working-directory", str(built),
-        ],
-        cwd=built,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
+    # Not a bare `*`: on Windows click expands that against the files in the
+    # working directory before Dagster sees it.
+    result = _dagster(built, tmp_path, "asset", "materialize", "--select", 'key:"*"')
     assert result.returncode == 0, (
         f"dagster asset materialize failed:\n{(result.stdout + result.stderr)[-3000:]}"
     )
     assert "probe_business" in _production_schemas(built), (
         f"Dagster did not build production; schemas: {sorted(_schemas(built))}"
     )
+
+
+@pytest.mark.skipif(shutil.which("dagster") is None, reason="dagster is not installed")
+def test_dagster_maintains_the_lake(built: pathlib.Path, tmp_path: pathlib.Path):
+    """The scheduled maintenance job loads with the scaffold and runs against its lake."""
+    result = _dagster(built, tmp_path, "job", "execute", "-j", "lake_maintenance")
+    assert result.returncode == 0, (
+        f"dagster job execute failed:\n{(result.stdout + result.stderr)[-3000:]}"
+    )
+
+
+@pytest.mark.skipif(shutil.which("dagster") is None, reason="dagster is not installed")
+@pytest.mark.parametrize("switch, state", [("on", "--running"), ("off", "--stopped")])
+def test_the_maintenance_schedule_can_be_switched_off(
+    built: pathlib.Path, tmp_path: pathlib.Path, switch: str, state: str
+):
+    """DATAVLOOT_LAKE_MAINTENANCE decides whether the daily schedule starts running."""
+    result = _dagster(
+        built, tmp_path, "schedule", "list", state, "--name",
+        env={"DATAVLOOT_LAKE_MAINTENANCE": switch},
+    )
+    assert result.returncode == 0, (
+        f"dagster schedule list failed:\n{(result.stdout + result.stderr)[-3000:]}"
+    )
+    assert "lake_maintenance_schedule" in result.stdout
