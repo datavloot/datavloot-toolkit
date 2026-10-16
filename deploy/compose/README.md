@@ -49,8 +49,7 @@ docker compose up -d --build
 docker compose ps       # prepare has exited (0), the rest is running
 ```
 
-More users: run the `htpasswd` line again with `>>` instead of `>`. Traefik picks the file up
-without a restart.
+More users: run the `htpasswd` line again with `>>` instead of `>`, then `docker compose restart traefik`.
 
 Updating to a newer toolkit: `git pull`, then `docker compose up -d --build`.
 
