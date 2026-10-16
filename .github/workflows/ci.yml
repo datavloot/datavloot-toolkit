@@ -65,7 +65,7 @@ jobs:
       - run: >
           uv run --with pytest --with pyyaml --with duckdb
           --with fastapi --with httpx
-          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py
+          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
           tests/test_extensions.py tests/test_storage.py -v
 
   # The runners have compilers, so a real install there succeeds even when a

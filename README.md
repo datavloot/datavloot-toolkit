@@ -386,7 +386,7 @@ In the meantime, the Optimist's individual components are independently portable
 
 | Step | What changes | What stays the same |
 |---|---|---|
-| **Cloud VM** | Move the whole platform to a VPS or cloud VM | Nothing — runs identically |
+| **Cloud VM** | Move the whole platform to a VPS or cloud VM | Nothing — the same project runs in Docker Compose behind Traefik, see [deploy/compose](deploy/compose/README.md) |
 | **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
 | **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
 
