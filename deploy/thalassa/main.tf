@@ -128,6 +128,11 @@ resource "thalassa_target_group" "this" {
   protocol = "tcp"
   port     = each.key
 
+  # Thalassa's default, written out: left unset, the API fills it in and every
+  # plan afterwards wants to set it back to null. With one VM the policy
+  # itself makes no difference.
+  loadbalancing_policy = "ROUND_ROBIN"
+
   # No health check settings: as soon as one is set, the provider sends a full
   # health check with an empty path, which the API rejects even for TCP. With
   # a single VM there is nothing to fail over to anyway.
