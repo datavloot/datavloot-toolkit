@@ -121,6 +121,10 @@ services:
       OAUTH2_PROXY_OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-groups}
       # Empty: whoever the provider signs in gets in.
       OAUTH2_PROXY_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:-}
+      # Set explicitly: with allowed groups oauth2-proxy would add a `groups` scope
+      # of its own, which Keycloak and Entra ID refuse as unknown (invalid_scope),
+      # and nobody can sign in. The groups arrive as a claim instead.
+      OAUTH2_PROXY_SCOPE: ${OIDC_SCOPE:-openid email profile}
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
       OAUTH2_PROXY_UPSTREAMS: file:///dev/null

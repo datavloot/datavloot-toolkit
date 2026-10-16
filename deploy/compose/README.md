@@ -88,7 +88,8 @@ Back to basic auth: `FALCON_AUTH=basic`, then `docker compose up -d --remove-orp
 - **Who gets in:** set *Assignment required* on the Enterprise application and assign the users or
   a group there. That keeps the decision with the customer, in Entra. `OIDC_ALLOWED_GROUPS` works
   too, but Entra puts group object IDs in the `groups` claim, not names, and leaves the claim out
-  for users in more than about 200 groups.
+  for users in more than about 200 groups. The claim has to be added to the app registration
+  (*Token configuration*, optional claim `groups`); it is a claim, not a scope.
 
 ### Testing single sign-on
 
@@ -146,7 +147,9 @@ reliable on a directory shared from Windows or macOS into a container.
   configuration from `OIDC_ISSUER_URL`; until that works it restarts. After signing in at the
   provider, `Internal Server Error` on `/oauth2/callback` is a user oauth2-proxy refuses; the log
   says why: `email in id_token () isn't verified` (no `email` claim, see `OIDC_EMAIL_CLAIM`, or
-  `OIDC_ALLOW_UNVERIFIED_EMAIL`).
+  `OIDC_ALLOW_UNVERIFIED_EMAIL`). `403` straight after the redirect, without a sign-in page, with
+  `invalid_scope` in the log: the provider refuses a scope; `OIDC_SCOPE` must hold only scopes it
+  knows (the default does).
 - `PermissionError` in `prepare`: `FALCON_UID`/`FALCON_GID` in `.env` do not match the owner of
   `FALCON_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).

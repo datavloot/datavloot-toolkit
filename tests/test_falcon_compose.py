@@ -80,6 +80,15 @@ def test_a_refused_user_is_not_sent_back_to_the_sign_in():
     assert config["http"]["middlewares"]["auth-errors"]["errors"]["status"] == ["401"]
 
 
+def test_the_groups_gate_does_not_ask_for_a_groups_scope():
+    # oauth2-proxy adds a `groups` scope of its own when allowed groups are set,
+    # unless the scope is given; Keycloak and Entra ID refuse it (invalid_scope).
+    env = _compose()["services"]["oauth2-proxy"]["environment"]
+    scope = env["OAUTH2_PROXY_SCOPE"]
+    assert scope == "${OIDC_SCOPE:-openid email profile}"
+    assert "groups" not in scope.split(":-")[1].rstrip("}").split()
+
+
 def test_unverified_emails_are_refused_unless_asked_for():
     env = _compose()["services"]["oauth2-proxy"]["environment"]
     assert env["OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL"] == "${OIDC_ALLOW_UNVERIFIED_EMAIL:-false}"
