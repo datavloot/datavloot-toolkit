@@ -1,8 +1,8 @@
 # Optimist architecture (single node)
 
-> **Status: proposed.** This describes the target architecture, not the current implementation: scaffolded projects currently write to a single DuckDB file, without a DuckLake catalog or maintenance jobs. The decision is recorded in an ADR (to be added).
+> **Status: proposed.** This describes the target architecture; parts of it are not built yet (see the issues labelled `optimist`). The reasoning is in [ADR 0001](adr/0001-optimist-single-node-single-writer.md).
 
-The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory. The next vessel, the Valk, runs the same project on an SRDP stack (see `docs/valk.md`, not yet merged); the Optimist's VM mode deliberately uses the same building blocks so that moving up is adding services, not rebuilding.
+The Optimist is the single-node vessel, aimed at an organisation with a data team of one: technically multi-client, organisationally single-writer. Everything lives on one host; the full state is one directory.
 
 ## 1. Component overview
 
@@ -22,8 +22,8 @@ flowchart LR
         end
 
         subgraph LAKE["DuckLake (one directory)"]
-            CAT[("Catalog: metadata.sqlite")]
-            PQ["Parquet files in DATA_PATH"]
+            CAT[("Catalog: lake/catalog.sqlite (WAL)")]
+            PQ["Parquet files in lake/data/"]
         end
 
         DEV["dbt dev target (separate schema)"]
@@ -48,12 +48,12 @@ flowchart LR
 
 ## 2. How a write works
 
-The heavy work (writing Parquet) happens outside the catalog. The catalog lock is held only for the short metadata commit, which is why several local processes can write side by side.
+The heavy work (writing Parquet) happens outside the catalog; the catalog is locked only for the short metadata commit. Readers are never blocked: the catalog runs in WAL mode, so they keep reading the last committed snapshot. Commits are taken one at a time. A second process that commits at the same moment fails instead of waiting, even when it writes another table, so writers take turns: one at a time in Dagster.
 
 ```mermaid
 sequenceDiagram
     participant W as Writer (Dagster run)
-    participant P as Parquet files (DATA_PATH)
+    participant P as Parquet files (lake/data/)
     participant C as Catalog (SQLite)
     participant R as Reader (Marimo / Crows Nest)
 
@@ -62,9 +62,9 @@ sequenceDiagram
     R->>P: Read those files
     W->>P: Write new Parquet files (no lock)
     W->>C: Commit: register files as snapshot N+1 (short lock)
-    alt Conflict on same table
-        C-->>W: Conflict
-        W->>C: Retry or report
+    alt Another process is committing
+        C-->>W: database is locked
+        W->>C: Rerun or report
     else No conflict
         C-->>W: Committed
     end
@@ -100,11 +100,11 @@ flowchart TB
 
 ## 4. Access on the VM
 
-Access to the site, not access policy on data; per-user roles belong to the Valk. The Dagster UI and Marimo have no authentication of their own, so every service sits behind Traefik.
+Access to the site, not access policy on data: whoever is let in sees everything. The Dagster UI and Marimo have no authentication of their own, so every service sits behind Traefik and is reachable only through it.
 
-The setup mirrors the Valk: same Traefik static configuration (Docker provider, `exposedByDefault: false`, HTTP to HTTPS redirect, dashboard off), same hostnames (`crowsnest.`, `dagster.`, `marimo.<domain>`) and the same ForwardAuth middleware to oauth2-proxy. The difference is the identity provider: the customer's own IdP instead of Zitadel. Without an IdP, Traefik's built-in `basicAuth` middleware replaces oauth2-proxy. TLS comes from Let's Encrypt through Traefik's ACME resolver.
+Traefik runs with the Docker provider (`exposedByDefault: false`), redirects HTTP to HTTPS and has its dashboard off; each service gets its own hostname (`crowsnest.`, `dagster.`, `marimo.<domain>`). A ForwardAuth middleware sends every request to oauth2-proxy, connected to the customer's own IdP, so one sign-in covers all three. Without an IdP, Traefik's built-in `basicAuth` middleware replaces oauth2-proxy. TLS comes from Let's Encrypt through Traefik's ACME resolver.
 
-Open: the Crows Nest validates access tokens itself rather than trusting the proxy's headers. Pointing its OIDC mode at the customer's IdP, with `reader` as default role, is the likely route; it has not been tested against Entra ID or Google Workspace.
+The Crows Nest's own token auth (`CROWSNEST_AUTH_TOKEN`) stays off behind the proxy, so users are not asked twice. That is only safe because the Crows Nest is not reachable except through Traefik.
 
 ```mermaid
 flowchart LR
@@ -128,44 +128,21 @@ flowchart LR
     SNAP -. "optional" .-> BUCKET["S3-compatible bucket (restic / rclone)"]
 ```
 
-## 6. Upgrade path to the Valk
-
-Set `vessel: valk` in `datavloot.yml`, move the catalog and the data; project code (dlt, dbt, Dagster assets) stays the same. The Valk is built as a client project on SRDP, which supplies Traefik, oauth2-proxy with Zitadel, and the Postgres that holds the DuckLake catalog.
-
-```mermaid
-flowchart LR
-    subgraph OPT["Optimist"]
-        O1[("SQLite catalog")]
-        O2["Parquet on local disk"]
-        O3["Traefik + oauth2-proxy, customer IdP"]
-    end
-
-    subgraph VALK["Valk (on SRDP)"]
-        F1[("PostgreSQL catalog")]
-        F2["Parquet on a volume or in S3-compatible storage"]
-        F3["Traefik + oauth2-proxy, Zitadel with roles"]
-    end
-
-    O1 -- "migrate metadata" --> F1
-    O2 -- "copy files, update data path" --> F2
-    O3 -- "switch identity provider" --> F3
-```
-
 ## Component summary
 
-| Component | Optimist | Valk |
-|---|---|---|
-| Ingest | dlt | dlt |
-| Catalog | DuckLake + SQLite | DuckLake + PostgreSQL |
-| Data storage | Parquet on local disk | Parquet on a volume or in S3-compatible storage |
-| Transform & test | dbt | dbt |
-| Data quality | Elementary | Elementary |
-| Orchestration | Dagster, concurrency limit on writing jobs | Dagster webserver, daemon and code server as separate containers |
-| Writers | Multiple local processes, one production path | One project per stack, writes through Dagster |
-| Dashboard | Crows Nest, read-only | Crows Nest, roles `reader` / `writer` / `admin` |
-| Analysis | Marimo, read-only | Marimo (SRDP's service) |
-| Reverse proxy | Traefik (VM mode only) | Traefik (from SRDP) |
-| Access | oauth2-proxy with the customer's IdP, or Traefik basic auth | oauth2-proxy with Zitadel, per-user roles |
-| Secrets | `.env` on the host | `.env` in `deploy/valk/` |
-| Backup | Copy of the directory, optional off-site bucket | Not yet defined |
-| Runtime | Laptop (pip) or single VM (Compose) | Docker Compose: SRDP stack plus the project's overlay |
+| Component | Optimist |
+|---|---|
+| Ingest | dlt |
+| Catalog | DuckLake + SQLite |
+| Data storage | Parquet on local disk, under the project directory |
+| Transform & test | dbt |
+| Data quality | Elementary |
+| Orchestration | Dagster, concurrency limit on writing jobs |
+| Writers | Multiple local processes, one production path |
+| Dashboard | Crows Nest, read-only |
+| Analysis | Marimo, read-only |
+| Reverse proxy | Traefik (VM mode only) |
+| Access | oauth2-proxy with the customer's IdP, or Traefik basic auth |
+| Secrets | `.env` on the host |
+| Backup | Copy of the directory, optional off-site bucket |
+| Runtime | Laptop (pip) or single VM (Compose) |
