@@ -1,9 +1,0 @@
-# Middlewares every router uses (compose.yaml). Traefik reloads this file on change.
-http:
-  middlewares:
-    # Basic auth from users.htpasswd (git-ignored; see README). To be replaced by
-    # a ForwardAuth to oauth2-proxy for single sign-on (#20).
-    auth:
-      basicAuth:
-        usersFile: /etc/traefik/users.htpasswd
-        removeHeader: true

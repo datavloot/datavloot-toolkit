@@ -9,8 +9,8 @@ Linux VM, behind Traefik over HTTPS:
 | `https://dagster.<DOMAIN>` | Dagster UI (`dagster-webserver`); `dagster-daemon` runs the schedules |
 | `https://marimo.<DOMAIN>` | Marimo notebooks |
 
-Only Traefik publishes ports (80 and 443); every service sits behind a sign-in. Certificates come
-from Let's Encrypt.
+Only Traefik publishes ports (80 and 443); every service sits behind a sign-in, except the Crows
+Nest's `/api/health`, for an uptime check. Certificates come from Let's Encrypt.
 
 The project lives on the host in `FALCON_DIR/PROJECT` (default `/srv/falcon/noaa`), with
 its lake in `lake/` as on a laptop. Dagster's own state (runs, schedules) is in the `dagster_home`
@@ -22,9 +22,13 @@ volume, so a schedule switched off in the UI stays off.
   VM runs what CI tested. A published release would do too, once one contains the DuckLake storage.
 - **Marimo is its own service**, not started by the Crows Nest as on a laptop: one notebook server,
   reachable at its own URL. The Crows Nest links to it (`CROWSNEST_MARIMO_PUBLIC_URL`).
-- **Sign-in is basic auth** in Traefik for now (`traefik/dynamic.yml`), one middleware on every
-  router. Marimo runs code on the VM, so nothing may be reachable without it. Single sign-on comes
-  with #20. Leave `CROWSNEST_AUTH_TOKEN` unset, or users sign in twice.
+- **One sign-in in front of everything**: the `auth` middleware on every router, from
+  `traefik/auth-<FALCON_AUTH>.yml`. Basic auth (`basic`, the default) or single sign-on through the
+  customer's identity provider (`oidc`, below). Marimo runs code on the VM, so nothing may be
+  reachable without it. Leave `CROWSNEST_AUTH_TOKEN` unset, or users sign in twice.
+- **Access is all or nothing**: whoever gets past the sign-in sees everything. Who gets in is
+  decided at the identity provider, or with `OIDC_ALLOWED_GROUPS`. Roles per user are the
+  Catamaran's.
 
 ## On the VM
 
@@ -54,6 +58,68 @@ More users: run the `htpasswd` line again with `>>` instead of `>`, then `docker
 
 Updating to a newer toolkit: `git pull`, then `docker compose up -d --build`.
 
+## Single sign-on with the customer's identity provider
+
+With `FALCON_AUTH=oidc`, people sign in with the account they already have: Microsoft Entra ID,
+Google Workspace, Keycloak, or any other OpenID Connect provider. Traefik asks oauth2-proxy about
+every request, and oauth2-proxy sends whoever is not signed in to the provider. One sign-in covers
+the Crows Nest, Dagster and Marimo.
+
+1. At the provider, register an application, a confidential OIDC client, with three redirect URIs:
+   `https://crowsnest.<DOMAIN>/oauth2/callback`, `https://dagster.<DOMAIN>/oauth2/callback` and
+   `https://marimo.<DOMAIN>/oauth2/callback`. Note its issuer URL, client ID and client secret.
+2. In `.env`: `FALCON_AUTH=oidc`, and the `OIDC_*` settings (see `.env.example`). Generate the
+   cookie secret with `openssl rand -base64 32 | tr -- '+/' '-_'`.
+3. `docker compose up -d`. This starts oauth2-proxy and switches Traefik over; `users.htpasswd`
+   is no longer used.
+
+Back to basic auth: `FALCON_AUTH=basic`, then `docker compose up -d --remove-orphans`.
+
+### Microsoft Entra ID
+
+- **App registration**, single tenant, a *Web* platform with the three redirect URIs, and a client
+  secret. The issuer URL is `https://login.microsoftonline.com/<tenant id>/v2.0`.
+- **Client secrets expire**, after 24 months at most. Agree with the customer who renews it, and
+  when; an expired secret locks everyone out.
+- **The token often has no `email` claim.** Set `OIDC_EMAIL_CLAIM=preferred_username`, or
+  oauth2-proxy refuses the user.
+- **Who gets in:** set *Assignment required* on the Enterprise application and assign the users or
+  a group there. That keeps the decision with the customer, in Entra. `OIDC_ALLOWED_GROUPS` works
+  too, but Entra puts group object IDs in the `groups` claim, not names, and leaves the claim out
+  for users in more than about 200 groups.
+
+### Testing single sign-on
+
+`test-idp/` runs Keycloak as a stand-in for the customer's provider, at `idp.<DOMAIN>`, behind the
+Falcon's own Traefik. Its realm has a client `falcon` and three users: `alice` (in the group
+`falcon-users`), `bob` (in the group, no email address, as an Entra user often looks) and `carol`
+(not in the group). Not for production: dev mode and test passwords.
+
+```bash
+cd test-idp
+cp .env.example .env
+nano .env               # DOMAIN, and three secrets: openssl rand -base64 24
+docker compose up -d    # the Falcon must be running: Keycloak joins its network
+cd ..
+```
+
+Then in the Falcon's `.env`: `FALCON_AUTH=oidc`, `OIDC_ISSUER_URL=https://idp.<DOMAIN>/realms/falcon`,
+`OIDC_CLIENT_ID=falcon`, `OIDC_CLIENT_SECRET` = `FALCON_TEST_CLIENT_SECRET` from `test-idp/.env`,
+a cookie secret, and `docker compose up -d`.
+
+| Case | Expected |
+|---|---|
+| Not signed in, open each of the three hosts | Redirected to the Keycloak sign-in |
+| `alice` signs in at the Crows Nest | In; Dagster and Marimo then open without a second sign-in |
+| `bob` (no email) | Refused with `OIDC_EMAIL_CLAIM=email`; in with `preferred_username` |
+| `carol`, with `OIDC_ALLOWED_GROUPS=falcon-users` | `403`; without the group setting: in |
+| Sign out (`/oauth2/sign_out`) | The next request asks to sign in again |
+| `https://crowsnest.<DOMAIN>/api/health`, not signed in | `200` |
+| A Marimo notebook after signing in | The kernel connects |
+| `FALCON_AUTH=basic` again | The basic-auth prompt; oauth2-proxy is gone |
+
+Afterwards: `docker compose down` in `test-idp/`, and `FALCON_AUTH` back as it was.
+
 ## On a laptop
 
 To try the stack without a VM, TLS or DNS (Docker Desktop):
@@ -72,6 +138,8 @@ reliable on a directory shared from Windows or macOS into a container.
 
 - `docker compose logs prepare`: the demo, `dbt deps` and `dbt parse` run here, once per start.
 - `docker compose logs traefik`: certificate and routing errors.
+- `docker compose logs oauth2-proxy`: single sign-on. At start it fetches the provider's
+  configuration from `OIDC_ISSUER_URL`; until that works it restarts.
 - `PermissionError` in `prepare`: `FALCON_UID`/`FALCON_GID` in `.env` do not match the owner of
   `FALCON_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).

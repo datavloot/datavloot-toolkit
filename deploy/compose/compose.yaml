@@ -4,8 +4,10 @@
 #   crowsnest.<DOMAIN>   Crows Nest
 #   marimo.<DOMAIN>      Marimo notebooks
 #
-# Only Traefik publishes ports. Every router goes through the `auth` middleware
-# (traefik/dynamic.yml): basic auth for now, a single sign-on later (#20).
+# Only Traefik publishes ports. Every router goes through the `auth` middleware,
+# from traefik/auth-${FALCON_AUTH}.yml: basic auth (users.htpasswd), or oidc,
+# single sign-on through the customer's identity provider with oauth2-proxy.
+# The one exception is the Crows Nest's /api/health, for an uptime check.
 # Settings come from .env, see .env.example. Run from this directory:
 #   docker compose up -d --build
 
@@ -74,6 +76,10 @@ services:
       - traefik.http.routers.crowsnest.rule=Host(`crowsnest.${DOMAIN}`)
       - traefik.http.routers.crowsnest.entrypoints=websecure
       - traefik.http.routers.crowsnest.middlewares=auth@file
+      # The health check only, without a sign-in, so an uptime monitor can reach
+      # it. It answers {"status": "ok"} and nothing about the data.
+      - traefik.http.routers.crowsnest-health.rule=Host(`crowsnest.${DOMAIN}`) && Path(`/api/health`)
+      - traefik.http.routers.crowsnest-health.entrypoints=websecure
       - traefik.http.services.crowsnest.loadbalancer.server.port=8080
 
   # Its own service rather than started by the Crows Nest as on a laptop: one
@@ -90,13 +96,50 @@ services:
       - traefik.http.routers.marimo.middlewares=auth@file
       - traefik.http.services.marimo.loadbalancer.server.port=2718
 
+  # FALCON_AUTH=oidc only (the profile follows from COMPOSE_PROFILES in .env).
+  # Traefik asks it about every request (traefik/auth-oidc.yml), and it sends
+  # whoever is not signed in to the customer's identity provider. /oauth2/ on
+  # every host comes here, so the provider calls back on the host the user
+  # started from: register https://<host>/oauth2/callback for each of them.
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.13.0@sha256:56e3daedf765c7a1eea6e366fbe684be7d3084830ade14b6174570d3c7960954
+    profiles: [oidc]
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_PROVIDER_DISPLAY_NAME: ${OIDC_PROVIDER_NAME:-your organisation}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OIDC_COOKIE_SECRET:-}
+      # Entra ID often leaves `email` out of the token: preferred_username then.
+      OAUTH2_PROXY_OIDC_EMAIL_CLAIM: ${OIDC_EMAIL_CLAIM:-email}
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-groups}
+      # Empty: whoever the provider signs in gets in.
+      OAUTH2_PROXY_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:-}
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: file:///dev/null
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .${DOMAIN}
+      OAUTH2_PROXY_COOKIE_DOMAINS: .${DOMAIN}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.oauth2.rule=(Host(`crowsnest.${DOMAIN}`) || Host(`dagster.${DOMAIN}`) || Host(`marimo.${DOMAIN}`)) && PathPrefix(`/oauth2/`)
+      - traefik.http.routers.oauth2.entrypoints=websecure
+      - traefik.http.services.oauth2-proxy.loadbalancer.server.port=4180
+
   traefik:
     image: traefik:v3.7
     restart: unless-stopped
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --providers.file.filename=/etc/traefik/auth-${FALCON_AUTH:-basic}.yml
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https

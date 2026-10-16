@@ -8,7 +8,8 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.file.filename=/etc/traefik/dynamic.yml
+      # Basic auth only here: oauth2-proxy's cookies need HTTPS.
+      - --providers.file.filename=/etc/traefik/auth-basic.yml
       - --entrypoints.web.address=:80
     ports: !override
       - "8000:80"
@@ -22,6 +23,7 @@ services:
       CROWSNEST_MARIMO_PUBLIC_URL: http://marimo.localhost:8000
     labels:
       - traefik.http.routers.crowsnest.entrypoints=web
+      - traefik.http.routers.crowsnest-health.entrypoints=web
   marimo:
     labels:
       - traefik.http.routers.marimo.entrypoints=web
