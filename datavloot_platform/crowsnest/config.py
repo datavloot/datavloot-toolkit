@@ -39,6 +39,8 @@ class CrowsnestConfig:
         ducklake_catalog_path: Optional[str],
         ducklake_alias: str,
         ducklake_data_path: Optional[str] = None,
+        dagster_public_url: str = "http://localhost:3000",
+        marimo_public_url: Optional[str] = None,
     ):
         self.duckdb_path = duckdb_path
         self.dagster_graphql_url = dagster_graphql_url
@@ -47,6 +49,13 @@ class CrowsnestConfig:
         self.ducklake_catalog_path = ducklake_catalog_path
         self.ducklake_alias = ducklake_alias
         self.ducklake_data_path = ducklake_data_path
+        # Where the browser reaches Dagster and Marimo. On a laptop that is
+        # localhost; behind a proxy (VM mode) the server-side URLs above are
+        # internal names, and these are the public ones.
+        self.dagster_public_url = dagster_public_url
+        # Set means Marimo runs as its own service: the Crows Nest links to it
+        # instead of starting a Marimo process itself.
+        self.marimo_public_url = marimo_public_url
 
     @classmethod
     def discover(cls) -> "CrowsnestConfig":
@@ -68,6 +77,10 @@ class CrowsnestConfig:
             or "elementary"
         )
         marimo_url = os.environ.get("CROWSNEST_MARIMO_URL") or "http://127.0.0.1:2718"
+        dagster_public_url = (
+            os.environ.get("CROWSNEST_DAGSTER_PUBLIC_URL") or "http://localhost:3000"
+        ).rstrip("/")
+        marimo_public_url = (os.environ.get("CROWSNEST_MARIMO_PUBLIC_URL") or "").rstrip("/") or None
         catalog, data, alias = _discover_lake()
 
         return cls(
@@ -78,6 +91,8 @@ class CrowsnestConfig:
             ducklake_catalog_path=catalog,
             ducklake_alias=alias,
             ducklake_data_path=data,
+            dagster_public_url=dagster_public_url,
+            marimo_public_url=marimo_public_url,
         )
 
 
