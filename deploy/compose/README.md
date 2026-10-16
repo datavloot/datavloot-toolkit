@@ -75,3 +75,8 @@ reliable on a directory shared from Windows or macOS into a container.
 - `PermissionError` in `prepare`: `FALCON_UID`/`FALCON_GID` in `.env` do not match the owner of
   `FALCON_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).
+- `alembic_version has more than one head` from `dagster-webserver`, `dagster-daemon` or a run:
+  Dagster's storage was created by several services at once, on a stack started before `prepare`
+  created it (#45). `prepare` cannot repair such a storage. With no run history to keep, start
+  Dagster's state over: `docker compose down`, `docker volume rm falcon_dagster_home`,
+  `docker compose up -d`. Not `down -v`: that also removes the certificates.

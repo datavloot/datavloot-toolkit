@@ -23,6 +23,13 @@ cd "$PROJECT_DIR"
 # from DAGSTER_HOME.
 cp dagster.yaml "$DAGSTER_HOME/dagster.yaml"
 
+# Create Dagster's SQLite storage here, in one process, before the webserver, the
+# daemon and the code server start. On an empty DAGSTER_HOME they would each
+# create it at the same moment and stamp its schema version twice, and the next
+# process to start then fails with "alembic_version has more than one head" (#45).
+# On an existing instance this does nothing, or migrates it after a Dagster upgrade.
+dagster instance migrate
+
 # Dagster loads the dbt assets from target/manifest.json; outside `dagster dev`
 # nothing builds it on the fly.
 dbt deps
