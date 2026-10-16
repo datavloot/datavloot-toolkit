@@ -80,5 +80,10 @@ def test_a_refused_user_is_not_sent_back_to_the_sign_in():
     assert config["http"]["middlewares"]["auth-errors"]["errors"]["status"] == ["401"]
 
 
+def test_unverified_emails_are_refused_unless_asked_for():
+    env = _compose()["services"]["oauth2-proxy"]["environment"]
+    assert env["OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL"] == "${OIDC_ALLOW_UNVERIFIED_EMAIL:-false}"
+
+
 def test_oauth2_proxy_only_runs_for_oidc():
     assert _compose()["services"]["oauth2-proxy"]["profiles"] == ["oidc"]

@@ -77,7 +77,8 @@ services:
       - traefik.http.routers.crowsnest.entrypoints=websecure
       - traefik.http.routers.crowsnest.middlewares=auth@file
       # The health check only, without a sign-in, so an uptime monitor can reach
-      # it. It answers {"status": "ok"} and nothing about the data.
+      # it. It answers which services are up ({"services": {"dagster": "ok", ...}})
+      # and nothing about the data.
       - traefik.http.routers.crowsnest-health.rule=Host(`crowsnest.${DOMAIN}`) && Path(`/api/health`)
       - traefik.http.routers.crowsnest-health.entrypoints=websecure
       - traefik.http.services.crowsnest.loadbalancer.server.port=8080
@@ -114,6 +115,9 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OIDC_COOKIE_SECRET:-}
       # Entra ID often leaves `email` out of the token: preferred_username then.
       OAUTH2_PROXY_OIDC_EMAIL_CLAIM: ${OIDC_EMAIL_CLAIM:-email}
+      # A provider that reports email_verified=false (Keycloak does for a user
+      # without a verified address) is refused, unless this is true.
+      OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: ${OIDC_ALLOW_UNVERIFIED_EMAIL:-false}
       OAUTH2_PROXY_OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-groups}
       # Empty: whoever the provider signs in gets in.
       OAUTH2_PROXY_ALLOWED_GROUPS: ${OIDC_ALLOWED_GROUPS:-}

@@ -82,7 +82,9 @@ Back to basic auth: `FALCON_AUTH=basic`, then `docker compose up -d --remove-orp
 - **Client secrets expire**, after 24 months at most. Agree with the customer who renews it, and
   when; an expired secret locks everyone out.
 - **The token often has no `email` claim.** Set `OIDC_EMAIL_CLAIM=preferred_username`, or
-  oauth2-proxy refuses the user.
+  oauth2-proxy refuses the user. Entra ID normally sends no `email_verified` claim, so nothing
+  more is needed; check it on the customer's tenant. A provider that does send
+  `email_verified=false` for these users needs `OIDC_ALLOW_UNVERIFIED_EMAIL=true` as well.
 - **Who gets in:** set *Assignment required* on the Enterprise application and assign the users or
   a group there. That keeps the decision with the customer, in Entra. `OIDC_ALLOWED_GROUPS` works
   too, but Entra puts group object IDs in the `groups` claim, not names, and leaves the claim out
@@ -111,7 +113,9 @@ a cookie secret, and `docker compose up -d`.
 |---|---|
 | Not signed in, open each of the three hosts | Redirected to the Keycloak sign-in |
 | `alice` signs in at the Crows Nest | In; Dagster and Marimo then open without a second sign-in |
-| `bob` (no email) | Refused with `OIDC_EMAIL_CLAIM=email`; in with `preferred_username` |
+| `bob` (no email), `OIDC_EMAIL_CLAIM=email` | Refused: `Internal Server Error`, and `email in id_token () isn't verified` in the oauth2-proxy log |
+| `bob`, `OIDC_EMAIL_CLAIM=preferred_username` | Still refused: Keycloak sends `email_verified=false` for him |
+| `bob`, and also `OIDC_ALLOW_UNVERIFIED_EMAIL=true` | In |
 | `carol`, with `OIDC_ALLOWED_GROUPS=falcon-users` | `403`; without the group setting: in |
 | Sign out (`/oauth2/sign_out`) | The next request asks to sign in again |
 | `https://crowsnest.<DOMAIN>/api/health`, not signed in | `200` |
@@ -139,7 +143,10 @@ reliable on a directory shared from Windows or macOS into a container.
 - `docker compose logs prepare`: the demo, `dbt deps` and `dbt parse` run here, once per start.
 - `docker compose logs traefik`: certificate and routing errors.
 - `docker compose logs oauth2-proxy`: single sign-on. At start it fetches the provider's
-  configuration from `OIDC_ISSUER_URL`; until that works it restarts.
+  configuration from `OIDC_ISSUER_URL`; until that works it restarts. After signing in at the
+  provider, `Internal Server Error` on `/oauth2/callback` is a user oauth2-proxy refuses; the log
+  says why: `email in id_token () isn't verified` (no `email` claim, see `OIDC_EMAIL_CLAIM`, or
+  `OIDC_ALLOW_UNVERIFIED_EMAIL`).
 - `PermissionError` in `prepare`: `FALCON_UID`/`FALCON_GID` in `.env` do not match the owner of
   `FALCON_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).
