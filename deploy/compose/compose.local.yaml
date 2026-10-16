@@ -27,7 +27,7 @@ services:
       - traefik.http.routers.marimo.entrypoints=web
 
 volumes:
-  # OPTIMIST_DIR in local.env names this volume instead of a host directory:
+  # FALCON_DIR in local.env names this volume instead of a host directory:
   # SQLite's locking, which the lake's catalog relies on, is not reliable on a
   # Windows or macOS directory shared into a container.
-  optimist_local:
+  falcon_local:

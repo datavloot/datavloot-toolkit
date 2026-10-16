@@ -1,4 +1,4 @@
-# VM mode: the Optimist behind Traefik, over HTTPS, behind a sign-in.
+# The Falcon: the platform behind Traefik, over HTTPS, behind a sign-in.
 #
 #   dagster.<DOMAIN>     Dagster UI       (dagster-webserver; dagster-daemon runs schedules)
 #   crowsnest.<DOMAIN>   Crows Nest
@@ -9,17 +9,17 @@
 # Settings come from .env, see .env.example. Run from this directory:
 #   docker compose up -d --build
 
-name: optimist
+name: falcon
 
-x-optimist: &optimist
-  image: optimist-platform:local
+x-falcon: &falcon
+  image: falcon-platform:local
   pull_policy: never
   restart: unless-stopped
-  working_dir: /srv/optimist/${PROJECT:-noaa}
+  working_dir: /srv/falcon/${PROJECT:-noaa}
   environment: &environment
-    PROJECT_DIR: /srv/optimist/${PROJECT:-noaa}
+    PROJECT_DIR: /srv/falcon/${PROJECT:-noaa}
   volumes:
-    - ${OPTIMIST_DIR:-/srv/optimist}:/srv/optimist
+    - ${FALCON_DIR:-/srv/falcon}:/srv/falcon
     - dagster_home:/dagster_home
   depends_on:
     prepare:
@@ -28,24 +28,24 @@ x-optimist: &optimist
 services:
   # One-off: creates the demo if asked, installs dbt packages, builds the manifest.
   prepare:
-    <<: *optimist
+    <<: *falcon
     build:
       context: ../..
       dockerfile: deploy/compose/Dockerfile
       args:
-        OPTIMIST_UID: ${OPTIMIST_UID:-1000}
-        OPTIMIST_GID: ${OPTIMIST_GID:-1000}
+        FALCON_UID: ${FALCON_UID:-1000}
+        FALCON_GID: ${FALCON_GID:-1000}
     pull_policy: build
     restart: "no"
-    working_dir: /srv/optimist
+    working_dir: /srv/falcon
     environment:
       <<: *environment
-      OPTIMIST_DEMO: ${OPTIMIST_DEMO:-0}
-    command: optimist-prepare
+      FALCON_DEMO: ${FALCON_DEMO:-0}
+    command: falcon-prepare
     depends_on: {}
 
   dagster-webserver:
-    <<: *optimist
+    <<: *falcon
     command: dagster-webserver --host 0.0.0.0 --port 3000
     labels:
       - traefik.enable=true
@@ -57,11 +57,11 @@ services:
   # Runs schedules (lake maintenance) and the run queue, so it shares the
   # webserver's DAGSTER_HOME.
   dagster-daemon:
-    <<: *optimist
+    <<: *falcon
     command: dagster-daemon run
 
   crowsnest:
-    <<: *optimist
+    <<: *falcon
     command: datavloot launch --host 0.0.0.0 --port 8080 --no-open
     environment:
       <<: *environment
@@ -81,7 +81,7 @@ services:
   # notebooks' code on this machine, so it must never be reachable without the
   # sign-in in front of it.
   marimo:
-    <<: *optimist
+    <<: *falcon
     command: marimo edit notebooks --host 0.0.0.0 --port 2718 --headless --no-token
     labels:
       - traefik.enable=true

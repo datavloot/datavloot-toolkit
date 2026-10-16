@@ -1,5 +1,5 @@
 """
-The Crows Nest behind a proxy (VM mode).
+The Crows Nest behind a proxy (the Falcon, deploy/compose).
 
 On a laptop the browser finds Dagster at localhost:3000 and the Crows Nest
 starts Marimo itself. Behind Traefik both live at their own public URL, which

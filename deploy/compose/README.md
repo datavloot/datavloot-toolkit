@@ -1,6 +1,7 @@
-# VM mode: the Optimist on Docker Compose
+# The Falcon: the platform on Docker Compose
 
-The same platform as on a laptop, on one Linux VM, behind Traefik over HTTPS:
+The Falcon is the second vessel: the same project and lake as the Optimist on a laptop, on one
+Linux VM, behind Traefik over HTTPS:
 
 | URL | Service |
 |---|---|
@@ -11,7 +12,7 @@ The same platform as on a laptop, on one Linux VM, behind Traefik over HTTPS:
 Only Traefik publishes ports (80 and 443); every service sits behind a sign-in. Certificates come
 from Let's Encrypt.
 
-The project lives on the host in `OPTIMIST_DIR/PROJECT` (default `/srv/optimist/noaa`), with
+The project lives on the host in `FALCON_DIR/PROJECT` (default `/srv/falcon/noaa`), with
 its lake in `lake/` as on a laptop. Dagster's own state (runs, schedules) is in the `dagster_home`
 volume, so a schedule switched off in the UI stays off.
 
@@ -27,7 +28,7 @@ volume, so a schedule switched off in the UI stays off.
 
 ## On the VM
 
-A VM from `deploy/thalassa` has Docker, a `deploy` user and `/srv/optimist`. DNS: a wildcard
+A VM from `deploy/thalassa` has Docker, a `deploy` user and `/srv/falcon`. DNS: a wildcard
 record `*.<DOMAIN>` pointing at the server, before the first start, or Let's Encrypt fails.
 
 ```bash
@@ -36,9 +37,9 @@ git clone https://github.com/datavloot/datavloot-toolkit.git
 cd datavloot-toolkit/deploy/compose
 
 cp .env.example .env
-nano .env               # DOMAIN, ACME_EMAIL; OPTIMIST_DEMO=1 for the NOAA demo
-# The services run as the owner of /srv/optimist:
-sed -i "s/^OPTIMIST_UID=.*/OPTIMIST_UID=$(id -u)/; s/^OPTIMIST_GID=.*/OPTIMIST_GID=$(id -g)/" .env
+nano .env               # DOMAIN, ACME_EMAIL; FALCON_DEMO=1 for the NOAA demo
+# The services run as the owner of /srv/falcon:
+sed -i "s/^FALCON_UID=.*/FALCON_UID=$(id -u)/; s/^FALCON_GID=.*/FALCON_GID=$(id -g)/" .env
 
 # A user for the sign-in; the password is asked for, not typed on the command line.
 read -rsp 'Password: ' pw; echo
@@ -71,6 +72,6 @@ reliable on a directory shared from Windows or macOS into a container.
 
 - `docker compose logs prepare`: the demo, `dbt deps` and `dbt parse` run here, once per start.
 - `docker compose logs traefik`: certificate and routing errors.
-- `PermissionError` in `prepare`: `OPTIMIST_UID`/`OPTIMIST_GID` in `.env` do not match the owner of
-  `OPTIMIST_DIR`. Fix them, then `docker compose up -d --build`.
+- `PermissionError` in `prepare`: `FALCON_UID`/`FALCON_GID` in `.env` do not match the owner of
+  `FALCON_DIR`. Fix them, then `docker compose up -d --build`.
 - Traefik older than 3.6 cannot talk to Docker Engine 29 (`API returned a 400`).

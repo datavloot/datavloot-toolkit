@@ -36,4 +36,4 @@ write_files:
 runcmd:
   - systemctl enable --now docker
   - systemctl restart docker
-  - install -d -o deploy -g deploy /srv/optimist
+  - install -d -o deploy -g deploy /srv/falcon
