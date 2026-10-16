@@ -91,7 +91,7 @@ pytest tests/test_packaging.py
 
 To run everything at once, `pytest` with no arguments.
 
-CI runs the same tests. The fast, Crows Nest and packaging jobs install dependencies per job with `uv run --with ...` instead of a venv, so they also catch a test that only passes because something unrelated happened to be installed locally. The smoke job runs on Linux, Windows and macOS and installs the `[optimist]` extra with pip, the way a user does. A separate `wheels` job checks that every dependency of the extra installs from a wheel on each platform, so a release that suddenly needs a compiler on users' machines fails CI instead of their install. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
+CI runs the same tests. The fast, Crows Nest and packaging jobs install dependencies per job with `uv run --with ...` instead of a venv, so they also catch a test that only passes because something unrelated happened to be installed locally. The smoke job installs the `[optimist]` extra with pip, the way a user does. On a pull request it runs on Linux only, to keep the wait short; on `main` after a merge it runs on Linux, Windows and macOS. For a change that could break on Windows or macOS (paths, installs, storage), run the full matrix on the branch first: Actions > CI > Run workflow. A separate `wheels` job checks that every dependency of the extra installs from a wheel on each platform, so a release that suddenly needs a compiler on users' machines fails CI instead of their install. A green local run on a full install is otherwise a reliable predictor of a green pipeline.
 
 ## Working on the Crows Nest frontend
 

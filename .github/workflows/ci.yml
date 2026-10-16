@@ -5,8 +5,9 @@
 #   lint       - the templates parse and declare nothing that does not exist
 #   crowsnest  - the Crows Nest security/auth tests, which need the web stack
 #   wheels     - every dependency of the optimist extra installs from a wheel
-#   smoke      - on Linux, Windows and macOS: a clean install, `datavloot new`,
-#                and a fresh project built by dbt and by Dagster
+#   smoke      - a clean install, `datavloot new`, and a fresh project built by
+#                dbt and by Dagster: on Linux for a pull request, on Linux,
+#                Windows and macOS on `main` and when run by hand
 #   package    - the built wheel contains no build inputs
 #
 # The `release` step (fast-forward the moving X.Y.x branch on a bare X.Y.Z tag)
@@ -25,12 +26,14 @@ name: CI
 # refs/pull/<n>/merge), so every job ran twice. The pull_request run is the one
 # worth keeping -- it tests the branch merged into the current main. Open a
 # draft pull request to get CI on a branch early. Tag pushes match neither
-# trigger, so releases are excluded.
+# trigger, so releases are excluded. `workflow_dispatch` runs everything on any
+# branch by hand (Actions > CI > Run workflow), including the full smoke matrix.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -117,7 +120,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # A pull request waits for Linux only (1-2 minutes; Windows takes 4-5).
+        # Windows and macOS run after the merge on `main`, or by hand on a
+        # branch whose change could break there (paths, installs, storage).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
