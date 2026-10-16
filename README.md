@@ -378,15 +378,21 @@ Schedules and sensors are defined in `definitions.py` alongside the existing ass
 
 ## Scaling up
 
-The Optimist runs entirely on a local machine. When you're ready for team scale, the goal is to change a config flag — not rewrite your pipelines. The pipelines, dbt models, and orchestration logic you build on the Optimist are designed to carry forward unchanged.
+The same tools, on a bigger vessel as your team grows. The pipelines, dbt models, and orchestration logic you build on the Optimist are designed to carry forward unchanged.
 
-The **Falcon** tier (on the roadmap) formalises this: switching `vessel: optimist` to `vessel: falcon` in `datavloot.yml` moves your platform to production-grade lakehouse storage on infrastructure of your choice, without starting over.
+| Vessel | For | Runs on | Lake catalog | Status |
+|---|---|---|---|---|
+| **Optimist** | One person | A laptop | DuckLake with a SQLite catalog | Ready |
+| **Falcon** | A small team | Docker Compose on one VM, behind Traefik over HTTPS | The same lake | First version: [deploy/compose](deploy/compose/README.md), and a VM on Thalassa Cloud with [deploy/thalassa](deploy/thalassa/README.md) |
+| **Catamaran** | A larger team | Docker Compose, with the state off the VM and per-user sign-in | Postgres and S3 | Planned |
+| **Yacht** | Enterprise | Kubernetes | Quack and S3 | Planned |
 
-In the meantime, the Optimist's individual components are independently portable:
+From the Optimist to the Falcon nothing changes but where the project runs: the same project directory, lake included, moves to the VM. From the Falcon to the Catamaran the lake's catalog moves from SQLite to Postgres, which is a data migration.
+
+The Optimist's individual components are also portable on their own:
 
 | Step | What changes | What stays the same |
 |---|---|---|
-| **Cloud VM** | Move the whole platform to a VPS or cloud VM | Nothing — the same project runs in Docker Compose behind Traefik, see [deploy/compose](deploy/compose/README.md) |
 | **Cloud storage** | Point DuckLake at S3, GCS, or Azure Blob instead of a local file | All dbt models and Dagster assets |
 | **Cloud warehouse** | Swap `dbt-duckdb` for `dbt-snowflake`, `dbt-bigquery`, etc. | All models and macros (mostly portable SQL) |
 

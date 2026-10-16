@@ -6,13 +6,13 @@ set -eu
 : "${PROJECT_DIR:?PROJECT_DIR is not set}"
 
 if [ ! -f "$PROJECT_DIR/dbt_project.yml" ]; then
-    if [ "${OPTIMIST_DEMO:-0}" = "1" ]; then
+    if [ "${FALCON_DEMO:-0}" = "1" ]; then
         # Docker creates the other services' working directory, empty, before
         # this runs; `datavloot demo` refuses a directory that exists.
         rmdir "$PROJECT_DIR" 2>/dev/null || true
         datavloot demo "$PROJECT_DIR"
     else
-        echo "No dbt project at $PROJECT_DIR. Put the project there, or set OPTIMIST_DEMO=1 for the NOAA demo." >&2
+        echo "No dbt project at $PROJECT_DIR. Put the project there, or set FALCON_DEMO=1 for the NOAA demo." >&2
         exit 1
     fi
 fi

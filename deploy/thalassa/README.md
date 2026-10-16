@@ -1,6 +1,7 @@
-# A VM for VM mode on Thalassa Cloud
+# A VM for the Falcon on Thalassa Cloud
 
-OpenTofu configuration for one Ubuntu VM with Docker, ready for the VM-mode Compose stack.
+OpenTofu configuration for one Ubuntu VM with Docker, ready for the Falcon's Compose stack
+(`deploy/compose`).
 
 ```
 internet ──> load balancer (public IP) ──┬─ :22  (your IP only) ─┐
@@ -37,18 +38,18 @@ terraform {
 
 provider "thalassa" {}
 
-module "optimist" {
-  source = "git::https://github.com/datavloot/datavloot-toolkit.git//deploy/thalassa?ref=<tag>"
+module "falcon" {
+  source = "git::https://github.com/datavloot/datavloot-toolkit.git//deploy/thalassa?ref=<tag or commit>"
 
-  domain              = "optimist.example.nl"
+  domain              = "falcon.example.nl"
   machine_image       = "ubuntu-24.04-63bcc0086f12" # as the console lists it under Machine images
   ssh_public_key      = "ssh-ed25519 AAAA... you@laptop"
   allowed_ssh_sources = ["203.0.113.7/32"]          # your own IP: curl ifconfig.me
 }
 
-output "public_ip"   { value = module.optimist.public_ip }
-output "ssh"         { value = module.optimist.ssh }
-output "dns_records" { value = module.optimist.dns_records }
+output "public_ip"   { value = module.falcon.public_ip }
+output "ssh"         { value = module.falcon.ssh }
+output "dns_records" { value = module.falcon.dns_records }
 ```
 
 Ignore `*.tfstate*` and `.terraform/` there; commit `.terraform.lock.hcl`.
@@ -80,7 +81,10 @@ Ignore `*.tfstate*` and `.terraform/` there; commit `.terraform.lock.hcl`.
 away its disk, and with it the lake. Changing the machine type does that.
 
 cloud-init runs only at first boot, so changes to `cloud-init.yaml` are ignored on an existing VM;
-apply them by hand, or replace the VM on purpose with `tofu apply -replace=module.optimist.thalassa_virtual_machine_instance.this`.
+apply them by hand, or replace the VM on purpose with `tofu apply -replace=module.falcon.thalassa_virtual_machine_instance.this`.
+
+`name` (default `falcon`) prefixes every resource. Changing it on an existing VM renames, and may
+replace, the VM and the load balancer; set it once and keep it.
 
 ## Not here yet
 

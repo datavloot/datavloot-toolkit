@@ -1,4 +1,4 @@
-# One VM for VM mode, reachable only through a load balancer.
+# One VM for the Falcon, reachable only through a load balancer.
 #
 # Thalassa cannot attach a public IP to a VM: inbound traffic goes through a
 # load balancer, outbound through a NAT gateway. The load balancer passes TCP

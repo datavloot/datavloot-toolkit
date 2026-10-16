@@ -81,7 +81,7 @@ async def launch_notebook(req: LaunchRequest):
     if not notebook_path.exists():
         raise HTTPException(404, f"Notebook '{name}' not found in notebooks/")
 
-    # Marimo runs as its own service (VM mode): nothing to start, only where to go.
+    # Marimo runs as its own service (the Falcon): nothing to start, only where to go.
     public_url = get_config().marimo_public_url
     if public_url:
         return {"launched": name, "url": f"{public_url}/?file={name}"}

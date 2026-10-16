@@ -1,7 +1,7 @@
 variable "name" {
   description = "Prefix for every resource name. Security group names may be at most 16 characters, so keep it short."
   type        = string
-  default     = "optimist"
+  default     = "falcon"
 
   validation {
     condition     = length(var.name) <= 13

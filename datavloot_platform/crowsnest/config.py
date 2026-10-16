@@ -50,7 +50,7 @@ class CrowsnestConfig:
         self.ducklake_alias = ducklake_alias
         self.ducklake_data_path = ducklake_data_path
         # Where the browser reaches Dagster and Marimo. On a laptop that is
-        # localhost; behind a proxy (VM mode) the server-side URLs above are
+        # localhost; behind a proxy (the Falcon) the server-side URLs above are
         # internal names, and these are the public ones.
         self.dagster_public_url = dagster_public_url
         # Set means Marimo runs as its own service: the Crows Nest links to it
