@@ -106,8 +106,10 @@ between the two vessels is `datavloot.yml` plus the generated `deploy/valk/`.
 
 ## Step 2: SRDP pin to main after #115
 
-Set `SRDP_REF` in `vessel.py` to the merge commit of #115. That brings in 125
-commits since our current pin (`896ceea`, 2026-09-04). These are the ones that touch
+Set `SRDP_REF` in `vessel.py` to SRDP `main`: #115 merged as `d6cd685`
+(2026-10-15), and `main` is already at `b03344e` (#76, DuckLake on S3, additive).
+See [valk-handover.md](valk-handover.md) for what #76 means for our S3 settings.
+Our current pin is `896ceea` (2026-09-04), 125 commits before #115. These are the ones that touch
 the overlay:
 
 | SRDP change | Effect on us |
