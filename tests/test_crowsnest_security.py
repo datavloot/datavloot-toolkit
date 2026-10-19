@@ -86,6 +86,7 @@ def test_a_plain_select_works(client):
     "DESCRIBE SELECT 1 AS x",
     "WITH t AS (SELECT 1 AS x) SELECT * FROM t",
     "EXPLAIN SELECT 1",
+    "EXPLAIN SELECT 'analyze' AS x",
 ])
 def test_read_shapes_are_allowed(client, sql):
     """SHOW/DESCRIBE/CTE/EXPLAIN are reads and must not be refused."""
@@ -104,6 +105,33 @@ def test_read_shapes_are_allowed(client, sql):
     "LOAD httpfs",
 ])
 def test_filesystem_and_extension_access_is_refused(client, sql):
+    r = run(client, sql)
+    assert r.status_code in (400, 403), f"{sql!r} returned {r.status_code}: {r.text[:200]}"
+
+
+def test_explain_analyze_cannot_write_into_the_lake(client, tmp_path):
+    """
+    EXPLAIN ANALYZE runs the statement it explains and still parses as EXPLAIN.
+
+    On a lake the data directory is writable (see db.py), so this overwrote a live
+    Parquet file when pointed at one.
+    """
+    data = cn_config.get_config().ducklake_data_path
+    target = (pathlib.Path(data) if data else tmp_path) / "planted.csv"
+    r = run(client, f"EXPLAIN ANALYZE COPY (SELECT 42 AS x) TO '{target.as_posix()}' (FORMAT csv)")
+    assert r.status_code in (400, 403), r.text
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("sql", [
+    "EXPLAIN ANALYZE SELECT 1",
+    "EXPLAIN ANALYSE SELECT 1",
+    "EXPLAIN (ANALYZE) SELECT 1",
+    "EXPLAIN (FORMAT json, ANALYZE) SELECT 1",
+    "EXPLAIN /* a comment */ ANALYZE SELECT 1",
+    "explain\nanalyze select 1",
+])
+def test_explain_analyze_is_refused_however_it_is_spelled(client, sql):
     r = run(client, sql)
     assert r.status_code in (400, 403), f"{sql!r} returned {r.status_code}: {r.text[:200]}"
 

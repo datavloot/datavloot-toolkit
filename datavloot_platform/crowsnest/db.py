@@ -44,7 +44,8 @@ from datavloot_platform.crowsnest.config import get_config
 # outside it, re-enabling access and installing extensions all stay blocked).
 # What this gives up: a COPY ... TO into the data directory itself would be
 # allowed. No route lets one through -- the query route accepts only SELECT and
-# EXPLAIN -- so only this second line of defence is narrower.
+# EXPLAIN, and refuses EXPLAIN ANALYZE, which would run a COPY it explains -- so
+# only this second line of defence is narrower.
 _HARDENING = (
     "SET enable_external_access=false",
     "SET disabled_filesystems='LocalFileSystem'",
