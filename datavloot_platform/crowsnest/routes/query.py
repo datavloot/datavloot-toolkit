@@ -31,12 +31,29 @@ MAX_ROWS = 10_000
 # DuckDB reports `select`, `show`, `describe`, `pragma` and CTE queries all as
 # SELECT, which is exactly the read surface a query editor wants. Everything that
 # writes, attaches, installs or configures gets its own type and is refused.
-# EXPLAIN is allowed as a reading aid; the connection is read-only, so an
-# EXPLAIN ANALYZE of a write cannot execute one.
+# EXPLAIN is allowed as a reading aid, but not EXPLAIN ANALYZE: that runs the
+# statement it explains while still parsing as EXPLAIN. A read-only connection
+# stops it writing to the database, not to files -- and on a lake the data
+# directory is writable (see db.py), so `EXPLAIN ANALYZE COPY ... TO` could
+# overwrite a live Parquet file.
 _ALLOWED_STATEMENTS = {
     duckdb.StatementType.SELECT,
     duckdb.StatementType.EXPLAIN,
 }
+_ANALYZE_KEYWORDS = {"analyze", "analyse"}
+
+
+def _is_explain_analyze(statement) -> bool:
+    """True for EXPLAIN ANALYZE in any spelling: ANALYSE, (ANALYZE), (FORMAT json, ANALYZE)."""
+    if statement.type != duckdb.StatementType.EXPLAIN:
+        return False
+    query = statement.query
+    # Tokens rather than a regex, so 'analyze' in a string or comment is not a match.
+    return any(
+        kind == duckdb.token_type.keyword
+        and query[start:start + 7].lower() in _ANALYZE_KEYWORDS
+        for start, kind in duckdb.tokenize(query)
+    )
 
 
 class QueryRequest(BaseModel):
@@ -78,6 +95,12 @@ def _validate(sql: str) -> str:
             403,
             f"{statement.type.name} statements are not allowed in the query editor, "
             "which is read-only. Use dbt for transformations.",
+        )
+    if _is_explain_analyze(statement):
+        raise HTTPException(
+            403,
+            "EXPLAIN ANALYZE is not allowed in the query editor: it runs the "
+            "statement it explains. Use EXPLAIN without ANALYZE.",
         )
     return statement.query
 
