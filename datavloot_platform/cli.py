@@ -1,6 +1,8 @@
 import argparse
+import importlib.metadata
 import os
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -94,12 +96,38 @@ def _substitute(dest: pathlib.Path, project_name: str) -> None:
             fpath.write_text(new_content, encoding="utf-8")
 
 
+def _pin_versions(dest: pathlib.Path) -> None:
+    """
+    Pin the toolkit and the dbt package in a new project to the release that created it.
+
+    Both files get the same version, so a project never mixes the Python package
+    of one release with the macros of another. The release procedure tags the dbt
+    package with the same X.Y.Z (docs/releasing.md); a development build has no
+    such tag, so it gets a warning.
+    """
+    toolkit_version = importlib.metadata.version("datavloot")
+    for name in ("pyproject.toml", "packages.yml"):
+        path = dest / name
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("<toolkit_version>", toolkit_version),
+            encoding="utf-8",
+        )
+    if not re.fullmatch(r"\d+\.\d+\.\d+", toolkit_version):
+        print(
+            f"Warning: datavloot {toolkit_version} is a development build, so the dbt package has no "
+            f"release '{toolkit_version}' and `dbt deps` will fail. Set `revision:` in packages.yml to a "
+            "release tag or a branch.\n",
+            file=sys.stderr,
+        )
+
+
 def cmd_new(args: argparse.Namespace) -> None:
     dest = pathlib.Path(args.path).resolve()
     project_name = _to_identifier(dest.name)
 
     _copy_template(TEMPLATES_DIR / "scaffold", dest)
     _substitute(dest, project_name)
+    _pin_versions(dest)
     _preinstall_extensions(dest)
 
     _warn_about_location(dest, project_name)
@@ -121,6 +149,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
         else pathlib.Path.cwd() / "optimist-demo"
     )
     _copy_template(TEMPLATES_DIR / "demo", dest)
+    _pin_versions(dest)
     _preinstall_extensions(dest)
     # The demo keeps its own name (noaa), unlike a scaffolded project.
     _warn_about_location(dest, "noaa")
