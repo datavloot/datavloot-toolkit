@@ -1,4 +1,4 @@
 packages:
   - git: "https://github.com/datavloot/datavloot-toolkit.git"
     subdirectory: "dbt/optimist"
-    revision: <toolkit_version>   # the datavloot release that created this project, matching its pyproject.toml
+    revision: <dbt_package_version>   # the release the datavloot toolkit that created this project was tested with

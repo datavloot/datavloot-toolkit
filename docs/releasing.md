@@ -106,13 +106,16 @@ Two rules keep this scheme working. Both fail silently if broken:
    git push origin 0.2.x
    # 0.1.x is now frozen — do not push to it again
    ```
-6. The scaffold and demo `packages.yml` templates do not need an edit: `datavloot new` writes
-   the installed toolkit's version as `revision:`, so a new project follows the PyPI release
-   (see [Releasing the datavloot PyPI package](#releasing-the-datavloot-pypi-package)).
+6. Set `DBT_PACKAGE_VERSION` in [`datavloot_platform/cli.py`](../datavloot_platform/cli.py) to
+   the new version, on the **same feature branch as step 2**. `datavloot new` and
+   `datavloot demo` write it as `revision:` in a new project's `packages.yml`, so new projects
+   get this release with the next datavloot PyPI release. `tests/test_scaffold.py` fails while
+   the constant and `version:` in `dbt_project.yml` differ.
 
-> **Ordering hazard.** A new project pins `revision:` to the version of the toolkit that
-> created it, so the bare `X.Y.Z` tag has to exist before that toolkit version is on PyPI.
-> The PyPI procedure below tags first and publishes after, for that reason.
+> **Ordering hazard.** Between the merge (step 3) and the tag push (step 4), `main` pins new
+> projects to a tag that does not exist yet, so `dbt deps` fails in a project created from a
+> checkout of `main`. PyPI users only get the new constant with the next datavloot release, so
+> push the tag before that release.
 >
 > **Protected refs.** GitLab protects tags and branches by pattern, separately from protected
 > branches. If `git push origin X.Y.Z` or the `0.1.x` push is rejected, the ref pattern needs
@@ -186,26 +189,19 @@ series never collide in the same repo.
 
    `tests/test_packaging.py` asserts this in CI on every commit, so a surprise here means the
    pipeline was skipped or the build is being run from a dirty tree.
-6. Tag the merge commit you built from in step 4, and push. Both tags go on the same commit:
-   the `datavloot-` tag for this package, and the bare `X.Y.Z` tag for the dbt package. A
-   project created by `datavloot new` pins `revision: X.Y.Z` in `packages.yml` (and
-   `datavloot[optimist]~=X.Y.Z` in `pyproject.toml`), so every PyPI release needs a dbt tag with
-   the same number, even when `dbt/optimist` did not change. Tag **before** publishing:
-   from the moment the release is on PyPI, `dbt deps` in a new project looks for that tag.
-   ```bash
-   git tag -a datavloot-vX.Y.Z -m "datavloot X.Y.Z"
-   git tag -a X.Y.Z -m "optimist dbt package X.Y.Z"
-   git push origin datavloot-vX.Y.Z X.Y.Z
-   ```
-   If the push is rejected, see the protected-refs note in the dbt package procedure above.
-   Pushing the bare tag also fast-forwards the `X.Y.x` branch (`.github/workflows/release.yml`).
-7. Publish:
+6. Publish:
    ```bash
    uv publish
    ```
    Needs a PyPI API token — either `UV_PUBLISH_TOKEN` in the environment or `--token` on the
    command line. (`twine upload dist/*` is the equivalent if not using uv, reading credentials
    from `~/.pypirc` or `TWINE_PASSWORD`.)
+7. Tag the merge commit you built from in step 4, and push:
+   ```bash
+   git tag -a datavloot-vX.Y.Z -m "datavloot X.Y.Z"
+   git push origin datavloot-vX.Y.Z
+   ```
+   If the push is rejected, see the protected-refs note in the dbt package procedure above.
 8. Check whether the install snippet on the marketing site (`html/production/index.html`) needs
    updating to match — see the open item in [`docs/backlog.md`](backlog.md).
 

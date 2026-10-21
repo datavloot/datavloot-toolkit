@@ -2,7 +2,6 @@ import argparse
 import importlib.metadata
 import os
 import pathlib
-import re
 import shutil
 import signal
 import subprocess
@@ -12,6 +11,11 @@ import time
 from datavloot_platform import location
 
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
+
+# The optimist dbt package release that new projects get, the one this toolkit
+# release was tested with. It has its own version series, apart from the
+# toolkit's: bump it with every dbt package release (docs/releasing.md).
+DBT_PACKAGE_VERSION = "0.1.0"
 
 _IGNORE = shutil.ignore_patterns(
     "__pycache__", "*.pyc", ".venv", "target", "dbt_packages", "logs"
@@ -96,38 +100,44 @@ def _substitute(dest: pathlib.Path, project_name: str) -> None:
             fpath.write_text(new_content, encoding="utf-8")
 
 
-def _pin_versions(dest: pathlib.Path) -> None:
+def _versions() -> dict[str, str]:
     """
-    Pin the toolkit and the dbt package in a new project to the release that created it.
+    The versions a new project pins, by placeholder.
 
-    Both files get the same version, so a project never mixes the Python package
-    of one release with the macros of another. The release procedure tags the dbt
-    package with the same X.Y.Z (docs/releasing.md); a development build has no
-    such tag, so it gets a warning.
+    Read before a template is copied, so a failure here leaves no half-made
+    project behind.
     """
-    toolkit_version = importlib.metadata.version("datavloot")
+    return {
+        "<toolkit_version>": importlib.metadata.version("datavloot"),
+        "<dbt_package_version>": DBT_PACKAGE_VERSION,
+    }
+
+
+def _pin_versions(dest: pathlib.Path, versions: dict[str, str]) -> None:
+    """
+    Pin the toolkit and the dbt package in a new project to known versions.
+
+    The toolkit to this release and its later patches (`~=`), the dbt package to
+    the exact release this toolkit was tested with. A patch of the toolkit can
+    therefore run with the dbt package of the release that created the project;
+    moving that pin is left to the user, or to `datavloot upgrade` (#55).
+    """
     for name in ("pyproject.toml", "packages.yml"):
         path = dest / name
-        path.write_text(
-            path.read_text(encoding="utf-8").replace("<toolkit_version>", toolkit_version),
-            encoding="utf-8",
-        )
-    if not re.fullmatch(r"\d+\.\d+\.\d+", toolkit_version):
-        print(
-            f"Warning: datavloot {toolkit_version} is a development build, so the dbt package has no "
-            f"release '{toolkit_version}' and `dbt deps` will fail. Set `revision:` in packages.yml to a "
-            "release tag or a branch.\n",
-            file=sys.stderr,
-        )
+        text = path.read_text(encoding="utf-8")
+        for placeholder, version in versions.items():
+            text = text.replace(placeholder, version)
+        path.write_text(text, encoding="utf-8")
 
 
 def cmd_new(args: argparse.Namespace) -> None:
     dest = pathlib.Path(args.path).resolve()
     project_name = _to_identifier(dest.name)
+    versions = _versions()
 
     _copy_template(TEMPLATES_DIR / "scaffold", dest)
     _substitute(dest, project_name)
-    _pin_versions(dest)
+    _pin_versions(dest, versions)
     _preinstall_extensions(dest)
 
     _warn_about_location(dest, project_name)
@@ -148,8 +158,9 @@ def cmd_demo(args: argparse.Namespace) -> None:
         if args.path
         else pathlib.Path.cwd() / "optimist-demo"
     )
+    versions = _versions()
     _copy_template(TEMPLATES_DIR / "demo", dest)
-    _pin_versions(dest)
+    _pin_versions(dest, versions)
     _preinstall_extensions(dest)
     # The demo keeps its own name (noaa), unlike a scaffolded project.
     _warn_about_location(dest, "noaa")
