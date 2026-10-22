@@ -322,7 +322,7 @@ dagster dev
 
 # Thank you
 
-**optimist-toolkit** — gitlab.com/datavloot/datavloot-toolkit
+**optimist-toolkit** — github.com/datavloot/datavloot-toolkit
 
 *Built in a single conversation between a captain who doesn't know data engineering
 and a crew who asked the right questions first.*

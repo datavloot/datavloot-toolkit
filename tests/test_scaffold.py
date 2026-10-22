@@ -6,6 +6,7 @@ broken -- see the docstrings.
 """
 
 import ast
+import importlib.metadata
 import pathlib
 import types
 
@@ -27,11 +28,46 @@ def test_placeholders_are_substituted(scaffold: pathlib.Path):
             text = f.read_text(encoding="utf-8")
         except (UnicodeDecodeError, PermissionError):
             continue
-        if "<project_name>" in text or "project_platform" in text:
+        if any(token in text for token in ("<project_name>", "project_platform", *cli._versions())):
             leftovers.append(f.relative_to(scaffold).as_posix())
     assert leftovers == [], f"unsubstituted placeholders in: {leftovers}"
 
     assert (scaffold / "probe_platform").is_dir(), "module dir was not renamed"
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: str):
+    """
+    A new project pins the toolkit to its release and the dbt package to the one it was tested with.
+
+    The scaffold listed `datavloot[optimist]` without a version and followed the
+    dbt package's `0.1.x` branch, so after a 0.2.0 a new project got the 0.2
+    toolkit with the 0.1 macros, and a laptop got whatever was newest on install day.
+    """
+    dest = tmp_path / "project"
+    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    cli._pin_versions(dest, cli._versions())
+
+    # No tomllib before Python 3.11, and the project supports 3.10.
+    pyproject = (dest / "pyproject.toml").read_text(encoding="utf-8")
+    assert f'"datavloot[optimist]~={importlib.metadata.version("datavloot")}"' in pyproject
+
+    (package,) = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    assert package["revision"] == cli.DBT_PACKAGE_VERSION
+    assert package["git"] == "https://github.com/datavloot/datavloot-toolkit.git"
+    assert package["subdirectory"] == "dbt/optimist"
+
+
+def test_new_projects_get_the_dbt_package_in_this_checkout(repo_root: pathlib.Path):
+    """
+    `DBT_PACKAGE_VERSION` is the release of dbt/optimist that CI tests the toolkit with.
+
+    The smoke test builds against the dbt package in this checkout, so a release
+    of it that does not also move the constant leaves new projects on macros CI
+    no longer tests.
+    """
+    project = yaml.safe_load((repo_root / "dbt" / "optimist" / "dbt_project.yml").read_text(encoding="utf-8"))
+    assert project["version"] == cli.DBT_PACKAGE_VERSION
 
 
 @pytest.mark.parametrize("target", ["dev", "prod"])

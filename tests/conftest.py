@@ -2,8 +2,8 @@
 Shared fixtures for the toolkit's own tests.
 
 These test the *templates and packaging*, not a user's project. The scaffold
-fixture goes through the same two calls `cli.cmd_new` makes, so a change to
-either one is covered.
+fixture goes through the same three calls `cli.cmd_new` makes, so a change to
+any one is covered.
 """
 
 import os
@@ -27,6 +27,7 @@ def _scaffold(dest: pathlib.Path, name: str) -> pathlib.Path:
     """Create a project exactly as `datavloot new <dest>` does."""
     cli._copy_template(cli.TEMPLATES_DIR / "scaffold", dest)
     cli._substitute(dest, cli._to_identifier(name))
+    cli._pin_versions(dest, cli._versions())
     return dest
 
 
@@ -41,9 +42,10 @@ def use_local_optimist(project: pathlib.Path) -> None:
     Point the project's packages.yml at this checkout instead of the published
     revision.
 
-    Without this the smoke test installs `revision: 0.1.x` from GitLab, so it
-    would validate the last release rather than the branch under review -- a
-    change to dbt/optimist would pass CI while being broken.
+    Without this the smoke test installs the dbt package at the release tag
+    pinned in `cli.DBT_PACKAGE_VERSION`, so it would validate the last release
+    rather than the branch under review -- a change to dbt/optimist would pass CI
+    while being broken.
     """
     local_pkg = (REPO_ROOT / "dbt" / "optimist").as_posix()
     (project / "packages.yml").write_text(

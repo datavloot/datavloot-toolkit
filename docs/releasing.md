@@ -106,18 +106,16 @@ Two rules keep this scheme working. Both fail silently if broken:
    git push origin 0.2.x
    # 0.1.x is now frozen — do not push to it again
    ```
-6. On a minor or major bump, `revision:` in
-   [`datavloot_platform/templates/scaffold/packages.yml`](../datavloot_platform/templates/scaffold/packages.yml)
-   and
-   [`datavloot_platform/templates/demo/packages.yml`](../datavloot_platform/templates/demo/packages.yml)
-   must point at the new minor branch, so newly scaffolded projects get the new default. Make
-   this edit on the **same feature branch as step 2**, not afterwards — it goes through the
-   protected-branch MR like any other change, and doing it as a follow-up MR just widens the
-   window described in the note below.
+6. Set `DBT_PACKAGE_VERSION` in [`datavloot_platform/cli.py`](../datavloot_platform/cli.py) to
+   the new version, on the **same feature branch as step 2**. `datavloot new` and
+   `datavloot demo` write it as `revision:` in a new project's `packages.yml`, so new projects
+   get this release with the next datavloot PyPI release. `tests/test_scaffold.py` fails while
+   the constant and `version:` in `dbt_project.yml` differ.
 
-> **Ordering hazard.** Between the MR merging (step 3) and the branch push (step 5), the
-> templates reference a ref that does not exist yet, so `dbt deps` in a freshly scaffolded
-> project fails to resolve. Run steps 4 and 5 promptly after accepting the MR.
+> **Ordering hazard.** Between the merge (step 3) and the tag push (step 4), `main` pins new
+> projects to a tag that does not exist yet, so `dbt deps` fails in a project created from a
+> checkout of `main`. PyPI users only get the new constant with the next datavloot release, so
+> push the tag before that release.
 >
 > **Protected refs.** GitLab protects tags and branches by pattern, separately from protected
 > branches. If `git push origin X.Y.Z` or the `0.1.x` push is rejected, the ref pattern needs
