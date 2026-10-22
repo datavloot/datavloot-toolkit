@@ -100,10 +100,6 @@ exclude = [
 packages = ["datavloot_platform"]
 
 
-[tool.dagster]
-module_name = "datavloot_platform.definitions"
-code_location_name = "datavloot-toolkit"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
