@@ -5,6 +5,7 @@ Serves the REST API at /api/* and the pre-built frontend static files at /*.
 Both run on the same port so no CORS configuration is needed.
 """
 
+import contextlib
 import pathlib
 
 import httpx
@@ -127,11 +128,20 @@ class _CacheControlledStatic(StaticFiles):
         return response
 
 
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):
+    yield
+    # A Marimo started from the Notebooks panel is an unauthenticated code
+    # editor on the warehouse; it must not outlive the server that started it.
+    notebooks.stop_marimo()
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Crows Nest",
         description="Unified dashboard for the Optimist data platform",
         version="0.1.0",
+        lifespan=_lifespan,
     )
 
     # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it

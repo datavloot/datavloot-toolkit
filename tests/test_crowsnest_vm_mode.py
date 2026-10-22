@@ -63,7 +63,7 @@ def test_the_browser_gets_the_public_urls(make_client):
 def test_a_marimo_service_is_linked_to_not_started(make_client, monkeypatch):
     started = []
     monkeypatch.setattr(notebooks.subprocess, "Popen", lambda *a, **k: started.append(a))
-    monkeypatch.setattr(notebooks, "_kill_port", lambda port: started.append(port))
+    monkeypatch.setattr(notebooks.subprocess, "run", lambda *a, **k: started.append(a))
     client = make_client(CROWSNEST_MARIMO_PUBLIC_URL="https://marimo.example.nl")
 
     launched = client.post("/api/notebooks/launch", json={"name": "explore.py"}).json()
