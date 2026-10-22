@@ -127,9 +127,9 @@ This toolkit is designed to be used alongside an AI assistant. Not as an abstrac
 
 The **captain and crew** model describes the workflow: you direct the session — you know your data sources, your domain, and what the output should look like. The AI handles implementation within the toolkit's conventions. You review, question, and approve. The understanding has to be yours; the AI accelerates getting there.
 
-A dedicated agent guide lives at [data-instructions.md](https://github.com/datavloot/datavloot-toolkit/blob/main/data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
+A dedicated agent guide lives at [data-instructions.md](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/scaffold/data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
-This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](datavloot_platform/templates/demo/) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](datavloot_platform/templates/demo/conversation.md).
+This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/conversation.md).
 
 ---
 
@@ -219,7 +219,7 @@ In older projects `profiles.yml` has one target, `dev`, that writes to the produ
 
 ## Example project
 
-The [NOAA demo](datavloot_platform/templates/demo/) is a complete consuming project built on this toolkit. It uses
+The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) is a complete consuming project built on this toolkit. It uses
 publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.gov/) near Guam
 (2025) combined with global port reference data. It demonstrates the full workflow:
 
@@ -229,7 +229,7 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 - Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
 - Configuring data quality tests at every layer
 
-Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/templates/demo/](datavloot_platform/templates/demo/). See the [demo README](datavloot_platform/templates/demo/README.md) for details.
+Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/templates/demo/](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo). See the [demo README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/README.md) for details.
 
 ---
 
@@ -237,9 +237,9 @@ Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/tem
 
 ### 1. Ingest raw data
 
-For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](datavloot_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
+For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
 
-For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](datavloot_platform/assets.py) for the DuckDB connection pattern.
+For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/assets.py) for the DuckDB connection pattern.
 
 ### 2. Define your sources in dbt
 
@@ -300,7 +300,7 @@ marimo edit notebooks/explore.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore.py` instead.
 
-The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](datavloot_platform/templates/demo/notebooks/explore_noaa.py) in the demo for a fully worked example.
+The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/notebooks/explore_noaa.py) in the demo for a fully worked example.
 
 You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click.
 
@@ -386,11 +386,11 @@ The same tools, on a bigger vessel as your team grows. The pipelines, dbt models
 | Vessel | For | Runs on | Lake catalog | Status |
 |---|---|---|---|---|
 | **Optimist** | One person | A laptop | DuckLake with a SQLite catalog | Ready |
-| **Falcon** | A small team | Docker Compose on one VM, behind Traefik over HTTPS | The same lake | First version: [deploy/compose](deploy/compose/README.md), and a VM on Thalassa Cloud with [deploy/thalassa](deploy/thalassa/README.md) |
+| **Falcon** | A small team | Docker Compose on one VM, behind Traefik over HTTPS | The same kind: DuckLake with a SQLite catalog | First version: [deploy/compose](https://github.com/datavloot/datavloot-toolkit/blob/main/deploy/compose/README.md), and a VM on Thalassa Cloud with [deploy/thalassa](https://github.com/datavloot/datavloot-toolkit/blob/main/deploy/thalassa/README.md) |
 | **Catamaran** | A larger team | Docker Compose, with the state off the VM and per-user sign-in | Postgres and S3 | Planned |
 | **Yacht** | Enterprise | Kubernetes | Quack and S3 | Planned |
 
-From the Optimist to the Falcon nothing changes but where the project runs: the same project directory, lake included, moves to the VM. From the Falcon to the Catamaran the lake's catalog moves from SQLite to Postgres, which is a data migration.
+From the Optimist to the Falcon the project stays the same: the same code, models and kind of lake, only on a VM. The Falcon starts with an empty lake of its own, and Dagster builds production there from the sources; the laptop's lake, with its development schemas, stays on the laptop. From the Falcon to the Catamaran the lake's catalog moves from SQLite to Postgres, which is a data migration.
 
 The Optimist's individual components are also portable on their own:
 
@@ -429,7 +429,7 @@ dbt deps
 - [Ingestion layer — loading data with dlt](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md)
 - [Source layer — auto-staging and audit columns](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/source-layer.md)
 - [Business layer — dimensions, facts, and surrogate keys](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/business-layer.md)
-- [Architecture — Optimist single-node setup (proposed)](docs/architecture.md)
+- [Architecture — Optimist single-node setup (proposed)](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/architecture.md)
 
 ---
 
