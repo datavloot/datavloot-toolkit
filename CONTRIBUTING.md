@@ -145,8 +145,6 @@ Releases are cut by maintainers. The full procedure for both packages, including
 
 Deferred work and known rough edges are listed in `docs/backlog.md`. If you fix something listed there, remove the entry in the same pull request. If you find something worth doing but out of scope for your change, add it there rather than leaving a TODO in code.
 
-The repository moved from GitLab to GitHub recently. Some files still describe the GitLab flow (`docs/releasing.md`, `.gitlab-ci.yml`, the git URLs in `packages.yml` and the README links). Where this document and those files disagree about *process*, this document wins; where they describe *mechanics* such as version bumps and tag names, they are still correct. Pull requests that bring the remaining references in line are welcome.
-
 ## Questions
 
 Open an issue. For anything you would rather not put in public, the contact details are on [datavloot.nl](https://datavloot.nl).

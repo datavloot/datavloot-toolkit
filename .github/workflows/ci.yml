@@ -1,4 +1,4 @@
-# Datavloot CI — GitHub Actions port of .gitlab-ci.yml
+# Datavloot CI
 #
 # Checks, fastest-to-fail first:
 #
