@@ -49,9 +49,11 @@ Config templates for the `source/` layer are provided in the package at
 | `add_audit_columns` | Emit standard audit columns in any SELECT | [Source layer](source-layer.md) |
 | `build_dimension` | Generate a dimension from a staged model, seed, or inline CTE | [Business layer](business-layer.md) |
 | `build_fact` | Generate a fact with dim joins and measures from config | [Business layer](business-layer.md) |
+| `build_dataset` | Flat, documented one-big-table output from a source you have already prepared (no surrogate key, no dimension joins) | [Business layer](business-layer.md) |
 | `generate_surrogate_key` | MD5 surrogate key over a list of columns | [Business layer](business-layer.md) |
-| `dim_date` | Shared date dimension (2015–2035, configurable) | [Business layer](business-layer.md) |
-| `dim_time` | Shared time dimension (minute granularity) | [Business layer](business-layer.md) |
+| `generate_date_key` | Integer `YYYYMMDD` key for joining to `dim_date` | [Business layer](business-layer.md) |
+| `build_dim_date` | Date dimension, called from the project's own `dim_date.sql` (2015–2035 by default, configurable) | [Business layer](business-layer.md) |
+| `build_dim_time` | Time-of-day dimension at minute granularity, called from `dim_time.sql` | [Business layer](business-layer.md) |
 
 ---
 
@@ -59,20 +61,19 @@ Config templates for the `source/` layer are provided in the package at
 
 The toolkit uses [Dagster](https://dagster.io) to orchestrate assets.
 
-Activate the project virtual environment first so `dbt` and `dagster` are on your PATH:
+Activate the project's virtual environment first so `dbt` and `dagster` are on your PATH
+(`source .venv/bin/activate` on Linux and macOS, `.venv\Scripts\activate` on Windows).
 
-```bash
-source .venv/bin/activate
-```
-
-Then generate a compiled dbt manifest (Dagster needs this to discover your models) and start the server:
+Then generate a compiled dbt manifest (Dagster needs this to discover your models) and start the
+platform:
 
 ```bash
 dbt parse
-dagster dev
+datavloot start      # Dagster and the Crows Nest; or `dagster dev` for Dagster alone
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The **Asset Catalog** lists every asset in
+Open [http://localhost:3000](http://localhost:3000) for Dagster, or the Crows Nest at
+[http://localhost:8080](http://localhost:8080). The **Asset Catalog** lists every asset in
 your pipeline — ingestion assets (dlt pipelines or plain Dagster assets) alongside all dbt source
 and business models.
 
@@ -87,20 +88,30 @@ alerts surface here as asset check failures alongside the asset metadata.
 
 ## Querying results
 
-All business-layer tables land in the `main_business` schema of your DuckDB database file. In a project created with `datavloot new` the data is in a DuckLake under `lake/` instead; the README's "Where the data lives" shows how to open it.
+All data is in a DuckLake under `lake/`: the catalog in `lake/catalog.sqlite`, the tables as
+Parquet files under `lake/data/`. The Crows Nest's SQL editor and the notebooks open it for you;
+from Python, `datavloot_platform.storage.connect(read_only=True)` does the same (see "Where the
+data lives" in the README).
 
 ### Install the DuckDB CLI
 
+Use the DuckDB version the toolkit is tested with (see "Stack versions" in the README), not the
+latest release: the toolkit holds DuckDB below 2.0 until the lake has been tried on it.
+
 ```bash
-curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v1.5.3/duckdb_cli-linux-amd64.zip
 unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb
 ```
 
-### Open the database
+On macOS use `duckdb_cli-osx-universal.zip`, on Windows `duckdb_cli-windows-amd64.zip`.
+
+### Open the lake
+
+From the project directory, read-only, so it can stay open while a pipeline runs:
 
 ```bash
-duckdb path/to/your.duckdb
+duckdb -cmd "ATTACH 'ducklake:sqlite:lake/catalog.sqlite' AS <project> (DATA_PATH 'lake/data/', OVERRIDE_DATA_PATH true, READ_ONLY); USE <project>;"
 ```
 
 ### Useful shell commands
@@ -110,21 +121,23 @@ duckdb path/to/your.duckdb
 SHOW ALL TABLES;
 
 -- Inspect a table's columns
-DESCRIBE main_business.dim_<entity>;
+DESCRIBE <project>_business.dim_<entity>;
 
 -- Count rows in a fact table
-SELECT COUNT(*) FROM main_business.fct_<event>;
+SELECT COUNT(*) FROM <project>_business.fct_<event>;
 ```
 
 Type `.quit` to exit.
 
 ### Schema layout
 
+Production (what Dagster builds, dbt's `prod` target) and development (dbt by hand, the default
+`dev` target) live side by side in the same lake:
+
 | Schema | Contents |
 |---|---|
-| `main` | Raw tables loaded by ingestion assets |
-| `main_business` | Dimension and fact tables built by dbt |
-| `main_elementary` | Elementary data quality metadata |
-
-The default profile uses a relative path for the database file — run the `duckdb` command from
-your project directory, or supply the full path.
+| The schema your ingestion writes to (dlt's `dataset_name`, e.g. `source`) | Raw tables loaded by ingestion assets |
+| `<project>_source`, `<project>_business` | Staging, dimension and fact tables built by Dagster |
+| `<project>_seeds` | Seeds |
+| `<project>_elementary` | Elementary data quality metadata |
+| `dev_source`, `dev_business`, … | The same, from dbt runs by hand |

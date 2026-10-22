@@ -441,24 +441,26 @@ dbt deps
 | `add_audit_columns` | Emit `_loaded_at`, `_source_name`, `_source_table` in any SELECT |
 | `build_dimension` | Config-driven dimension with surrogate key, optional dedup, and three source options |
 | `build_fact` | Config-driven fact with automatic dimension LEFT JOINs and surrogate key |
+| `build_dataset` | Flat, documented one-big-table output from a source you have already prepared; no surrogate key, no dimension joins |
 | `generate_surrogate_key` | MD5 surrogate key over a list of columns, available standalone |
-| `dim_date` | Shared calendar date dimension (configurable range, default 2020–2030) |
-| `dim_time` | Shared time-of-day dimension at minute granularity (1 440 rows) |
+| `generate_date_key` | Integer `YYYYMMDD` key that matches `dim_date`, for any date or timestamp column |
+| `build_dim_date` | Calendar date dimension, called from the project's own `dim_date.sql` (configurable range, default 2015–2035) |
+| `build_dim_time` | Time-of-day dimension at minute granularity (1 440 rows), called from `dim_time.sql` |
 
 ---
 
 ## Stack versions
 
-Versions below are what the NOAA example project was built and tested on. Newer patch releases generally work; minor/major upgrades may require changes.
+Versions below are the ones locked in `uv.lock`, which the Falcon image installs. `pip install datavloot[optimist]` picks the newest release within the bounds in `pyproject.toml`; newer patch releases generally work, minor/major upgrades may require changes. DuckDB is held below 2.0 until the lake has been tried on it.
 
-| Package | Tested version |
+| Package | Locked version |
 |---|---|
 | Python | ≥3.10, <3.14 |
-| dagster | 1.13.6 |
-| dagster-dbt | 0.29.6 |
+| dagster | 1.13.7 |
+| dagster-dbt | 0.29.7 |
 | dbt-core | 1.11.11 |
 | dbt-duckdb | 1.10.1 |
-| dlt | 1.28.0 |
+| dlt | 1.30.0 |
 | duckdb | 1.5.3 |
 | elementary-data | 0.24.0 |
-| marimo | 0.23.9 |
+| marimo | 0.24.2 |
