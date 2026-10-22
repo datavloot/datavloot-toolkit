@@ -136,12 +136,12 @@ The data is a [DuckLake](https://ducklake.select) in `lake/`: the catalog in `la
 
 ### Install the DuckDB CLI
 
-Use the same version as the `duckdb` package in your environment, not the latest release: the toolkit holds DuckDB below 2.0 (`duckdb<2` in `pyproject.toml`) until the lake has been tried on it, and the latest CLI is 2.0.
+Use the same version as the `duckdb` package in your environment, not the latest release: the toolkit holds DuckDB below 2.0 (`duckdb<2` in its own `pyproject.toml`, not this project's) until the lake has been tried on it, and the latest CLI is 2.0.
 
 ```bash
 # Download the standalone CLI binary (Linux x86-64)
 V=$(python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
-curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v$V/duckdb_cli-linux-amd64.zip
+curl -fLo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v$V/duckdb_cli-linux-amd64.zip
 unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb
 ```
