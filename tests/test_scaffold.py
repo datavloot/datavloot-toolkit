@@ -366,7 +366,7 @@ def _translator(assets_py: pathlib.Path, project_name: str):
 
 @pytest.mark.parametrize(
     "where, project_name",
-    [("scaffold", "probe"), ("demo", "noaa"), ("toolkit", "optimist")],
+    [("scaffold", "probe"), ("demo", "noaa")],
 )
 def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, project_name: str):
     """
@@ -379,7 +379,6 @@ def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, pr
     assets_py = {
         "scaffold": scaffold / "probe_platform" / "assets.py",
         "demo": cli.TEMPLATES_DIR / "demo" / "noaa_platform" / "assets.py",
-        "toolkit": pathlib.Path(cli.__file__).parent / "assets.py",
     }[where]
     translator = _translator(assets_py, project_name)
 

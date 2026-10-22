@@ -239,7 +239,7 @@ Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/tem
 
 For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
 
-For simpler cases (reading a local file, calling a small API), a plain Dagster asset that writes directly to DuckDB is enough. See [assets.py](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/assets.py) for the DuckDB connection pattern.
+For simpler cases (reading a local file, calling a small API), a plain Dagster asset that opens the lake with `storage.connect()` is enough; see the [ingestion guide](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md).
 
 ### 2. Define your sources in dbt
 
