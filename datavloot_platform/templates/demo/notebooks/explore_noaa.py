@@ -37,9 +37,9 @@ def _(con, mo):
 
 @app.cell
 def _(con, mo):
-    total = con.sql("SELECT COUNT(*) AS total_events FROM noaa_business.fct_port_event").fetchone()[0]
-    arrivals = con.sql("SELECT COUNT(*) FROM noaa_business.fct_port_event WHERE NOT is_departure").fetchone()[0]
-    departures = con.sql("SELECT COUNT(*) FROM noaa_business.fct_port_event WHERE is_departure").fetchone()[0]
+    total = con.execute("SELECT COUNT(*) AS total_events FROM noaa_business.fct_port_event").fetchone()[0]
+    arrivals = con.execute("SELECT COUNT(*) FROM noaa_business.fct_port_event WHERE NOT is_departure").fetchone()[0]
+    departures = con.execute("SELECT COUNT(*) FROM noaa_business.fct_port_event WHERE is_departure").fetchone()[0]
     mo.vstack([
         mo.md("## Overview"),
         mo.hstack([
