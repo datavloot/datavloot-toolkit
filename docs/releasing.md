@@ -53,22 +53,31 @@ used while it lived here.
 ### Cutting a release
 
 1. Decide the bump type (see Versioning above) based on what changed since the last release.
-2. On a feature branch off `main`, update `version` in `pyproject.toml` to match, and commit.
+2. On a feature branch off `main`, update `version` in `pyproject.toml` to match, run `uv lock`
+   (the lock records the project's own version), and commit both. Put the release notes in the
+   pull request description; step 9 reuses them.
 3. Push the branch, open a pull request against `main`, and merge it on GitHub. **Do not merge
-   locally**: the tag in step 7 has to point at the merge commit GitHub creates.
+   locally**: the tag in step 8 has to point at the merge commit GitHub creates.
    ```bash
    git push -u origin <branch>
    gh pr create --base main --title "Release X.Y.Z"
    ```
-4. Pull the merge commit and build from it, so the uploaded artifact matches the commit that
-   gets tagged in step 7:
+4. Wait for CI on that merge commit to pass. Pull requests run the smoke test on Linux only;
+   `main` runs it on Linux, Windows and macOS, so this is the first time the release is tested
+   on all three.
    ```bash
-   git switch main
-   git pull origin main
-   rm -rf dist/
+   gh run list --branch main --limit 1
+   ```
+5. Build from the merge commit in a **clean** checkout. A working copy can hold untracked files
+   that are not ignored (old build output, notes, a `temp/` folder); the sdist would pack them.
+   A detached worktree has only what git tracks:
+   ```bash
+   git fetch origin
+   git worktree add --detach ../datavloot-build <merge-commit>
+   cd ../datavloot-build
    uv build
    ```
-5. Sanity-check the built artifacts before uploading anything:
+6. Sanity-check the built artifacts before uploading anything:
    ```bash
    uvx twine check dist/*
    ls -lh dist/
@@ -77,33 +86,61 @@ used while it lived here.
    without comment, which is exactly how 0.1.1 shipped 66.9 MB of frontend build inputs. So
    check the size too: **the wheel should be well under 5 MB**. If it is not, something that
    only a nested `.gitignore` was hiding has entered the build; see the `exclude` list in
-   [`pyproject.toml`](../pyproject.toml).
+   [`pyproject.toml`](../pyproject.toml). `tests/test_packaging.py` asserts this in CI on every
+   commit.
 
-   `tests/test_packaging.py` asserts this in CI on every commit, so a surprise here means the
-   pipeline was skipped or the build is being run from a dirty tree.
-6. Publish:
+   Then install the wheel the way a user would, in a fresh environment, and build a new
+   project with it. A version on PyPI can never be uploaded again, so this is the last cheap
+   moment to find a problem:
+   ```bash
+   uv venv --seed --python 3.12 /tmp/release-check
+   /tmp/release-check/bin/python -m pip install "datavloot[optimist] @ file://$PWD/dist/datavloot-X.Y.Z-py3-none-any.whl"
+   cd /tmp && /tmp/release-check/bin/datavloot new shop && cd shop
+   DBT_PROFILES_DIR=. /tmp/release-check/bin/dbt deps
+   DBT_PROFILES_DIR=. /tmp/release-check/bin/dbt build
+   ```
+   (On Windows the executables are in `Scripts\` instead of `bin/`.) Call the environment's
+   own `datavloot` and `dbt` by path: if its install failed, a `datavloot` elsewhere on `PATH`
+   would run instead, and the check would pass without testing the release.
+7. Publish, from the build directory:
    ```bash
    uv publish
    ```
-   Needs a PyPI API token — either `UV_PUBLISH_TOKEN` in the environment or `--token` on the
-   command line. (`twine upload dist/*` is the equivalent if not using uv, reading credentials
-   from `~/.pypirc` or `TWINE_PASSWORD`.)
-7. Tag the merge commit you built from in step 4, and push:
+   Needs a PyPI API token scoped to the `datavloot` project (pypi.org → Account settings → API
+   tokens; it is shown once, so keep it in a password manager). Either set `UV_PUBLISH_TOKEN`,
+   or answer the prompt with `__token__` as the username and the token as the password.
+
+   Compare the hashes PyPI reports with the files you built:
    ```bash
-   git tag -a datavloot-vX.Y.Z -m "datavloot X.Y.Z"
+   curl -s https://pypi.org/pypi/datavloot/X.Y.Z/json | python -c "import sys, json; [print(f['digests']['sha256'], f['filename']) for f in json.load(sys.stdin)['urls']]"
+   sha256sum dist/*
+   ```
+   `pip install datavloot==X.Y.Z` can still report the version as missing for a few minutes,
+   until PyPI's index catches up with its JSON API.
+8. Tag the merge commit you built from, and push:
+   ```bash
+   git tag -a datavloot-vX.Y.Z <merge-commit> -m "datavloot X.Y.Z"
    git push origin datavloot-vX.Y.Z
    ```
    If the push is rejected, a tag protection rule on `datavloot-v*` needs your account in its
    bypass list.
-8. Check whether the install snippets and release notes on the website (the `datavloot-website`
-   repository) need updating to match.
+9. Create the GitHub release from the tag, with the release notes from step 2 and the files
+   you published:
+   ```bash
+   gh release create datavloot-vX.Y.Z --verify-tag --title "datavloot X.Y.Z" \
+     --notes-file notes.md dist/datavloot-X.Y.Z-py3-none-any.whl dist/datavloot-X.Y.Z.tar.gz
+   ```
+10. Check whether the install snippets and release notes on the website (the `datavloot-website`
+    repository) need updating to match. Then remove the build worktree
+    (`git worktree remove ../datavloot-build`).
 
 ### Current state
 
 As of 2026-10-22:
 
-- PyPI has **0.1.0**, **0.1.1** and **0.1.2**; `pyproject.toml` says `0.1.2`. Git has the tags
-  `datavloot-v0.1.1` and `datavloot-v0.1.2`; `datavloot-v0.1.0` was never tagged.
+- PyPI has **0.1.0**, **0.1.1**, **0.1.2** and **0.2.0**; `pyproject.toml` says `0.2.0`. Git has
+  the tags `datavloot-v0.1.1`, `datavloot-v0.1.2` and `datavloot-v0.2.0`; `datavloot-v0.1.0` was
+  never tagged. 0.2.0 is the first release with a GitHub release.
 - New projects get the dbt package at **0.1.1** from dbt-datavloot-optimist
   (`DBT_PACKAGE_VERSION`).
 - The bare tag `0.1.2` (2026-09-07) in this repo has no dbt package release behind it; it looks
