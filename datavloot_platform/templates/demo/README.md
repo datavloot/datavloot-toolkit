@@ -30,8 +30,8 @@ reference data. The output answers questions like:
 
 ```
 data/
-└── guam_2025.csv             # AIS position broadcasts — download separately (see Getting started)
-noaa_platform/                # Dagster platform layer (assets, definitions)
+└── guam_2025.csv             # AIS position broadcasts, downloaded on the first run (see Getting started)
+noaa_platform/                # Dagster platform layer (assets, definitions, the AIS download)
 seeds/
 ├── ports.csv                 # global port reference data (3,804 rows)
 ├── sea_state_categories.csv  # Beaufort wind scale thresholds
@@ -87,10 +87,16 @@ pip install -e .
 dbt deps
 ```
 
-### 3. Get the AIS data
+### 3. The AIS data
 
-Download the Guam 2025 AIS zone file from [marinecadastre.gov/ais](https://marinecadastre.gov/ais/)
-and save it as `data/guam_2025.csv`.
+Nothing to do: the first run of `noaa/guam_2025` downloads NOAA's Guam 2025 AIS zone file
+(41 MB, 366 MB unpacked), checks it against the file the demo was built on, and saves it as
+`data/guam_2025.csv`. Later runs use that file.
+
+Behind a proxy or offline, the run fails with the manual route: download
+[guam-2025.zip](https://ocmgeodatastor1.blob.core.windows.net/marinecadastre/data/ais/guam/guam-2025.zip)
+from [NOAA's index](https://ocmgeodatastor1.blob.core.windows.net/marinecadastre/data/ais/guam/index-guam.html),
+unzip it, and save `guam_2025.csv` in `data/`.
 
 ### 4. Generate the dbt manifest
 
