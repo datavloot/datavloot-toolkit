@@ -116,3 +116,36 @@ def test_stop_leaves_a_foreign_marimo_alone(app, monkeypatch, foreign_marimo):
         assert client.post("/api/notebooks/stop").json() == {"stopped": False}
 
     assert killed == []
+
+
+def test_list_reports_the_notebook_it_started(app, monkeypatch):
+    """The panel embeds Marimo only when it is ours, so it has to be told which one that is."""
+    started = []
+    monkeypatch.setattr(notebooks.subprocess, "Popen", lambda *a, **k: started.append(_sleeper()) or started[-1])
+
+    with TestClient(app) as client:
+        assert client.get("/api/notebooks/list").json()["running"] is None
+        client.post("/api/notebooks/launch", json={"name": "explore.py"})
+        try:
+            assert client.get("/api/notebooks/list").json()["running"] == "explore.py"
+            started[0].kill()
+            started[0].wait(timeout=10)
+            assert client.get("/api/notebooks/list").json()["running"] is None, "a dead Marimo reported as running"
+        finally:
+            started[0].kill()
+
+
+def test_list_reports_a_foreign_marimo_as_not_ours(app, foreign_marimo):
+    with TestClient(app) as client:
+        listing = client.get("/api/notebooks/list").json()
+
+    assert listing["running"] is None
+    assert listing["external"] is False
+
+
+def test_list_says_when_marimo_is_a_service(app, monkeypatch):
+    monkeypatch.setenv("CROWSNEST_MARIMO_PUBLIC_URL", "https://marimo.example.nl")
+    cn_config.reset_config()
+
+    with TestClient(app) as client:
+        assert client.get("/api/notebooks/list").json()["external"] is True

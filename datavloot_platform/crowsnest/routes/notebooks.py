@@ -21,6 +21,7 @@ MARIMO_PORT = 2718
 # else on MARIMO_PORT -- typically the user's own Marimo in another project --
 # is left alone.
 _marimo_process: "subprocess.Popen | None" = None
+_marimo_notebook: "str | None" = None
 
 
 def _port_in_use(port: int) -> bool:
@@ -31,7 +32,7 @@ def _port_in_use(port: int) -> bool:
 
 def stop_marimo() -> bool:
     """Stop the Marimo this Crows Nest started, if any. Returns whether there was one."""
-    global _marimo_process
+    global _marimo_process, _marimo_notebook
     if _marimo_process is None:
         return False
     try:
@@ -40,21 +41,31 @@ def stop_marimo() -> bool:
     except Exception:
         pass
     _marimo_process = None
+    _marimo_notebook = None
     return True
 
 
 @router.get("/list")
 async def list_notebooks():
-    """List all .py notebooks in the project's notebooks/ directory."""
+    """
+    List all .py notebooks in the project's notebooks/ directory.
+
+    running is the notebook of the Marimo this Crows Nest started, if it is still
+    alive; external is true when Marimo is a service of its own (the Falcon). The
+    panel embeds Marimo only in those two cases, never a Marimo that merely
+    answers on the port.
+    """
+    running = _marimo_notebook if _marimo_process is not None and _marimo_process.poll() is None else None
+    external = bool(get_config().marimo_public_url)
     notebooks_dir = pathlib.Path.cwd() / "notebooks"
     if not notebooks_dir.exists():
-        return {"notebooks": [], "available": False}
+        return {"notebooks": [], "available": False, "running": running, "external": external}
     notebooks = [
         {"name": f.name, "stem": f.stem}
         for f in sorted(notebooks_dir.glob("*.py"))
         if f.is_file()
     ]
-    return {"notebooks": notebooks, "available": True}
+    return {"notebooks": notebooks, "available": True, "running": running, "external": external}
 
 
 class LaunchRequest(BaseModel):
@@ -64,7 +75,7 @@ class LaunchRequest(BaseModel):
 @router.post("/launch")
 async def launch_notebook(req: LaunchRequest):
     """Start a Marimo notebook server for the given notebook file."""
-    global _marimo_process
+    global _marimo_process, _marimo_notebook
 
     name = pathlib.Path(req.name).name
     if not name.endswith(".py"):
@@ -112,6 +123,7 @@ async def launch_notebook(req: LaunchRequest):
         [launcher, "-m", "marimo", "edit", "--headless", "--no-token", "--port", str(MARIMO_PORT), str(notebook_path)],
         **kwargs,
     )
+    _marimo_notebook = name
     return {"launched": name, "url": f"http://127.0.0.1:{MARIMO_PORT}"}
 
 

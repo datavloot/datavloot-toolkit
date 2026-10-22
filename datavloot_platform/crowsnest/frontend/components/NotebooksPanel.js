@@ -13,6 +13,10 @@ export default function NotebooksPanel() {
 
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
+  // Embed only a Marimo this Crows Nest started, or the Marimo service on the
+  // Falcon -- never whatever else happens to answer on the port.
+  const showMarimo = marimoStatus === 'ok' && (notebooks.data?.running || notebooks.data?.external);
+  const portTaken = marimoStatus === 'ok' && !showMarimo;
 
   // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
   useEffect(() => {
@@ -39,6 +43,9 @@ export default function NotebooksPanel() {
     } catch (err) {
       setLaunchError(err.message);
     } finally {
+      // Learn that the Marimo is ours before leaving the launching state, or
+      // the panel briefly takes it for someone else's.
+      await notebooks.reload();
       setLaunching(null);
       reloadHealth();
     }
@@ -51,13 +58,14 @@ export default function NotebooksPanel() {
       // process may already be dead
     }
     reloadHealth();
+    notebooks.reload();
   };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Marimo notebooks</h2>
-        {marimoStatus === 'ok' && (
+        {showMarimo && (
           <a
             href={marimoUrl}
             target="_blank"
@@ -69,7 +77,7 @@ export default function NotebooksPanel() {
         )}
       </div>
 
-      {marimoStatus === 'ok' ? (
+      {showMarimo ? (
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-surface-3 bg-surface-1">
             <span className="text-xs text-ink-3 font-mono">{marimoUrl}</span>
@@ -95,6 +103,7 @@ export default function NotebooksPanel() {
       ) : (
         <NotRunning
           marimoUrl={marimoUrl}
+          portTaken={portTaken}
           notebooks={notebooks.data?.notebooks || []}
           notebooksAvailable={notebooks.data?.available}
           notebooksLoading={notebooks.loading}
@@ -118,7 +127,7 @@ function LaunchingState({ name }) {
   );
 }
 
-function NotRunning({ marimoUrl, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
+function NotRunning({ marimoUrl, portTaken, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
   return (
     <div className="space-y-4">
       {launchError && (
@@ -138,10 +147,23 @@ function NotRunning({ marimoUrl, notebooks, notebooksAvailable, notebooksLoading
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium text-ink-1">Marimo is not running</p>
-            <p className="text-xs text-ink-3 mt-0.5">
-              Expected at <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
-            </p>
+            {portTaken ? (
+              <>
+                <p className="text-sm font-medium text-ink-1">Another Marimo is using this port</p>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  Something the Crows Nest did not start answers at{' '}
+                  <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code> — another project, or one left
+                  over from an earlier session. Stop it to launch a notebook here.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-ink-1">Marimo is not running</p>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  Expected at <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
+                </p>
+              </>
+            )}
           </div>
         </div>
 
