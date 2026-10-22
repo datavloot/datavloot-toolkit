@@ -16,7 +16,9 @@ export default function NotebooksPanel() {
   // Embed only a Marimo this Crows Nest started, or the Marimo service on the
   // Falcon -- never whatever else happens to answer on the port.
   const showMarimo = marimoStatus === 'ok' && (notebooks.data?.running || notebooks.data?.external);
-  const portTaken = marimoStatus === 'ok' && !showMarimo;
+  // Wait for the notebook list before calling the port taken: health can
+  // answer first, and our own Marimo would briefly look like someone else's.
+  const portTaken = marimoStatus === 'ok' && notebooks.data && !showMarimo;
 
   // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
   useEffect(() => {

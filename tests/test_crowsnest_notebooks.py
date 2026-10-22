@@ -9,6 +9,7 @@ the port alone -- typically the user's own session in another project.
 import socket
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -149,3 +150,47 @@ def test_list_says_when_marimo_is_a_service(app, monkeypatch):
 
     with TestClient(app) as client:
         assert client.get("/api/notebooks/list").json()["external"] is True
+
+
+class _SlowToReleaseMarimo:
+    """
+    Holds the Marimo port until shortly after kill() returns.
+
+    On Windows the venv's python.exe is a launcher: kill() and wait() return once
+    the launcher is gone, and the interpreter that serves the port exits a moment
+    later. A relaunch in that moment must not mistake our own Marimo for a stranger.
+    """
+
+    def __init__(self, port):
+        self._sock = socket.socket()
+        self._sock.bind(("127.0.0.1", port))
+        self._sock.listen()
+        self._killed = False
+
+    def poll(self):
+        return 0 if self._killed else None
+
+    def kill(self):
+        self._killed = True
+        threading.Timer(0.5, self._sock.close).start()
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def test_relaunch_waits_for_its_own_marimo_to_release_the_port(app, monkeypatch):
+    started = []
+
+    def fake_popen(*args, **kwargs):
+        started.append(_SlowToReleaseMarimo(notebooks.MARIMO_PORT))
+        return started[-1]
+
+    monkeypatch.setattr(notebooks.subprocess, "Popen", fake_popen)
+
+    with TestClient(app) as client:
+        assert client.post("/api/notebooks/launch", json={"name": "explore.py"}).status_code == 200
+        relaunch = client.post("/api/notebooks/launch", json={"name": "explore.py"})
+        assert relaunch.status_code == 200, relaunch.json()
+
+    for proc in started:
+        proc.kill()

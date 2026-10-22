@@ -7,6 +7,7 @@ import pathlib
 import socket
 import subprocess
 import sys
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -42,6 +43,12 @@ def stop_marimo() -> bool:
         pass
     _marimo_process = None
     _marimo_notebook = None
+    # On Windows the venv's python.exe is a launcher: wait() returns when the
+    # launcher is gone, and the interpreter serving the port exits a moment later.
+    # Wait for the port, or a relaunch would take our own Marimo for a stranger's.
+    deadline = time.monotonic() + 5
+    while _port_in_use(MARIMO_PORT) and time.monotonic() < deadline:
+        time.sleep(0.1)
     return True
 
 
@@ -95,8 +102,8 @@ async def launch_notebook(req: LaunchRequest):
     if _port_in_use(MARIMO_PORT):
         raise HTTPException(
             409,
-            f"Port {MARIMO_PORT} is in use by a Marimo the Crows Nest did not start "
-            "(another project, or one left over from an earlier session). "
+            f"Port {MARIMO_PORT} is in use by something the Crows Nest did not start "
+            "(a Marimo from another project, or one left over from an earlier session). "
             "Stop it and launch again.",
         )
 
