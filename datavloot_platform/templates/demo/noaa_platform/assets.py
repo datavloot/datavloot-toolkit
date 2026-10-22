@@ -8,6 +8,8 @@ from dagster_dlt import DagsterDltResource, DagsterDltTranslator, dlt_assets
 
 from datavloot_platform import storage
 
+from . import ais
+
 PROJECT_DIR = Path(__file__).parent.parent  # noaa/
 CSV_PATH = PROJECT_DIR / "data" / "guam_2025.csv"
 
@@ -51,13 +53,8 @@ class OpenMeteoDltTranslator(DagsterDltTranslator):
     pool=LAKE_POOL,
 )
 def noaa_guam_2025_raw(context: AssetExecutionContext) -> None:
-    """Load Guam 2025 AIS CSV into the lake as raw.guam_2025."""
-    if not CSV_PATH.exists():
-        raise FileNotFoundError(
-            f"AIS data not found at {CSV_PATH}. "
-            "Download from https://marinecadastre.gov/ais/ "
-            "and save as data/guam_2025.csv in the project root."
-        )
+    """Load Guam 2025 AIS CSV into the lake as raw.guam_2025, downloading it on the first run."""
+    ais.ensure_csv(CSV_PATH, context.log, get=dlt_requests.get)
 
     con = storage.connect(PROJECT_DIR)
     try:
