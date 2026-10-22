@@ -15,8 +15,8 @@
 #
 # lint, crowsnest and package pull deps ephemerally with `uv run --with ...`, so
 # a test cannot pass because something unrelated happened to be installed.
-# smoke instead installs the optimist extra the way a user does. In both cases
-# the dbt package under dbt/optimist is tested from *this checkout*.
+# smoke instead installs the optimist extra the way a user does, and the dbt
+# package a new project pins (github.com/datavloot/dbt-datavloot-optimist).
 
 name: CI
 

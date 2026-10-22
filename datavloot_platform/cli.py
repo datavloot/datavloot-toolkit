@@ -13,9 +13,10 @@ from datavloot_platform import location
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
 # The optimist dbt package release that new projects get, the one this toolkit
-# release was tested with. It has its own version series, apart from the
-# toolkit's: bump it with every dbt package release (docs/releasing.md).
-DBT_PACKAGE_VERSION = "0.1.0"
+# release was tested with: a tag of github.com/datavloot/dbt-datavloot-optimist.
+# It has its own version series, apart from the toolkit's: bump it with every
+# release of that repository.
+DBT_PACKAGE_VERSION = "0.1.1"
 
 _IGNORE = shutil.ignore_patterns(
     "__pycache__", "*.pyc", ".venv", "target", "dbt_packages", "logs"

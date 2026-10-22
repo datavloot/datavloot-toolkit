@@ -52,22 +52,27 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
     pyproject = (dest / "pyproject.toml").read_text(encoding="utf-8")
     assert f'"datavloot[optimist]~={importlib.metadata.version("datavloot")}"' in pyproject
 
-    (package,) = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
-    assert package["revision"] == cli.DBT_PACKAGE_VERSION
-    assert package["git"] == "https://github.com/datavloot/datavloot-toolkit.git"
-    assert package["subdirectory"] == "dbt/optimist"
+    packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    (optimist,) = [p for p in packages if "git" in p]
+    assert optimist == {
+        "git": "https://github.com/datavloot/dbt-datavloot-optimist.git",
+        "revision": cli.DBT_PACKAGE_VERSION,
+    }
 
 
-def test_new_projects_get_the_dbt_package_in_this_checkout(repo_root: pathlib.Path):
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_projects_install_elementary_themselves(tmp_path: pathlib.Path, template: str):
     """
-    `DBT_PACKAGE_VERSION` is the release of dbt/optimist that CI tests the toolkit with.
+    The project declares Elementary; the optimist dbt package no longer brings it.
 
-    The smoke test builds against the dbt package in this checkout, so a release
-    of it that does not also move the constant leaves new projects on macros CI
-    no longer tests.
+    The Crows Nest's Data quality and Catalog panels read Elementary's tables, and
+    the templates configure `models: elementary`. Up to 0.1.0 the dbt package
+    pulled Elementary in; from 0.1.1 (dbt-datavloot-optimist) it does not.
     """
-    project = yaml.safe_load((repo_root / "dbt" / "optimist" / "dbt_project.yml").read_text(encoding="utf-8"))
-    assert project["version"] == cli.DBT_PACKAGE_VERSION
+    dest = tmp_path / "project"
+    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    assert [p["version"] for p in packages if p.get("package") == "elementary-data/elementary"] == [[">=0.25.0", "<0.26.0"]]
 
 
 @pytest.mark.parametrize("target", ["dev", "prod"])
