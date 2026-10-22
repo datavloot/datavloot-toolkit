@@ -3,7 +3,7 @@ name = "datavloot"
 version = "0.1.2"
 description = "Open, modular, Python-native data platform — from a laptop to a fleet, without vendor lock-in."
 readme = "README.md"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 dependencies = [
@@ -33,11 +33,12 @@ dependencies = [
 # placeholder. The DuckLake extension is installed by DuckDB itself, see
 # datavloot_platform/extensions.py.
 #
-# `duckdb` is a direct dependency only to cap it. dbt-duckdb, dlt and
+# `duckdb` is a direct dependency to bound it. dbt-duckdb, dlt and
 # dagster-duckdb pull it in without an upper bound, so a new major would reach
 # every install the day it is released, with a lake format we have not tested.
-# DuckDB 2.0 (2026-10-21) cannot be read back by older versions. Lift the cap
-# after the lake has been tried on it.
+# The floor is 2.0, the only major the tests run on; files written by 2.0
+# cannot be read by 1.x, so an environment that resolved 1.x would fail on a
+# lake that 2.0 has touched.
 optimist = [
     "altair>=6.0,<7",
     "dagster>=1.13.6,<1.14",
@@ -48,7 +49,7 @@ optimist = [
     "dbt-core>=1.11,<1.12",
     "dbt-duckdb>=1.10,<2",
     "dlt[duckdb,ducklake]>=1.28,<2",  # ducklake: the destination for the project lake, needs pyarrow
-    "duckdb>=1.5,<2",
+    "duckdb>=2.0,<3",
     "elementary-data[duckdb]>=0.24,<0.26",
     "fastapi>=0.115,<1",
     "httpx>=0.27,<1",
