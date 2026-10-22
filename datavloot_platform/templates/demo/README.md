@@ -1,6 +1,6 @@
 # noaa
 
-A dbt project built on [optimist-toolkit](https://github.com/datavloot/datavloot-toolkit).
+A dbt project built on the [datavloot toolkit](https://github.com/datavloot/datavloot-toolkit).
 
 This project is an **example** of how a project is set up with the optimist toolkit. It uses
 publicly available data from the [National Oceanic and Atmospheric Administration (NOAA)](https://www.noaa.gov/)
@@ -16,7 +16,7 @@ reference data. The output answers questions like:
 
 ## What this project demonstrates
 
-- Scaffolding a new consuming project from the optimist-toolkit template
+- Scaffolding a new consuming project from the datavloot toolkit's template
 - Loading a large raw dataset (3.2M rows) into DuckDB as a source — not a seed
 - Loading small reference data (ports) as a dbt seed
 - Staging source tables with audit columns and deduplication
@@ -67,7 +67,7 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 All commands run from the project root. You'll need **Python 3.10–3.13** (3.12 recommended) and **git**.
 
-This demo is part of the [optimist-toolkit](https://github.com/datavloot/datavloot-toolkit). If you haven't already, install the toolkit and copy the demo locally:
+This demo is part of the [datavloot toolkit](https://github.com/datavloot/datavloot-toolkit). If you haven't already, install the toolkit and copy the demo locally:
 
 ```bash
 pip install datavloot[optimist]
@@ -81,7 +81,7 @@ cd optimist-demo
 pip install -e .
 ```
 
-### 2. Install the optimist-toolkit dbt package
+### 2. Install the dbt packages (optimist and Elementary)
 
 ```bash
 dbt deps

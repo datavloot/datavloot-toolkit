@@ -8,6 +8,7 @@ broken -- see the docstrings.
 import ast
 import importlib.metadata
 import pathlib
+import re
 import types
 
 import pytest
@@ -52,22 +53,51 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
     pyproject = (dest / "pyproject.toml").read_text(encoding="utf-8")
     assert f'"datavloot[optimist]~={importlib.metadata.version("datavloot")}"' in pyproject
 
-    (package,) = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
-    assert package["revision"] == cli.DBT_PACKAGE_VERSION
-    assert package["git"] == "https://github.com/datavloot/datavloot-toolkit.git"
-    assert package["subdirectory"] == "dbt/optimist"
+    packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    (optimist,) = [p for p in packages if "git" in p]
+    assert optimist == {
+        "git": "https://github.com/datavloot/dbt-datavloot-optimist.git",
+        "revision": cli.DBT_PACKAGE_VERSION,
+    }
 
 
-def test_new_projects_get_the_dbt_package_in_this_checkout(repo_root: pathlib.Path):
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_projects_install_elementary_in_step_with_its_cli(
+    tmp_path: pathlib.Path, repo_root: pathlib.Path, template: str
+):
     """
-    `DBT_PACKAGE_VERSION` is the release of dbt/optimist that CI tests the toolkit with.
+    The project declares Elementary, in the same range as the toolkit's `edr` CLI.
 
-    The smoke test builds against the dbt package in this checkout, so a release
-    of it that does not also move the constant leaves new projects on macros CI
-    no longer tests.
+    The Crows Nest's Data quality and Catalog panels read Elementary's tables, and
+    the templates configure `models: elementary`. Up to 0.1.0 the optimist dbt
+    package pulled Elementary in; from 0.1.1 (dbt-datavloot-optimist) it does not.
+    The dbt package and `elementary-data` in pyproject.toml are bounded alike, so
+    the CLI never reads tables a different minor of the package wrote.
     """
-    project = yaml.safe_load((repo_root / "dbt" / "optimist" / "dbt_project.yml").read_text(encoding="utf-8"))
-    assert project["version"] == cli.DBT_PACKAGE_VERSION
+    dest = tmp_path / "project"
+    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    (version,) = [p["version"] for p in packages if p.get("package") == "elementary-data/elementary"]
+
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'"elementary-data\[duckdb\]>=([\d.]+),<([\d.]+)"', pyproject)
+    assert match, "elementary-data is not bounded as >=X,<Y in pyproject.toml"
+    floor, cap = (".".join((v.split(".") + ["0", "0"])[:3]) for v in match.groups())
+    assert version == [f">={floor}", f"<{cap}"]
+
+
+@pytest.mark.parametrize("doc", ["README.md", "docs/getting-started.md"])
+def test_docs_show_the_pinned_dbt_package_release(repo_root: pathlib.Path, doc: str):
+    """
+    The `packages.yml` examples in the docs pin the release new projects get.
+
+    Only `DBT_PACKAGE_VERSION` is bumped on a dbt package release; without this
+    the examples would keep the old tag.
+    """
+    text = (repo_root / doc).read_text(encoding="utf-8")
+    pins = re.findall(r'dbt-datavloot-optimist\.git"\s+revision: (\S+)', text)
+    assert pins, f"{doc} shows no dbt-datavloot-optimist pin"
+    assert set(pins) == {cli.DBT_PACKAGE_VERSION}
 
 
 @pytest.mark.parametrize("target", ["dev", "prod"])

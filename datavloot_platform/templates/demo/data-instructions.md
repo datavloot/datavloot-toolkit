@@ -1,6 +1,6 @@
 # noaa
 
-A dbt project built on [optimist-toolkit](https://github.com/datavloot/datavloot-toolkit),
+A dbt project built on the [datavloot toolkit](https://github.com/datavloot/datavloot-toolkit),
 demonstrating AIS vessel tracking enriched with marine weather data for the port of Guam.
 
 See `dbt_packages/optimist/data-instructions.md` for the full workflow, naming conventions, modelling
