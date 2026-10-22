@@ -148,7 +148,7 @@ def cmd_new(args: argparse.Namespace) -> None:
     print(f"  2. pip install -e .   # install the project's Python package")
     print(f"  3. dbt deps           # install the optimist dbt package")
     print(f"  4. dbt parse          # compile the manifest for Dagster")
-    print(f"  5. dagster dev        # start the platform at http://localhost:3000")
+    print(f"  5. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
     print(f"\nSee data-instructions.md or hand it to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions, then start adding your data sources.")
 
@@ -173,7 +173,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
     print(f"  4. Download the Guam 2025 AIS zone file from https://ocmgeodatastor1.blob.core.windows.net/marinecadastre/data/ais/guam/index-guam.html")
     print(f"     and save it as data/guam_2025.csv inside the project folder")
     print(f"  5. dbt parse          # compile the manifest for Dagster")
-    print(f"  6. dagster dev        # start the platform at http://localhost:3000")
+    print(f"  6. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
     print(f"\nHand data-instructions.md to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions.")
 

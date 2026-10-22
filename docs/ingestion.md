@@ -90,7 +90,7 @@ from datavloot_platform import storage
     dlt_pipeline=dlt.pipeline(
         pipeline_name="example_api",
         dataset_name="source",          # → the `source` schema in the project's lake
-        destination=storage.dlt_destination(),  # finds the project from the current directory
+        destination=storage.dlt_destination(PROJECT_DIR),  # PROJECT_DIR: set at the top of assets.py
     ),
     group_name="source",
     pool="lake",                        # it writes to the lake: one writer at a time
@@ -101,13 +101,18 @@ def example_api_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
 
 ### 3. Register the dlt resource in definitions.py
 
+Add the resource to the `Definitions` the scaffold already has. Keep its job and
+schedule, or the daily lake maintenance stops:
+
 ```python
 from dagster_dlt import DagsterDltResource
 
 defs = Definitions(
     assets=all_assets,
+    jobs=[lake_maintenance],
+    schedules=[lake_maintenance_schedule],
     resources={
-        "dbt": DbtCliResource(project_dir=optimist_dbt_project),
+        "dbt": DbtCliResource(project_dir=<project>_dbt_project),
         "dlt": DagsterDltResource(),
     },
 )
@@ -159,7 +164,7 @@ dlt init <source_name> duckdb
 ```
 
 The generated pipeline writes to a DuckDB file of its own. When you move it
-into a Dagster asset, replace its destination with `storage.dlt_destination()`
+into a Dagster asset, replace its destination with `storage.dlt_destination(PROJECT_DIR)`
 and give the asset `pool="lake"`, as in the example above, so it lands in the
 project's lake.
 
