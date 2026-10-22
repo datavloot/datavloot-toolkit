@@ -202,19 +202,18 @@ series never collide in the same repo.
    git push origin datavloot-vX.Y.Z
    ```
    If the push is rejected, see the protected-refs note in the dbt package procedure above.
-8. Check whether the install snippet on the marketing site (`html/production/index.html`) needs
-   updating to match — see the open item in [`docs/backlog.md`](backlog.md).
+8. Check whether the install snippets and release notes on the website (the `datavloot-website`
+   repository) need updating to match.
 
 ### Current state
 
-PyPI already has two releases — **0.1.0** and **0.1.1** (confirmed via the PyPI JSON API,
-2026-06-30) — but this checkout's `pyproject.toml` currently says `version = "0.1.0"`, and no
-`datavloot-vX.Y.Z` tags exist in git. The next release must bump to at least `0.1.2`, not
-`0.1.1` (already taken) or `0.1.0` (already superseded). Worth reconciling before the next
-publish: figure out why the checked-out version fell behind what's live, and retroactively tag
-the two existing releases (`datavloot-v0.1.0`, `datavloot-v0.1.1`) so the tag history matches
-what's actually on PyPI.
+As of 2026-10-22:
 
-There's also a stale local `dist/datavloot-0.1.1-*` build sitting untracked at the repo root
-(matches the already-published 0.1.1). `dist/` isn't in `.gitignore` yet — worth adding, so
-build output doesn't show up as untracked noise in every `git status`.
+- PyPI has **0.1.0**, **0.1.1** and **0.1.2**; `pyproject.toml` says `0.1.2`. Git has the tags
+  `datavloot-v0.1.1` and `datavloot-v0.1.2`; `datavloot-v0.1.0` was never tagged.
+- The dbt package is at `0.1.0` (`dbt/optimist/dbt_project.yml` and `DBT_PACKAGE_VERSION` in
+  `cli.py`), tagged `0.1.0`.
+- **There is also a bare tag `0.1.2`** (2026-09-07, the same day as `datavloot-v0.1.2`), while
+  no dbt package `0.1.2` exists. It looks like the PyPI release tagged without its prefix. A bare
+  tag counts as a dbt package release and starts the `Release` workflow, so decide whether to
+  delete it, or to keep it and skip `0.1.2` for the dbt package (bump straight to `0.1.3`).

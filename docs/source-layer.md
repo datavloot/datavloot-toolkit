@@ -219,7 +219,7 @@ from {{ source('harbor', 'vessels') }}
 
 ## Config templates
 
-Blank templates are included in every project created with `optimist new`:
+Blank templates are included in every project created with `datavloot new`:
 
 - `models/source/_sources.yml` — source definition template
 - `models/source/_schema.yml` — staged model documentation template

@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before filing, check whether the problem is already covered in `docs/backlog.md` or an open issue.
+        Before filing, check whether the problem is already covered in an open issue.
 
   - type: input
     id: version

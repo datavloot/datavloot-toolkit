@@ -100,19 +100,19 @@ Dagster needs a compiled manifest before it can start:
 dbt parse
 ```
 
-### 5. Start Dagster
+### 5. Start the platform
 
 ```bash
-dagster dev
+datavloot start
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+This starts Dagster and the Crows Nest together and opens the Crows Nest at [http://localhost:8080](http://localhost:8080). Dagster is at [http://localhost:3000](http://localhost:3000). (`dagster dev` starts Dagster alone.)
 
-In the **Asset Catalog**, click **Materialize all** — Dagster knows the dependency order and runs ingestion before dbt automatically.
+In Dagster's **Asset Catalog**, click **Materialize all** — Dagster knows the dependency order and runs ingestion before dbt automatically.
 
 To re-run only the dbt models without re-loading raw data, select the dbt assets and click **Materialize selected**.
 
-Dagster persists run history, asset metadata, and test results in `noaa_platform/` — check the **Runs** tab for logs if a build fails.
+Check the **Runs** tab for logs if a build fails; the Crows Nest's Pipelines panel shows the same runs.
 
 ---
 
@@ -123,10 +123,10 @@ Dagster persists run history, asset metadata, and test results in `noaa_platform
 `explore_noaa.py` is a [Marimo](https://marimo.io) reactive notebook that opens the project's lake read-only (so it can stay open while a pipeline runs) and provides charts and tables for all the key questions this project answers.
 
 ```bash
-marimo edit explore_noaa.py
+marimo edit notebooks/explore_noaa.py
 ```
 
-Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run explore_noaa.py` instead.
+Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore_noaa.py` instead. The Crows Nest's Notebooks panel starts it with one click as well.
 
 ---
 
@@ -136,12 +136,17 @@ The data is a [DuckLake](https://ducklake.select) in `lake/`: the catalog in `la
 
 ### Install the DuckDB CLI
 
+Use the same version as the `duckdb` package in your environment, not the latest release: the toolkit holds DuckDB below 2.0 (`duckdb<2` in `pyproject.toml`) until the lake has been tried on it, and the latest CLI is 2.0.
+
 ```bash
 # Download the standalone CLI binary (Linux x86-64)
-curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip
+V=$(python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
+curl -Lo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v$V/duckdb_cli-linux-amd64.zip
 unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb
 ```
+
+On macOS use `duckdb_cli-osx-universal.zip`, on Windows `duckdb_cli-windows-amd64.zip`.
 
 ### Open the lake
 

@@ -10,8 +10,8 @@ When working on any of these components, verify against the standards below.
 | Component | Role |
 |---|---|
 | `dbt/optimist/` | The installable dbt package. Contains macros, built-in dimensions, and config templates. |
-| `datavloot_platform/templates/scaffold/` | New-project template, served by `optimist new`. Mirrors the structure a real project should have. |
-| `datavloot_platform/templates/demo/` | NOAA worked example, served by `optimist demo`. Demonstrates AIS + weather ingestion with Dagster + dlt. |
+| `datavloot_platform/templates/scaffold/` | New-project template, served by `datavloot new`. Mirrors the structure a real project should have. |
+| `datavloot_platform/templates/demo/` | NOAA worked example, served by `datavloot demo`. Demonstrates AIS + weather ingestion with Dagster + dlt. |
 | `datavloot_platform/` | Dagster platform for the toolkit itself. Contains toolkit assets + commented dlt pattern. |
 
 ---
@@ -60,7 +60,7 @@ It is not the right place for project-level or modelling guidance.
 - [ ] Create `datavloot_platform/templates/<project>/<project>_platform/` for the Dagster layer (assets.py, definitions.py)
 - [ ] Create `datavloot_platform/templates/<project>/pyproject.toml` with `[tool.dagster]` pointing to `<project>_platform.definitions`
 - [ ] Copy `datavloot_platform/templates/scaffold/data-instructions.md` as the starting `data-instructions.md` and fill in project-specific details
-- [ ] Add a CLI subcommand or update `optimist demo` to point to the new template
+- [ ] Add a CLI subcommand or update `datavloot demo` to point to the new template
 - [ ] Add a section to the root `README.md` describing the example
 
 ## 6. Core design principle: DRY

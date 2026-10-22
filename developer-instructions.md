@@ -1,7 +1,9 @@
-# optimist-toolkit
+# datavloot-toolkit
 
-A shared dbt package providing standardized macros, conventions, and model templates for dbt projects.
-Designed to be used by AI agents (crew) following instructions from a human user (captain).
+Two things ship from this repo: the `optimist` dbt package (standardized macros, conventions and
+model templates) and the `datavloot` Python package (the CLI, the lake storage, the Crows Nest
+and the project templates). Designed to be used by AI agents (crew) following instructions from
+a human user (captain).
 
 ---
 
@@ -17,8 +19,16 @@ dbt/optimist/                              # the installable dbt package
 ├── models/
 │   └── source/                            # _sources.yml and _schema.yml templates
 docs/                                      # reference documentation
-datavloot_platform/templates/scaffold/      # new-project template (served via `optimist new`)
-datavloot_platform/templates/demo/          # NOAA worked example (served via `optimist demo`)
+datavloot_platform/                         # the datavloot Python package
+├── cli.py                                 # datavloot new | demo | start | launch
+├── storage.py                             # how dbt, dlt, assets and notebooks attach the lake
+├── crowsnest/                             # the Crows Nest dashboard (FastAPI + a prebuilt frontend)
+└── templates/
+    ├── scaffold/                          # new-project template (served via `datavloot new`)
+    └── demo/                              # NOAA worked example (served via `datavloot demo`)
+deploy/
+├── compose/                               # the Falcon: the platform on Docker Compose
+└── thalassa/                              # OpenTofu module for a Falcon VM on Thalassa Cloud
 ```
 
 Note: `dim_date`/`dim_time` ship as macros (`build_dim_date`/`build_dim_time`), not models — there
@@ -30,7 +40,7 @@ is what makes the date range and time grain configurable per project.
 
 ## If you are building models in a consuming project
 
-You are in the wrong repo. Run `optimist new <path>` to scaffold a new consuming project, then follow the `data-instructions.md` inside it.
+You are in the wrong repo. Run `datavloot new <path>` to scaffold a new consuming project, then follow the `data-instructions.md` inside it.
 
 ---
 

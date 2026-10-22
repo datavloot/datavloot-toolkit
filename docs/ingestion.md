@@ -2,8 +2,8 @@
 
 The toolkit uses [dlt](https://dlthub.com) as its standard ingestion layer.
 dlt handles the mechanics of pulling data from external sources — REST APIs,
-databases, file stores — and landing it in DuckDB with the right schema,
-types, and incremental state. dbt then picks up those tables as sources and
+databases, file stores — and landing it in the project's lake (a DuckLake under
+`lake/`) with the right schema, types, and incremental state. dbt then picks up those tables as sources and
 transforms them.
 
 ## When to use dlt vs. a plain Dagster asset
@@ -11,7 +11,7 @@ transforms them.
 | Scenario | Recommended approach |
 |---|---|
 | REST API, SaaS tool, or database with a connector | **dlt pipeline** via `@dlt_assets` |
-| Static flat file loaded once (CSV, Parquet) | **Plain Dagster `@asset`** using `duckdb.read_csv()` |
+| Static flat file loaded once (CSV, Parquet) | **Plain Dagster `@asset`** that opens the lake with `storage.connect()` and loads it with `read_csv` / `read_parquet` (in the `lake` pool) |
 | Custom extraction logic not covered by dlt | **Plain Dagster `@asset`** |
 
 The NOAA example project uses a plain asset for its one-time CSV load. For a
@@ -25,7 +25,7 @@ live source — a shipping API, an ERP database, a SaaS export — use dlt.
 External source
       │
       ▼
-  dlt pipeline  ──────────────────────►  lakehouse.source (DuckDB)
+  dlt pipeline  ──────────────────────►  <project>.source (the lake)
   (@dlt_assets)                                │
                                                ▼
                                          dbt source models
@@ -35,7 +35,7 @@ External source
                                          dims / facts
 ```
 
-dlt lands tables directly into the `source` dataset in DuckDB. dbt staging
+dlt lands tables directly into the `source` dataset in the lake. dbt staging
 models then reference those tables via `{{ source(...) }}` exactly as they
 would any other source.
 
@@ -45,13 +45,14 @@ would any other source.
 
 ### 1. Install dependencies
 
-```bash
-pip install -e ".[dev]"   # dlt[duckdb] and dagster-dlt are included
-```
+`datavloot[optimist]` already includes dlt (with its DuckLake destination) and
+dagster-dlt. A verified source may need an extra of its own, for example
+`dlt[sql_database]`: add it to your project's `pyproject.toml` and run
+`pip install -e .` again.
 
 ### 2. Write the pipeline asset
 
-In `datavloot_platform/assets.py`, add a `@dlt_assets` function for your
+In `<project>_platform/assets.py`, add a `@dlt_assets` function for your
 source. dlt ships with
 [verified sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources/)
 for common systems (GitHub, Salesforce, Stripe, SQL databases, REST APIs,
@@ -92,6 +93,7 @@ from datavloot_platform import storage
         destination=storage.dlt_destination(),  # finds the project from the current directory
     ),
     group_name="source",
+    pool="lake",                        # it writes to the lake: one writer at a time
 )
 def example_api_assets(context: AssetExecutionContext, dlt: DagsterDltResource):
     yield from dlt.run(context=context)
@@ -138,8 +140,9 @@ part of the business data.
 
 ## Incremental loading
 
-dlt tracks its own cursor state in the pipeline's state store (persisted in
-DuckDB). On the first run it performs a full load; on subsequent runs it only
+dlt tracks its own cursor state in the pipeline's state store, persisted in
+the lake (`_dlt_pipeline_state` in the dataset's schema), so it moves with the
+lake. On the first run it performs a full load; on subsequent runs it only
 fetches rows newer than the last cursor value. No additional configuration is
 needed beyond setting `type: "incremental"` on the relevant endpoint parameter
 as shown above.
@@ -154,6 +157,11 @@ them directly:
 ```bash
 dlt init <source_name> duckdb
 ```
+
+The generated pipeline writes to a DuckDB file of its own. When you move it
+into a Dagster asset, replace its destination with `storage.dlt_destination()`
+and give the asset `pool="lake"`, as in the example above, so it lands in the
+project's lake.
 
 Examples: `github`, `salesforce`, `stripe`, `sql_database`, `google_analytics`,
 `hubspot`. Full list at [dlthub.com/docs/dlt-ecosystem/verified-sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources/).

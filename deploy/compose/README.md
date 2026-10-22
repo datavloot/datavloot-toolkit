@@ -19,7 +19,8 @@ volume, so a schedule switched off in the UI stays off.
 ## Choices
 
 - **One image for every service**, built from this checkout with the versions in `uv.lock`, so the
-  VM runs what CI tested. A published release would do too, once one contains the DuckLake storage.
+  VM runs what CI tested. Building from the PyPI release a project pins, with the deploy files in
+  the project itself, is planned (#55).
 - **Marimo is its own service**, not started by the Crows Nest as on a laptop: one notebook server,
   reachable at its own URL. The Crows Nest links to it (`CROWSNEST_MARIMO_PUBLIC_URL`).
 - **One sign-in in front of everything**: the `auth` middleware on every router, from

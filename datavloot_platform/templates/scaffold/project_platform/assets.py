@@ -40,7 +40,7 @@ def project_dbt_assets(context: AssetExecutionContext, dbt: DbtCliResource):
 # ---------------------------------------------------------------------------
 # Ingestion — add dlt pipelines here
 # ---------------------------------------------------------------------------
-# See the NOAA demo for a complete worked example: optimist demo
+# See the NOAA demo for a complete worked example: datavloot demo
 #
 # Pattern:
 #
