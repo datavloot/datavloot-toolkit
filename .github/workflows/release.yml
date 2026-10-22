@@ -5,8 +5,7 @@
 # dbt only warns about unpinned revisions for the literal strings HEAD, main
 # and master.
 #
-# GitLab did this with a project access token (GITLAB_PUSH_TOKEN). On GitHub the
-# built-in GITHUB_TOKEN can push branches once this workflow is granted
+# The built-in GITHUB_TOKEN can push branches once this workflow is granted
 # `contents: write` -- UNLESS the X.Y.x branch has a protection rule, which the
 # default GITHUB_TOKEN cannot bypass. In that case either:
 #   - allow the "github-actions[bot]" app to push to that branch in the rule's

@@ -76,18 +76,13 @@ Two rules keep this scheme working. Both fail silently if broken:
    `dbt/optimist/` since the last release.
 2. On a feature branch off `main`, update `version:` in `dbt/optimist/dbt_project.yml` to
    match, and commit.
-3. Push the branch and open a merge request against `main`. **`main` is protected — it cannot
-   be pushed to directly, and the release must not be merged locally.** The tag in the next
-   step has to point at the merge commit GitLab itself creates, which does not exist until the
-   MR is accepted.
+3. Push the branch and open a pull request against `main`, and merge it on GitHub. **The release
+   must not be merged locally**: the tag in the next step has to point at the merge commit
+   GitHub creates, which does not exist until the pull request is merged.
    ```bash
-   git push origin feature/<name> \
-     -o merge_request.create \
-     -o merge_request.target=main \
-     -o merge_request.title="Release X.Y.Z"
+   git push -u origin feature/<name>
+   gh pr create --base main --title "Release X.Y.Z"
    ```
-   Then accept the MR in the GitLab UI. (`glab mr create` does the same thing if the CLI is
-   installed; the push options above need no extra tooling.)
 4. Pull the resulting merge commit and tag it:
    ```bash
    git switch main
@@ -95,12 +90,17 @@ Two rules keep this scheme working. Both fail silently if broken:
    git tag -a X.Y.Z -m "optimist dbt package X.Y.Z"
    git push origin X.Y.Z
    ```
-5. Fast-forward the moving minor branch (patch release):
+5. Pushing the bare tag in step 4 starts the `Release` workflow
+   ([`.github/workflows/release.yml`](../.github/workflows/release.yml)), which fast-forwards the
+   moving minor branch to the tag, or creates it on the first release of a minor version. Check
+   in the Actions tab that it ran: the tag alone changes nothing for consumers who track
+   `X.Y.x`. If it did not, do it by hand (patch release):
    ```bash
    git branch -f 0.1.x 0.1.1
    git push origin 0.1.x --force-with-lease
    ```
-   Or, on a minor/major bump, create the new branch instead and stop touching the old one:
+   On a minor/major bump the new branch is created instead, and the old one is never touched
+   again:
    ```bash
    git branch 0.2.x 0.2.0
    git push origin 0.2.x
@@ -117,10 +117,11 @@ Two rules keep this scheme working. Both fail silently if broken:
 > checkout of `main`. PyPI users only get the new constant with the next datavloot release, so
 > push the tag before that release.
 >
-> **Protected refs.** GitLab protects tags and branches by pattern, separately from protected
-> branches. If `git push origin X.Y.Z` or the `0.1.x` push is rejected, the ref pattern needs
-> allowing under *Settings → Repository → Protected tags / Protected branches*, or someone with
-> Maintainer rights has to push it.
+> **Protected refs.** The workflow pushes with the built-in `GITHUB_TOKEN`, which cannot push to
+> an `X.Y.x` branch that has a protection rule. If the push is rejected, allow
+> `github-actions[bot]` in the rule's bypass list, or give the workflow a token with
+> *Contents: write* (see the comments in `release.yml`). A tag protection rule on `X.Y.Z`
+> blocks your own `git push origin X.Y.Z` the same way.
 
 ### Release history
 
@@ -165,8 +166,7 @@ series never collide in the same repo.
 1. Decide the bump type (see Versioning above) based on what changed outside `dbt/optimist/`
    since the last release.
 2. On a feature branch off `main`, update `version` in `pyproject.toml` to match, and commit.
-3. Push the branch, open a merge request against `main`, and accept it in the GitLab UI —
-   `main` is protected and cannot be pushed to directly. Same flow and same push options as
+3. Push the branch, open a pull request against `main`, and merge it on GitHub. Same flow as
    [step 3 of the dbt package procedure](#cutting-a-release) above; do not merge locally.
 4. Pull the merge commit and build from it, so the uploaded artifact matches the commit that
    gets tagged in step 7:
