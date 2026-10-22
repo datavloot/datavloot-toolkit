@@ -29,7 +29,7 @@
 - [ ] Scaffold and demo templates are kept in step
 - [ ] Frontend source change comes with a rebuilt and committed `crowsnest/static/`
 - [ ] Widened dependency bound is explained above
-- [ ] Fixed `docs/backlog.md` entry removed, if any
+- [ ] Issues this closes are referenced (`Closes #...`)
 
 ## Breaking change?
 

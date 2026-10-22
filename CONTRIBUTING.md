@@ -143,7 +143,7 @@ Releases are cut by maintainers. The full procedure for both packages, including
 
 ## Documentation and housekeeping
 
-Planned work is tracked as [GitHub issues](https://github.com/datavloot/datavloot-toolkit/issues); small deferred items and known rough edges are listed in `docs/backlog.md`. If you fix something listed there, remove the entry in the same pull request. If you find something worth doing but out of scope for your change, add it there rather than leaving a TODO in code.
+Planned work, deferred items and known rough edges are tracked as [GitHub issues](https://github.com/datavloot/datavloot-toolkit/issues). If your change fixes one, write `Closes #<number>` in the pull request. If you find something worth doing but out of scope for your change, open an issue rather than leaving a TODO in code.
 
 ## Questions
 
