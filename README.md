@@ -83,7 +83,7 @@ pip install -e .   # install the demo's Python package
 
 ```bash
 pip install -e .   # install your project's Python package
-dbt deps           # install the optimist dbt package — re-run whenever you upgrade or change packages.yml
+dbt deps           # install the dbt packages (optimist, Elementary) — re-run whenever you upgrade or change packages.yml
 dbt parse          # compile the manifest (required before first run)
 ```
 
@@ -142,7 +142,7 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── pyproject.toml                    # Python project config; wires Dagster to the platform module
 ├── .gitignore
 ├── data-instructions.md              # AI agent workflow guide (captain/crew model)
-├── packages.yml                      # points to this toolkit's dbt package
+├── packages.yml                      # the optimist dbt package (dbt-datavloot-optimist) and Elementary
 ├── dbt_project.yml                   # project config
 ├── profiles.yml                      # dbt connection: attaches the lake; dev (default) and prod targets
 ├── dagster.yaml                      # Dagster instance settings: one lake writer at a time
@@ -463,5 +463,5 @@ Versions below are the ones locked in `uv.lock`, which the Falcon image installs
 | dbt-duckdb | 1.10.1 |
 | dlt | 1.30.0 |
 | duckdb | 1.5.3 |
-| elementary-data | 0.24.0 |
+| elementary-data | 0.25.1 |
 | marimo | 0.24.2 |

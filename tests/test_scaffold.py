@@ -8,6 +8,7 @@ broken -- see the docstrings.
 import ast
 import importlib.metadata
 import pathlib
+import re
 import types
 
 import pytest
@@ -61,18 +62,42 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_projects_install_elementary_themselves(tmp_path: pathlib.Path, template: str):
+def test_projects_install_elementary_in_step_with_its_cli(
+    tmp_path: pathlib.Path, repo_root: pathlib.Path, template: str
+):
     """
-    The project declares Elementary; the optimist dbt package no longer brings it.
+    The project declares Elementary, in the same range as the toolkit's `edr` CLI.
 
     The Crows Nest's Data quality and Catalog panels read Elementary's tables, and
-    the templates configure `models: elementary`. Up to 0.1.0 the dbt package
-    pulled Elementary in; from 0.1.1 (dbt-datavloot-optimist) it does not.
+    the templates configure `models: elementary`. Up to 0.1.0 the optimist dbt
+    package pulled Elementary in; from 0.1.1 (dbt-datavloot-optimist) it does not.
+    The dbt package and `elementary-data` in pyproject.toml are bounded alike, so
+    the CLI never reads tables a different minor of the package wrote.
     """
     dest = tmp_path / "project"
     cli._copy_template(cli.TEMPLATES_DIR / template, dest)
     packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
-    assert [p["version"] for p in packages if p.get("package") == "elementary-data/elementary"] == [[">=0.25.0", "<0.26.0"]]
+    (version,) = [p["version"] for p in packages if p.get("package") == "elementary-data/elementary"]
+
+    pyproject = (repo_root / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'"elementary-data\[duckdb\]>=([\d.]+),<([\d.]+)"', pyproject)
+    assert match, "elementary-data is not bounded as >=X,<Y in pyproject.toml"
+    floor, cap = (".".join((v.split(".") + ["0", "0"])[:3]) for v in match.groups())
+    assert version == [f">={floor}", f"<{cap}"]
+
+
+@pytest.mark.parametrize("doc", ["README.md", "docs/getting-started.md"])
+def test_docs_show_the_pinned_dbt_package_release(repo_root: pathlib.Path, doc: str):
+    """
+    The `packages.yml` examples in the docs pin the release new projects get.
+
+    Only `DBT_PACKAGE_VERSION` is bumped on a dbt package release; without this
+    the examples would keep the old tag.
+    """
+    text = (repo_root / doc).read_text(encoding="utf-8")
+    pins = re.findall(r'dbt-datavloot-optimist\.git"\s+revision: (\S+)', text)
+    assert pins, f"{doc} shows no dbt-datavloot-optimist pin"
+    assert set(pins) == {cli.DBT_PACKAGE_VERSION}
 
 
 @pytest.mark.parametrize("target", ["dev", "prod"])

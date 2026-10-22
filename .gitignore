@@ -8,8 +8,6 @@ build/
 .uv-cache/
 .pytest_cache/
 
-# dbt
-
 # Dagster
 .dagster/
 

@@ -2,5 +2,6 @@ packages:
   - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
     revision: <dbt_package_version>   # the release the datavloot toolkit that created this project was tested with
   # The Crows Nest's Data quality and Catalog panels read the tables Elementary writes.
+  # Same range as elementary-data (the edr CLI) in the datavloot toolkit, so the two match.
   - package: elementary-data/elementary
     version: [">=0.25.0", "<0.26.0"]
