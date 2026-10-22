@@ -10,7 +10,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends git tini \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
+# 0.13.4 or later: older uv trusts the compromised eMudhra emSign CAs when it
+# downloads the packages below.
+COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 
 # The same uid and gid as the owner of the project directory on the host, so the
 # services can write to it and files they create stay the owner's (see .env).
