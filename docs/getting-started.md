@@ -1,22 +1,27 @@
 # Getting started
 
-optimist-toolkit is a shared dbt package that provides standardized macros, conventions, and
-model templates to be reused across Optimist dbt projects.
+A project created with `datavloot new` is a dbt project with a Dagster layer around it. Its
+models use the `optimist` dbt package, which provides standardized macros, conventions, and
+model templates; the package has its own repository,
+[dbt-datavloot-optimist](https://github.com/datavloot/dbt-datavloot-optimist).
 
 ---
 
 ## Installation
 
-Add the package to your project's `packages.yml`:
+`datavloot new` writes the package into the project's `packages.yml`, pinned to the release this
+toolkit was tested with, together with Elementary, which the Crows Nest's Data quality and
+Catalog panels read:
 
 ```yaml
 packages:
-  - git: "https://github.com/datavloot/datavloot-toolkit.git"
-    subdirectory: "dbt/optimist"
-    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) in production
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.1
+  - package: elementary-data/elementary
+    version: [">=0.25.0", "<0.26.0"]
 ```
 
-Then install it:
+Then install them:
 
 ```bash
 dbt deps
@@ -30,13 +35,13 @@ dbt deps
 your-project/
 └── models/
     ├── source/           # thin staging wrappers over raw sources
-    │   ├── _sources.yml  # source definitions (copy from optimist-toolkit template)
-    │   ├── _schema.yml   # model docs and tests (copy from optimist-toolkit template)
+    │   ├── _sources.yml  # source definitions (scaffolded by datavloot new)
+    │   ├── _schema.yml   # model docs and tests (scaffolded by datavloot new)
     │   └── stg_<source>__<table>.sql
     └── business/         # transformed, business-oriented models
 ```
 
-Config templates for the `source/` layer are provided in the package at
+`datavloot new` scaffolds the blank config templates for the `source/` layer,
 `models/source/_sources.yml` and `models/source/_schema.yml`.
 
 ---
@@ -45,15 +50,15 @@ Config templates for the `source/` layer are provided in the package at
 
 | Feature | Description | Docs |
 |---|---|---|
-| `stage_source` | Auto-generate a source staging model with audit columns | [Source layer](source-layer.md) |
-| `add_audit_columns` | Emit standard audit columns in any SELECT | [Source layer](source-layer.md) |
-| `build_dimension` | Generate a dimension from a staged model, seed, or inline CTE | [Business layer](business-layer.md) |
-| `build_fact` | Generate a fact with dim joins and measures from config | [Business layer](business-layer.md) |
-| `build_dataset` | Flat, documented one-big-table output from a source you have already prepared (no surrogate key, no dimension joins) | [Business layer](business-layer.md) |
-| `generate_surrogate_key` | MD5 surrogate key over a list of columns | [Business layer](business-layer.md) |
-| `generate_date_key` | Integer `YYYYMMDD` key for joining to `dim_date` | [Business layer](business-layer.md) |
-| `build_dim_date` | Date dimension, called from the project's own `dim_date.sql` (2015–2035 by default, configurable) | [Business layer](business-layer.md) |
-| `build_dim_time` | Time-of-day dimension at minute granularity, called from `dim_time.sql` | [Business layer](business-layer.md) |
+| `stage_source` | Auto-generate a source staging model with audit columns | [Source layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/source-layer.md) |
+| `add_audit_columns` | Emit standard audit columns in any SELECT | [Source layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/source-layer.md) |
+| `build_dimension` | Generate a dimension from a staged model, seed, or inline CTE | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `build_fact` | Generate a fact with dim joins and measures from config | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `build_dataset` | Flat, documented one-big-table output from a source you have already prepared (no surrogate key, no dimension joins) | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `generate_surrogate_key` | MD5 surrogate key over a list of columns | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `generate_date_key` | Integer `YYYYMMDD` key for joining to `dim_date` | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `build_dim_date` | Date dimension, called from the project's own `dim_date.sql` (2015–2035 by default, configurable) | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
+| `build_dim_time` | Time-of-day dimension at minute granularity, called from `dim_time.sql` | [Business layer](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) |
 
 ---
 

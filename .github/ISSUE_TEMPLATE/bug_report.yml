@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before filing, check whether the problem is already covered in an open issue.
+        Before filing, check whether the problem is already covered in an open issue. Problems with the dbt macros or conventions (the `optimist` dbt package) go to [dbt-datavloot-optimist](https://github.com/datavloot/dbt-datavloot-optimist/issues).
 
   - type: input
     id: version
@@ -29,8 +29,7 @@ body:
     attributes:
       label: Which part is affected?
       options:
-        - CLI (datavloot new / demo / start / crowsnest)
-        - optimist dbt package (macros, conventions)
+        - CLI (datavloot new / demo / start / launch)
         - Scaffold template
         - Demo project (NOAA)
         - Crows Nest dashboard

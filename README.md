@@ -243,19 +243,19 @@ For simpler cases (reading a local file, calling a small API), a plain Dagster a
 
 ### 2. Define your sources in dbt
 
-Copy the templates from `dbt/optimist/models/source/` and fill in your source tables.
+Fill in `models/source/_sources.yml` (scaffolded with every new project) with your source tables.
 
 ### 3. Stage with one line
 
 ```sql
--- dbt/optimist/models/source/stg_harbor__vessels.sql
+-- models/source/stg_harbor__vessels.sql
 {{ optimist.stage_source('harbor', 'vessels') }}
 ```
 
 ### 4. Build business models
 
 ```sql
--- dbt/optimist/models/business/dimensions/dim_vessel.sql
+-- models/business/dimensions/dim_vessel.sql
 {{ optimist.build_dimension(
     source_model = 'stg_harbor__vessels',
     natural_key  = 'vessel_id',
@@ -264,7 +264,7 @@ Copy the templates from `dbt/optimist/models/source/` and fill in your source ta
 ```
 
 ```sql
--- dbt/optimist/models/business/facts/fct_port_call.sql
+-- models/business/facts/fct_port_call.sql
 {{ optimist.build_fact(
     source_model   = 'stg_harbor__port_calls',
     natural_key    = 'port_call_id',
@@ -405,14 +405,13 @@ See [datavloot.nl/over](https://datavloot.nl/over) for the full vessel roadmap.
 
 ## Using the dbt package in an existing project
 
-If you already have a dbt project and only want the standardized macros, install the package via `dbt deps`:
+The macros are the `optimist` dbt package, which has its own repository: [dbt-datavloot-optimist](https://github.com/datavloot/dbt-datavloot-optimist). If you already have a dbt project and only want the standardized macros, install it via `dbt deps`:
 
 ```yaml
 # packages.yml
 packages:
-  - git: "https://github.com/datavloot/datavloot-toolkit.git"
-    subdirectory: "dbt/optimist"
-    revision: 0.1.x       # latest 0.1 patch; pin to a tag (e.g. 0.1.0) for reproducible builds
+  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
+    revision: 0.1.1       # a release tag of dbt-datavloot-optimist
 ```
 
 Then install:
@@ -425,15 +424,17 @@ dbt deps
 
 ## Documentation
 
-- [Getting started with the dbt package](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md)
+- [Getting started](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md)
 - [Ingestion layer — loading data with dlt](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md)
-- [Source layer — auto-staging and audit columns](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/source-layer.md)
-- [Business layer — dimensions, facts, and surrogate keys](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/business-layer.md)
+- [Source layer — auto-staging and audit columns](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/source-layer.md) (in the dbt package)
+- [Business layer — dimensions, facts, and surrogate keys](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) (in the dbt package)
 - [Architecture — Optimist single-node setup (proposed)](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/architecture.md)
 
 ---
 
 ## Features
+
+The macros of the [`optimist` dbt package](https://github.com/datavloot/dbt-datavloot-optimist):
 
 | Feature | Description |
 |---|---|

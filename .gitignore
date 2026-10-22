@@ -9,9 +9,6 @@ build/
 .pytest_cache/
 
 # dbt
-dbt/optimist/target/
-dbt/optimist/dbt_packages/
-dbt/optimist/logs/
 
 # Dagster
 .dagster/
