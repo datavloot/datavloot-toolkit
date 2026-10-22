@@ -6,8 +6,8 @@ The lake is DuckLake: a SQLite catalog and Parquet files, both in
 everything else -- dlt, notebooks, the Crows Nest -- goes through this module,
 so the attach options below are written down once.
 
-What the attach relies on, each verified against DuckDB 1.5 with the ducklake
-and sqlite extensions:
+What the attach relies on, with DuckDB 2.0 and the ducklake and sqlite
+extensions:
 
   - WAL journal mode on the catalog. In SQLite's default mode a reader and a
     writer lock each other out: a notebook stalls for seconds per query during a
@@ -18,9 +18,12 @@ and sqlite extensions:
     pipeline started from different folders would write to different places.
     The override applies to the session only, and the file paths inside the
     catalog are relative to the data path, so a moved project keeps working.
-  - One commit at a time. A second process committing at the same moment fails
-    with "database is locked" instead of waiting; neither DuckLake's retries nor
-    a SQLite busy timeout change that. Writers have to take turns.
+  - Writers take turns. Two processes that commit at the same moment both
+    succeed when they touch different data (inserts wait a fraction of a
+    second), but when they change the same table -- a rebuild, a delete, an
+    update -- one of them fails with "Failed to commit DuckLake transaction".
+    dbt rebuilds tables, so in Dagster the writers share one pool. (On DuckDB
+    1.5 even unrelated commits failed, with "database is locked".)
 
 duckdb and dlt are imported lazily, so the CLI and the fast test tier work
 without the optimist extra.

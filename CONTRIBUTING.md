@@ -30,7 +30,7 @@ Changes that need an issue before code:
 
 ## Setting up a working copy
 
-Prerequisites are the same as for using the toolkit (see the README): Python 3.10 to 3.13 and git. No C compiler is needed, except on Intel Macs (see the note in the README).
+Prerequisites are the same as for using the toolkit (see the README): Python 3.11 to 3.13 and git. No C compiler is needed, except on Intel Macs (see the note in the README).
 
 The recommended route is [uv](https://docs.astral.sh/uv/). Clone your fork and let uv create the virtual environment and install the package in editable mode, with the full stack and the test dependencies, at the versions in `uv.lock`:
 

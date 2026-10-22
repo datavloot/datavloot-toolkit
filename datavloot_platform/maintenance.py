@@ -5,7 +5,7 @@ Every write to the lake adds Parquet files, and every snapshot keeps the files
 it saw alive, so without maintenance the file count and the directory size
 only grow, and queries slow down as they open more and more small files.
 `maintain` runs DuckLake's maintenance functions in this order, each verified
-against DuckDB 1.5 with the ducklake extension:
+against DuckDB 2.0 with the ducklake extension:
 
   1. Flush inlined data: small inserts live in the catalog until written out.
   2. Rewrite data files that consist mostly of deleted rows.
@@ -19,13 +19,11 @@ against DuckDB 1.5 with the ducklake extension:
      its files on disk before it commits, so a write in progress looks exactly
      like this; only age tells them apart.
 
-Why the margins are in days. With a SQLite catalog, steps 4 and 5 compare
-their cutoff by UTC date, not by time: a cutoff of 00:00:01 UTC also takes what
-was scheduled at 23:00 that day. A grace of one hour therefore protects
-nothing; two days guarantee at least one. Retention is likewise whole days:
-`keep_snapshots` of seven days keeps between six and seven. Step 6 compares
-file times instead, which DuckDB on Windows reads shifted by the UTC offset; in
-a zone behind UTC a fresh file looks hours older than it is.
+The margins are in days, so a reader on an old snapshot, or a slow write, has
+all the time it needs. They were also chosen for two quirks of DuckDB 1.5 that
+2.0 no longer has: steps 4 and 5 compared their cutoff by UTC date, so a grace
+of one hour protected nothing, and step 6 read file times on Windows shifted by
+the UTC offset. On 2.0 both compare by time.
 
 Steps 5 and 6 delete files, so they run only while holding the lake's file
 lock (see storage.file_lock), which a backup also takes. When the lock is held,

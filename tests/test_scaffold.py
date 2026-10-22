@@ -8,6 +8,7 @@ broken -- see the docstrings.
 import ast
 import importlib.metadata
 import pathlib
+import tomllib
 import types
 
 import pytest
@@ -48,9 +49,8 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
     cli._copy_template(cli.TEMPLATES_DIR / template, dest)
     cli._pin_versions(dest, cli._versions())
 
-    # No tomllib before Python 3.11, and the project supports 3.10.
-    pyproject = (dest / "pyproject.toml").read_text(encoding="utf-8")
-    assert f'"datavloot[optimist]~={importlib.metadata.version("datavloot")}"' in pyproject
+    dependencies = tomllib.loads((dest / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
+    assert f"datavloot[optimist]~={importlib.metadata.version('datavloot')}" in dependencies
 
     (package,) = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
     assert package["revision"] == cli.DBT_PACKAGE_VERSION

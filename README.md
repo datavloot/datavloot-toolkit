@@ -32,7 +32,7 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 ### Prerequisites
 
-- Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
+- Python 3.11–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
 - Git
 
 No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
@@ -453,7 +453,7 @@ Versions below are what the NOAA example project was built and tested on. Newer 
 
 | Package | Tested version |
 |---|---|
-| Python | ≥3.10, <3.14 |
+| Python | ≥3.11, <3.14 |
 | dagster | 1.13.6 |
 | dagster-dbt | 0.29.6 |
 | dbt-core | 1.11.11 |

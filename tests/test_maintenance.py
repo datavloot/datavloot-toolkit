@@ -63,7 +63,13 @@ def _rows(project) -> dict[str, int]:
 
 
 def test_the_lake_stops_growing(project):
-    """Repeated runs leave the file count and the directory size where they were."""
+    """
+    Repeated runs leave the file count where it was, and the directory size too.
+
+    The size is compared within 1%: on DuckDB 2.0 the same data merges into a
+    file whose size differs by a few bytes from run to run (about 20 on 240 kB).
+    Growth that maintenance misses is a whole file per run, far more than that.
+    """
     sizes = []
     for _ in range(4):
         _round_of_writes(project)
@@ -71,7 +77,9 @@ def test_the_lake_stops_growing(project):
         files = _files(project)
         sizes.append((len(files), sum(f.stat().st_size for f in files)))
 
-    assert sizes[1] == sizes[2] == sizes[3], f"(files, bytes) per run: {sizes}"
+    counts, total_bytes = zip(*sizes[1:])
+    assert len(set(counts)) == 1, f"(files, bytes) per run: {sizes}"
+    assert max(total_bytes) <= min(total_bytes) * 1.01, f"(files, bytes) per run: {sizes}"
 
 
 def test_no_data_is_lost(project):
@@ -89,8 +97,8 @@ def test_nothing_recent_is_deleted_by_default(project):
     Fresh snapshots stay, and files replaced by today's merge stay too, so a
     reader that is still on them can finish.
 
-    With a grace of one hour this deleted the merged-away files at once: the
-    SQLite catalog compares cleanup cutoffs by date (see maintenance.py).
+    On DuckDB 1.5 a grace of one hour deleted the merged-away files at once,
+    because the cleanup cutoff was compared by date (see maintenance.py).
     """
     _round_of_writes(project)
     result = maintenance.maintain(project)

@@ -68,7 +68,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: >
-          uv run --with pytest --with pyyaml --with "duckdb>=1.5,<2"
+          uv run --with pytest --with pyyaml --with "duckdb>=2.0,<3"
           --with fastapi --with httpx --with pytz
           python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
           tests/test_extensions.py tests/test_storage.py tests/test_maintenance.py -v
@@ -107,7 +107,7 @@ jobs:
           fi
           no_binary=$(printf -- '--no-binary %s ' $allowed)
           # Oldest and newest supported Python: wheels are built per version.
-          for py in 3.10 3.13; do
+          for py in 3.11 3.13; do
             echo "::group::${{ matrix.platform }}, Python $py"
             uv pip compile pyproject.toml --extra optimist \
               --python-platform ${{ matrix.platform }} --python-version $py \
