@@ -89,6 +89,42 @@ transformation layer without re-loading source data, select the dbt assets and c
 The **Runs** tab shows logs for every execution. dbt test failures and Elementary data quality
 alerts surface here as asset check failures alongside the asset metadata.
 
+### Windows asks whether Python may use public and private networks
+
+The first time a notebook opens (from the Crows Nest or with `marimo edit`), Windows Defender
+Firewall can ask whether Python may access public and private networks. **Choose Cancel**, or
+leave both boxes unticked. Dagster, the Crows Nest and Marimo listen on `localhost` only, which
+the firewall does not block, so everything keeps working.
+
+The question comes from Marimo, not from anything the toolkit opens: in edit mode it looks for
+free ports for its language servers on all network interfaces, which is enough for Windows to
+ask. Windows asks once per `python.exe`, so it can come back after installing a new Python
+version.
+
+Do not allow **public networks**. The rule would cover that `python.exe` on every port, for good:
+anything it runs later on a network address is then reachable from any Wi-Fi you join. That
+includes `marimo edit --no-token` with another `--host` (a Python shell for anyone on that
+network) and `datavloot launch --host 0.0.0.0`, whose sign-in is off on a laptop. If you
+allowed it, switch the rule off under *Windows Security → Firewall & network protection →
+Allow an app through firewall*, or in an administrator PowerShell:
+
+```powershell
+Get-NetFirewallApplicationFilter | Where-Object Program -match 'python' | Get-NetFirewallRule |
+  Where-Object { $_.Action -eq 'Allow' -and $_.Profile -match 'Public' } | Disable-NetFirewallRule
+```
+
+To show the Crows Nest to someone on your own network, open one port on the private profile for
+the occasion instead, start the Crows Nest on all interfaces with a sign-in token
+(`CROWSNEST_AUTH_TOKEN`, see the README), and remove the rule afterwards:
+
+```powershell
+New-NetFirewallRule -DisplayName "Crows Nest demo" -Direction Inbound -Protocol TCP -LocalPort 8080 -Profile Private -Action Allow
+$env:CROWSNEST_AUTH_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(32))"
+datavloot launch --host 0.0.0.0
+# afterwards:
+Remove-NetFirewallRule -DisplayName "Crows Nest demo"
+```
+
 ---
 
 ## Querying results

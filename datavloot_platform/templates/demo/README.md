@@ -134,6 +134,8 @@ marimo edit notebooks/explore_noaa.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore_noaa.py` instead. The Crows Nest's Notebooks panel starts it with one click as well.
 
+On Windows, the first notebook can make Windows Defender Firewall ask whether Python may access public and private networks. Choose **Cancel**: everything runs on `localhost`, which the firewall does not block. Do not allow public networks; [getting-started](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md#windows-asks-whether-python-may-use-public-and-private-networks) explains why and how to undo it.
+
 ---
 
 ## Querying the results
