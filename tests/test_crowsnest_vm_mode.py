@@ -71,3 +71,12 @@ def test_a_marimo_service_is_linked_to_not_started(make_client, monkeypatch):
 
     assert client.post("/api/notebooks/stop").json() == {"stopped": False}
     assert started == [], "the Crows Nest started or killed a process next to the Marimo service"
+
+
+def test_the_panel_learns_whether_marimo_is_shared(make_client):
+    # Shared (the Falcon): one Marimo for the whole notebooks/ folder, whose
+    # root is its own file list; the panel then opens the launched notebook's
+    # URL rather than the root, which would open notebooks in a new tab.
+    assert make_client().get("/api/services").json()["marimo_shared"] is False
+    shared = make_client(CROWSNEST_MARIMO_PUBLIC_URL="https://marimo.example.nl")
+    assert shared.get("/api/services").json()["marimo_shared"] is True
