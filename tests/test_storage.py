@@ -93,7 +93,7 @@ def test_a_notebook_connection_serves_marimos_own_sql_engine(project):
     Marimo's built-in "DuckDB (in-memory)" engine runs SQL cells on DuckDB's
     default connection; a notebook's own connection left it an empty database.
     """
-    import duckdb
+    duckdb = pytest.importorskip("duckdb")
 
     _write(project, 3)
     con = storage.connect(project, read_only=True, default=True)
