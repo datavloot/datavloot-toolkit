@@ -11,9 +11,11 @@ def _():
     from pathlib import Path
     from datavloot_platform import storage
 
-    # Read-only, so the notebook can stay open while a pipeline writes.
+    # Read-only, so the notebook can stay open while a pipeline writes. On
+    # DuckDB's default connection, so SQL cells find the lake on either engine
+    # Marimo offers: "con" or its own "DuckDB (in-memory)".
     PROJECT_DIR = Path(__file__).parent.parent
-    con = storage.connect(PROJECT_DIR, read_only=True)
+    con = storage.connect(PROJECT_DIR, read_only=True, default=True)
     mo.md(f"Connected to the lake in `{storage.lake_dir(PROJECT_DIR)}`")
     return PROJECT_DIR, alt, con, mo
 
