@@ -304,6 +304,8 @@ The `datavloot new` scaffold includes a template notebook at `notebooks/explore.
 
 You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click.
 
+A notebook that others should read rather than edit becomes an app: move it to an `apps/` folder in the project. The Crows Nest's **Dashboards** panel serves everything in `apps/` with `marimo run`: the output, without the code. Paths in the app such as `css_file` resolve from `apps/`.
+
 ---
 
 ## The Crows Nest
@@ -316,11 +318,12 @@ The **Crows Nest** is a built-in unified dashboard that replaces the need to man
 datavloot launch
 ```
 
-Opens [http://localhost:8080](http://localhost:8080) with five panels:
+Opens [http://localhost:8080](http://localhost:8080) with six panels:
 
 | Panel | What it shows |
 |---|---|
 | **Pipelines** | Recent Dagster run history with status, job name, and duration. Auto-refreshes every 15 seconds. |
+| **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
 | **SQL editor** | Read-only SQL editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
@@ -338,6 +341,7 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml`; for a project still on a single `.duckdb` file, and takes precedence over a lake found in the project |
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
 | `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
+| `CROWSNEST_APPS_URL` | `http://127.0.0.1:2719` |
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 

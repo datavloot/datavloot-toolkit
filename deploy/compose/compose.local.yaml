@@ -1,7 +1,8 @@
 # Try the stack on a laptop, without TLS or DNS:
 #   docker compose --env-file local.env -f compose.yaml -f compose.local.yaml up -d --build
-# then http://crowsnest.localhost:8000, http://dagster.localhost:8000 and
-# http://marimo.localhost:8000 (browsers resolve *.localhost themselves).
+# then http://crowsnest.localhost:8000, http://dagster.localhost:8000,
+# http://marimo.localhost:8000 and http://apps.localhost:8000 (browsers resolve
+# *.localhost themselves).
 
 services:
   traefik:
@@ -21,12 +22,16 @@ services:
     environment:
       CROWSNEST_DAGSTER_PUBLIC_URL: http://dagster.localhost:8000
       CROWSNEST_MARIMO_PUBLIC_URL: http://marimo.localhost:8000
+      CROWSNEST_APPS_PUBLIC_URL: http://apps.localhost:8000
     labels:
       - traefik.http.routers.crowsnest.entrypoints=web
       - traefik.http.routers.crowsnest-health.entrypoints=web
   marimo:
     labels:
       - traefik.http.routers.marimo.entrypoints=web
+  apps:
+    labels:
+      - traefik.http.routers.apps.entrypoints=web
 
 volumes:
   # FALCON_DIR in local.env names this volume instead of a host directory:

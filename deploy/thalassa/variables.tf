@@ -10,7 +10,7 @@ variable "name" {
 }
 
 variable "domain" {
-  description = "Domain the services run under: dagster.<domain>, crowsnest.<domain>, marimo.<domain>."
+  description = "Domain the services run under: dagster.<domain>, crowsnest.<domain>, marimo.<domain>, apps.<domain>."
   type        = string
 }
 

@@ -8,6 +8,7 @@ Linux VM, behind Traefik over HTTPS:
 | `https://crowsnest.<DOMAIN>` | Crows Nest |
 | `https://dagster.<DOMAIN>` | Dagster UI (`dagster-webserver`); `dagster-daemon` runs the schedules |
 | `https://marimo.<DOMAIN>` | Marimo notebooks |
+| `https://apps.<DOMAIN>` | The project's apps (`marimo run apps/`), shown in the Crows Nest's Dashboards tab |
 
 Only Traefik publishes ports (80 and 443); every service sits behind a sign-in, except the Crows
 Nest's `/api/health`, for an uptime check. Certificates come from Let's Encrypt.
@@ -64,11 +65,11 @@ Updating to a newer toolkit: `git pull`, then `docker compose up -d --build`.
 With `FALCON_AUTH=oidc`, people sign in with the account they already have: Microsoft Entra ID,
 Google Workspace, Keycloak, or any other OpenID Connect provider. Traefik asks oauth2-proxy about
 every request, and oauth2-proxy sends whoever is not signed in to the provider. One sign-in covers
-the Crows Nest, Dagster and Marimo.
+the Crows Nest, Dagster, Marimo and the apps.
 
-1. At the provider, register an application, a confidential OIDC client, with three redirect URIs:
-   `https://crowsnest.<DOMAIN>/oauth2/callback`, `https://dagster.<DOMAIN>/oauth2/callback` and
-   `https://marimo.<DOMAIN>/oauth2/callback`. Note its issuer URL, client ID and client secret.
+1. At the provider, register an application, a confidential OIDC client, with four redirect URIs:
+   `https://crowsnest.<DOMAIN>/oauth2/callback`, `https://dagster.<DOMAIN>/oauth2/callback`,
+   `https://marimo.<DOMAIN>/oauth2/callback` and `https://apps.<DOMAIN>/oauth2/callback`. Note its issuer URL, client ID and client secret.
 2. In `.env`: `FALCON_AUTH=oidc`, and the `OIDC_*` settings (see `.env.example`). Generate the
    cookie secret with `openssl rand -base64 32 | tr -- '+/' '-_'`.
 3. `docker compose up -d`. This starts oauth2-proxy and switches Traefik over; `users.htpasswd`
@@ -78,7 +79,7 @@ Back to basic auth: `FALCON_AUTH=basic`, then `docker compose up -d --remove-orp
 
 ### Microsoft Entra ID
 
-- **App registration**, single tenant, a *Web* platform with the three redirect URIs, and a client
+- **App registration**, single tenant, a *Web* platform with the four redirect URIs, and a client
   secret. The issuer URL is `https://login.microsoftonline.com/<tenant id>/v2.0`.
 - **Client secrets expire**, after 24 months at most. Agree with the customer who renews it, and
   when; an expired secret locks everyone out.
@@ -113,8 +114,8 @@ a cookie secret, and `docker compose up -d`.
 
 | Case | Expected |
 |---|---|
-| Not signed in, open each of the three hosts | Redirected to the Keycloak sign-in |
-| `alice` signs in at the Crows Nest | In; Dagster and Marimo then open without a second sign-in |
+| Not signed in, open each of the four hosts | Redirected to the Keycloak sign-in |
+| `alice` signs in at the Crows Nest | In; Dagster, Marimo and the Dashboards tab then open without a second sign-in |
 | `bob` (no email), `OIDC_EMAIL_CLAIM=email` | Refused: `Internal Server Error`, and `email in id_token () isn't verified` in the oauth2-proxy log |
 | `bob`, `OIDC_EMAIL_CLAIM=preferred_username` | Still refused: Keycloak sends `email_verified=false` for him |
 | `bob`, and also `OIDC_ALLOW_UNVERIFIED_EMAIL=true` | In |

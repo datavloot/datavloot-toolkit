@@ -19,6 +19,9 @@ fi
 
 cd "$PROJECT_DIR"
 
+# The apps service serves apps/; a project without apps has an empty one.
+mkdir -p apps
+
 # The project's instance settings (the lake pool, see dagster.yaml) only apply
 # from DAGSTER_HOME.
 cp dagster.yaml "$DAGSTER_HOME/dagster.yaml"

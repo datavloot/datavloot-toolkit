@@ -6,7 +6,8 @@ Discovery order:
   1. The project's lake → <project>/lake/catalog.sqlite (see storage.py), when it exists
   2. profiles.yml       → DuckDB file path (outputs.dev.path) and target schema, for
                           projects still on a single .duckdb file
-  3. Defaults           → Dagster on localhost:3000, Marimo on localhost:2718
+  3. Defaults           → Dagster on localhost:3000, Marimo on localhost:2718,
+                          apps (marimo run) on localhost:2719
   4. Env vars           → CROWSNEST_* overrides
 
 Elementary schema:
@@ -41,6 +42,8 @@ class CrowsnestConfig:
         ducklake_data_path: Optional[str] = None,
         dagster_public_url: str = "http://localhost:3000",
         marimo_public_url: Optional[str] = None,
+        apps_url: str = "http://127.0.0.1:2719",
+        apps_public_url: Optional[str] = None,
     ):
         self.duckdb_path = duckdb_path
         self.dagster_graphql_url = dagster_graphql_url
@@ -56,6 +59,10 @@ class CrowsnestConfig:
         # Set means Marimo runs as its own service: the Crows Nest links to it
         # instead of starting a Marimo process itself.
         self.marimo_public_url = marimo_public_url
+        # The apps server (`marimo run apps`, routes/apps.py), the same way:
+        # set public URL means a service of its own, linked to, not started.
+        self.apps_url = apps_url
+        self.apps_public_url = apps_public_url
 
     @classmethod
     def discover(cls) -> "CrowsnestConfig":
@@ -81,6 +88,8 @@ class CrowsnestConfig:
             os.environ.get("CROWSNEST_DAGSTER_PUBLIC_URL") or "http://localhost:3000"
         ).rstrip("/")
         marimo_public_url = (os.environ.get("CROWSNEST_MARIMO_PUBLIC_URL") or "").rstrip("/") or None
+        apps_url = (os.environ.get("CROWSNEST_APPS_URL") or "http://127.0.0.1:2719").rstrip("/")
+        apps_public_url = (os.environ.get("CROWSNEST_APPS_PUBLIC_URL") or "").rstrip("/") or None
         catalog, data, alias = _discover_lake()
 
         return cls(
@@ -93,6 +102,8 @@ class CrowsnestConfig:
             ducklake_data_path=data,
             dagster_public_url=dagster_public_url,
             marimo_public_url=marimo_public_url,
+            apps_url=apps_url,
+            apps_public_url=apps_public_url,
         )
 
 
