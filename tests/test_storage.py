@@ -88,6 +88,26 @@ def _count(project):
         con.close()
 
 
+def test_a_notebook_connection_serves_marimos_own_sql_engine(project):
+    """
+    Marimo's built-in "DuckDB (in-memory)" engine runs SQL cells on DuckDB's
+    default connection; a notebook's own connection left it an empty database.
+    """
+    duckdb = pytest.importorskip("duckdb")
+
+    _write(project, 3)
+    con = storage.connect(project, read_only=True, default=True)
+    try:
+        assert con is duckdb.default_connection()
+        assert duckdb.sql("SELECT count(*) FROM raw.t").fetchone()[0] == 3
+        # A notebook reruns its first cell: attaching again must not fail.
+        storage.connect(project, read_only=True, default=True)
+    finally:
+        # The default connection outlives the test; leave it as it was.
+        con.execute("USE memory")
+        con.execute("DETACH sales")
+
+
 def test_a_created_lake_is_in_wal_mode(project):
     """In SQLite's default mode a reader and a writer lock each other out."""
     pytest.importorskip("duckdb")

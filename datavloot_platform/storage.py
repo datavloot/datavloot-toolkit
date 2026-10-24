@@ -135,7 +135,12 @@ else:
 
 
 def attach_statement(
-    catalog: pathlib.Path, data: pathlib.Path, alias: str, *, read_only: bool = False
+    catalog: pathlib.Path,
+    data: pathlib.Path,
+    alias: str,
+    *,
+    read_only: bool = False,
+    if_not_exists: bool = False,
 ) -> str:
     """The ATTACH for a lake, with the options every attach needs (see the module docstring)."""
     options = [
@@ -145,30 +150,44 @@ def attach_statement(
     ]
     if read_only:
         options.append("READ_ONLY")
+    attach = "ATTACH IF NOT EXISTS" if if_not_exists else "ATTACH"
     return (
-        f"ATTACH 'ducklake:sqlite:{pathlib.Path(catalog).as_posix()}' AS {alias} "
+        f"{attach} 'ducklake:sqlite:{pathlib.Path(catalog).as_posix()}' AS {alias} "
         f"({', '.join(options)})"
     )
 
 
-def connect(project_dir: pathlib.Path | None = None, *, read_only: bool = False):
+def connect(
+    project_dir: pathlib.Path | None = None, *, read_only: bool = False, default: bool = False
+):
     """
     A DuckDB connection with the project's lake attached and selected.
 
     Queries can then name tables as `schema.table`, as they did against the
     project's .duckdb file.
+
+    default=True attaches the lake to DuckDB's default connection instead of a
+    new one, and returns that. It is the connection duckdb.sql() uses, and so
+    Marimo's own "DuckDB (in-memory)" SQL engine: a notebook's SQL cells then
+    find the lake whichever engine they are set to, where a new connection
+    leaves the built-in engine with an empty database. Running it again is
+    harmless. For notebooks only: the default connection is shared by the whole
+    process, and an app under `marimo run` serves every viewer from one.
     """
     import duckdb
 
     project_dir = _resolve(project_dir)
     alias = project_name(project_dir)
-    conn = duckdb.connect()
+    conn = duckdb.default_connection() if default else duckdb.connect()
     for name in extensions.REQUIRED:
         extensions.ensure_loaded(conn, name)
     if not read_only:
         lake_dir(project_dir).mkdir(parents=True, exist_ok=True)
     conn.execute(
-        attach_statement(catalog_path(project_dir), data_path(project_dir), alias, read_only=read_only)
+        attach_statement(
+            catalog_path(project_dir), data_path(project_dir), alias,
+            read_only=read_only, if_not_exists=default,
+        )
     )
     conn.execute(f"USE {alias}")
     return conn

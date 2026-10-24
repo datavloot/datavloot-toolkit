@@ -188,6 +188,8 @@ con = storage.connect(read_only=True)              # finds the project from the 
 con.sql("SELECT * FROM <project>_business.dim_date").show()
 ```
 
+In a Marimo notebook, pass `default=True`: the lake is then attached to DuckDB's default connection, which Marimo's own "DuckDB (in-memory)" SQL engine uses, so SQL cells work on either engine. The notebook templates do this. Not in an app under `marimo run`: there one process serves every viewer.
+
 ### Upgrading a project that writes to a single `.duckdb` file
 
 Projects created before the lake write everything to `<project>.duckdb`. To move one over, take `profiles.yml`, the `lake/` directory and the `storage` calls in `<project>_platform/assets.py` and `notebooks/` from a freshly scaffolded project, then either rerun your pipelines from scratch, or copy the existing tables across from the project directory:
