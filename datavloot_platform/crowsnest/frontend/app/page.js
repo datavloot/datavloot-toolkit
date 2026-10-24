@@ -98,8 +98,10 @@ export default function CrowsNestPage() {
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-surface-3">
-          <div className="text-[11px] text-ink-3">
-            Crows Nest{services?.version ? ` v${services.version}` : ''}
+          <div className="flex items-center gap-2 text-[11px] text-ink-3">
+            {/* datavloot, the toolkit the Crows Nest comes with; also under a project's own branding */}
+            <img src="/datavloot-logo.png" alt="datavloot" title="datavloot" className="w-4 h-4" />
+            <span>Crows Nest{services?.version ? ` v${services.version}` : ''}</span>
           </div>
         </div>
       </aside>
