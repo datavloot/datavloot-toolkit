@@ -29,6 +29,8 @@ reference data. The output answers questions like:
 ## Project structure
 
 ```
+apps/
+└── vessel_traffic.py         # dashboard for the Crows Nest's Dashboards tab (marimo run, no code)
 data/
 └── guam_2025.csv             # AIS position broadcasts, downloaded on the first run (see Getting started)
 noaa_platform/                # Dagster platform layer (assets, definitions, the AIS download)
@@ -132,7 +134,17 @@ Check the **Runs** tab for logs if a build fails; the Crows Nest's Pipelines pan
 marimo edit notebooks/explore_noaa.py
 ```
 
-Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore_noaa.py` instead. The Crows Nest's Notebooks panel starts it with one click as well.
+Open [http://localhost:2718](http://localhost:2718). The Crows Nest's Notebooks panel starts it with one click as well.
+
+### Dashboard
+
+`apps/vessel_traffic.py` is the same data for someone who reads rather than explores: vessel traffic per month, the hours vessels arrive, port events per vessel category and per sea state, and the most frequent visitors, with filters for port, category and months. Notebooks in `apps/` open in the Crows Nest's **Dashboards** tab, run with `marimo run`: their output, without their code. To open it on its own:
+
+```bash
+marimo run apps/vessel_traffic.py
+```
+
+Build in `notebooks/`, then move what others should read to `apps/`.
 
 On Windows, the first notebook can make Windows Defender Firewall ask whether Python may access public and private networks. Choose **Cancel**: everything runs on `localhost`, which the firewall does not block. Do not allow public networks; [getting-started](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md#windows-asks-whether-python-may-use-public-and-private-networks) explains why and how to undo it.
 
