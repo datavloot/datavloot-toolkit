@@ -18,6 +18,9 @@ query RecentRuns($limit: Int!) {
         runId
         status
         jobName
+        assetSelection {
+          path
+        }
         startTime
         endTime
         tags {
@@ -82,7 +85,8 @@ async def get_recent_runs(limit: int = 20):
             runs.append(
                 {
                     "id": r["runId"],
-                    "job": r["jobName"],
+                    "job": _job_label(r["jobName"], r.get("assetSelection")),
+                    "job_name": r["jobName"],
                     "status": _normalize_status(r["status"]),
                     "started_at": r.get("startTime"),
                     "ended_at": r.get("endTime"),
@@ -112,7 +116,8 @@ async def get_jobs():
         jobs = []
         for repo in repos.get("nodes", []):
             for job in repo.get("jobs", []):
-                if job.get("isJob"):
+                # Dagster's own hidden jobs (__ASSET_JOB) are not the project's.
+                if job.get("isJob") and not job["name"].startswith("__"):
                     jobs.append(
                         {
                             "name": job["name"],
@@ -152,6 +157,24 @@ async def pipeline_summary(limit: int = 50):
             "latest_run": None,
             "error": "Cannot connect to Dagster",
         }
+
+
+def _job_label(job_name: str, asset_selection: list | None) -> str:
+    """
+    The job as a person reads it.
+
+    A run started with "Materialize" in Dagster belongs to no job of the
+    project: Dagster files it under a hidden job, __ASSET_JOB. What tells such
+    runs apart is the assets they materialized, so that is what is shown.
+    """
+    if not job_name.startswith("__ASSET_JOB"):
+        return job_name
+    keys = ["/".join(key["path"]) for key in asset_selection or []]
+    if not keys:
+        return "Materialize"
+    if len(keys) <= 2:
+        return "Materialize: " + ", ".join(keys)
+    return f"Materialize · {len(keys)} assets"
 
 
 def _normalize_status(dagster_status: str) -> str:
