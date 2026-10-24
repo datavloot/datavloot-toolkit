@@ -6,6 +6,7 @@ Both run on the same port so no CORS configuration is needed.
 """
 
 import pathlib
+from importlib.metadata import PackageNotFoundError, version
 
 import httpx
 from fastapi import FastAPI
@@ -17,6 +18,12 @@ from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
+
+try:
+    # The Crows Nest ships in the datavloot package, so that is its version.
+    VERSION = version("datavloot")
+except PackageNotFoundError:  # a checkout that was never installed
+    VERSION = "dev"
 FRONTEND_DIR = pathlib.Path(__file__).parent / "frontend"
 
 # Build inputs that affect static/.  Only these directories are walked — never
@@ -131,7 +138,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Crows Nest",
         description="Unified dashboard for the Optimist data platform",
-        version="0.1.0",
+        version=VERSION,
     )
 
     # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
@@ -190,6 +197,7 @@ def create_app() -> FastAPI:
             "marimo_url": config.marimo_public_url or config.marimo_url,
             "apps_url": config.apps_public_url or config.apps_url,
             "duckdb_path": config.duckdb_path,
+            "version": VERSION,
         }
 
     warning = check_static_freshness()

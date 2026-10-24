@@ -22,6 +22,7 @@ const TABS = [
 export default function CrowsNestPage() {
   const [activeTab, setActiveTab] = useState('pipelines');
   const { data: branding } = useApi(() => api.getBranding(), []);
+  const { data: services } = useApi(() => api.getServices(), []);
 
   // The project's colours (branding/ in the project) replace the defaults in globals.css.
   useEffect(() => {
@@ -97,8 +98,10 @@ export default function CrowsNestPage() {
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-surface-3">
-          <div className="text-[11px] text-ink-3">
-            Crows Nest v0.1.0
+          <div className="flex items-center gap-2.5 text-xs text-ink-3">
+            {/* datavloot, the toolkit the Crows Nest comes with; also under a project's own branding */}
+            <img src="/datavloot-logo.png" alt="" className="w-7 h-7" />
+            <span>datavloot{services?.version ? ` v${services.version}` : ''}</span>
           </div>
         </div>
       </aside>
