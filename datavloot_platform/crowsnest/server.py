@@ -195,6 +195,8 @@ def create_app() -> FastAPI:
         return {
             "dagster_url": config.dagster_public_url,
             "marimo_url": config.marimo_public_url or config.marimo_url,
+            # One Marimo for every notebook (the Falcon), not one per launch.
+            "marimo_shared": bool(config.marimo_public_url),
             "apps_url": config.apps_public_url or config.apps_url,
             "duckdb_path": config.duckdb_path,
             "version": VERSION,

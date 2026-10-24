@@ -10,9 +10,18 @@ export default function NotebooksPanel() {
 
   const [launching, setLaunching] = useState(null);
   const [launchError, setLaunchError] = useState(null);
+  // The launched notebook's own URL. Behind a proxy Marimo serves the whole
+  // notebooks/ folder; its root is Marimo's file list, which opens every
+  // notebook in a new tab, so the iframe must go to the notebook itself.
+  const [notebookUrl, setNotebookUrl] = useState(null);
 
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
+  const shared = services.data?.marimo_shared;
+  // On a laptop a running Marimo is the notebook launched last; a shared one
+  // shows a notebook only once one is picked here.
+  const showNotebook = marimoStatus === 'ok' && (notebookUrl || !shared);
+  const frameUrl = notebookUrl || marimoUrl;
 
   // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
   useEffect(() => {
@@ -25,7 +34,7 @@ export default function NotebooksPanel() {
     setLaunching(name);
     setLaunchError(null);
     try {
-      await api.launchNotebook(name);
+      const result = await api.launchNotebook(name);
       const delays = [2000, 3000, 3000, 4000, 4000, 5000, 5000, 5000];
       for (const delay of delays) {
         await new Promise((r) => setTimeout(r, delay));
@@ -36,6 +45,7 @@ export default function NotebooksPanel() {
           // keep polling
         }
       }
+      setNotebookUrl(result.url);
     } catch (err) {
       setLaunchError(err.message);
     } finally {
@@ -50,6 +60,7 @@ export default function NotebooksPanel() {
     } catch {
       // process may already be dead
     }
+    setNotebookUrl(null);
     reloadHealth();
   };
 
@@ -57,9 +68,9 @@ export default function NotebooksPanel() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Marimo notebooks</h2>
-        {marimoStatus === 'ok' && (
+        {showNotebook && (
           <a
-            href={marimoUrl}
+            href={frameUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
@@ -69,10 +80,10 @@ export default function NotebooksPanel() {
         )}
       </div>
 
-      {marimoStatus === 'ok' ? (
+      {showNotebook ? (
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-surface-3 bg-surface-1">
-            <span className="text-xs text-ink-3 font-mono">{marimoUrl}</span>
+            <span className="text-xs text-ink-3 font-mono">{frameUrl}</span>
             <button
               onClick={handleClose}
               className="text-xs text-ink-2 hover:text-ink-0 transition-colors flex items-center gap-1.5 px-2 py-1 rounded hover:bg-surface-2"
@@ -84,7 +95,7 @@ export default function NotebooksPanel() {
             </button>
           </div>
           <iframe
-            src={marimoUrl}
+            src={frameUrl}
             className="w-full border-0"
             style={{ height: 'calc(100vh - 230px)', minHeight: '560px' }}
             title="Marimo notebooks"
@@ -95,6 +106,7 @@ export default function NotebooksPanel() {
       ) : (
         <NotRunning
           marimoUrl={marimoUrl}
+          running={marimoStatus === 'ok'}
           notebooks={notebooks.data?.notebooks || []}
           notebooksAvailable={notebooks.data?.available}
           notebooksLoading={notebooks.loading}
@@ -118,7 +130,7 @@ function LaunchingState({ name }) {
   );
 }
 
-function NotRunning({ marimoUrl, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
+function NotRunning({ marimoUrl, running, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
   return (
     <div className="space-y-4">
       {launchError && (
@@ -138,9 +150,13 @@ function NotRunning({ marimoUrl, notebooks, notebooksAvailable, notebooksLoading
             </svg>
           </div>
           <div>
-            <p className="text-sm font-medium text-ink-1">Marimo is not running</p>
+            {/* Running yet listed: a shared Marimo, waiting for a notebook to be picked. */}
+            <p className="text-sm font-medium text-ink-1">
+              {running ? 'Pick a notebook to open' : 'Marimo is not running'}
+            </p>
             <p className="text-xs text-ink-3 mt-0.5">
-              Expected at <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
+              {running ? 'Running at ' : 'Expected at '}
+              <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
             </p>
           </div>
         </div>
