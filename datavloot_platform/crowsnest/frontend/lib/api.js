@@ -52,6 +52,14 @@ export const api = {
     }),
   stopNotebook: () => apiFetch('/notebooks/stop', { method: 'POST' }),
 
+  // Apps
+  getApps: () => apiFetch('/apps/list'),
+  openApp: (name) =>
+    apiFetch('/apps/open', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
   // Health & Services
   getHealth: () => apiFetch('/health'),
   getServices: () => apiFetch('/services'),

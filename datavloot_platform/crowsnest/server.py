@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config
 from datavloot_platform.crowsnest.db import get_conn
-from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks
+from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 FRONTEND_DIR = pathlib.Path(__file__).parent / "frontend"
@@ -144,6 +144,7 @@ def create_app() -> FastAPI:
     app.include_router(query.router, prefix="/api/query", tags=["SQL Query"])
     app.include_router(catalog.router, prefix="/api/catalog", tags=["Catalog"])
     app.include_router(notebooks.router, prefix="/api/notebooks", tags=["Notebooks"])
+    app.include_router(apps.router, prefix="/api/apps", tags=["Apps"])
 
     @app.get("/api/health")
     async def health_check():
@@ -186,6 +187,7 @@ def create_app() -> FastAPI:
         return {
             "dagster_url": config.dagster_public_url,
             "marimo_url": config.marimo_public_url or config.marimo_url,
+            "apps_url": config.apps_public_url or config.apps_url,
             "duckdb_path": config.duckdb_path,
         }
 

@@ -39,7 +39,8 @@
       "redirectUris": [
         "https://crowsnest.${DOMAIN}/oauth2/callback",
         "https://dagster.${DOMAIN}/oauth2/callback",
-        "https://marimo.${DOMAIN}/oauth2/callback"
+        "https://marimo.${DOMAIN}/oauth2/callback",
+        "https://apps.${DOMAIN}/oauth2/callback"
       ],
       "webOrigins": [
         "+"

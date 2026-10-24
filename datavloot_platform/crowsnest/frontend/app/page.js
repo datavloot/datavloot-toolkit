@@ -5,10 +5,12 @@ import QualityPanel from '../components/QualityPanel';
 import QueryPanel from '../components/QueryPanel';
 import CatalogPanel from '../components/CatalogPanel';
 import NotebooksPanel from '../components/NotebooksPanel';
+import AppsPanel from '../components/AppsPanel';
 import HealthBanner from '../components/HealthBanner';
 
 const TABS = [
   { id: 'pipelines', label: 'Pipelines', icon: PipelineIcon },
+  { id: 'apps', label: 'Dashboards', icon: AppsIcon },
   { id: 'quality', label: 'Data quality', icon: QualityIcon },
   { id: 'query', label: 'SQL editor', icon: QueryIcon },
   { id: 'catalog', label: 'Catalog', icon: CatalogIcon },
@@ -85,6 +87,7 @@ export default function CrowsNestPage() {
           {activeTab === 'query' && <QueryPanel />}
           {activeTab === 'catalog' && <CatalogPanel />}
           {activeTab === 'notebooks' && <NotebooksPanel />}
+          {activeTab === 'apps' && <AppsPanel />}
         </div>
       </main>
       </div>
@@ -97,6 +100,18 @@ function PipelineIcon({ active }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
       stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 6h16M4 12h10M4 18h6" />
+    </svg>
+  );
+}
+
+function AppsIcon({ active }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1.5" />
+      <rect x="14" y="3" width="7" height="5" rx="1.5" />
+      <rect x="14" y="12" width="7" height="9" rx="1.5" />
+      <rect x="3" y="16" width="7" height="5" rx="1.5" />
     </svg>
   );
 }

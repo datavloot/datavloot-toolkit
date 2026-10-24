@@ -3,6 +3,7 @@
 #   dagster.<DOMAIN>     Dagster UI       (dagster-webserver; dagster-daemon runs schedules)
 #   crowsnest.<DOMAIN>   Crows Nest
 #   marimo.<DOMAIN>      Marimo notebooks
+#   apps.<DOMAIN>        the project's apps (marimo run apps/), shown in the Crows Nest's Dashboards
 #
 # Only Traefik publishes ports. Every router goes through the `auth` middleware,
 # from traefik/auth-${FALCON_AUTH}.yml: basic auth (users.htpasswd), or oidc,
@@ -71,6 +72,8 @@ services:
       CROWSNEST_DAGSTER_PUBLIC_URL: https://dagster.${DOMAIN}
       CROWSNEST_MARIMO_URL: http://marimo:2718
       CROWSNEST_MARIMO_PUBLIC_URL: https://marimo.${DOMAIN}
+      CROWSNEST_APPS_URL: http://apps:2719
+      CROWSNEST_APPS_PUBLIC_URL: https://apps.${DOMAIN}
     labels:
       - traefik.enable=true
       - traefik.http.routers.crowsnest.rule=Host(`crowsnest.${DOMAIN}`)
@@ -96,6 +99,20 @@ services:
       - traefik.http.routers.marimo.entrypoints=websecure
       - traefik.http.routers.marimo.middlewares=auth@file
       - traefik.http.services.marimo.loadbalancer.server.port=2718
+
+  # The project's apps: the notebooks in apps/, read-only and without their
+  # code, for the people who read the results. One server for every app; the
+  # Crows Nest shows them in its Dashboards tab. prepare creates apps/ when the
+  # project has none, or this service would not start.
+  apps:
+    <<: *falcon
+    command: marimo run apps --host 0.0.0.0 --port 2719 --headless --no-token
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.apps.rule=Host(`apps.${DOMAIN}`)
+      - traefik.http.routers.apps.entrypoints=websecure
+      - traefik.http.routers.apps.middlewares=auth@file
+      - traefik.http.services.apps.loadbalancer.server.port=2719
 
   # FALCON_AUTH=oidc only (the profile follows from COMPOSE_PROFILES in .env).
   # Traefik asks it about every request (traefik/auth-oidc.yml), and it sends
@@ -137,7 +154,7 @@ services:
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
     labels:
       - traefik.enable=true
-      - traefik.http.routers.oauth2.rule=(Host(`crowsnest.${DOMAIN}`) || Host(`dagster.${DOMAIN}`) || Host(`marimo.${DOMAIN}`)) && PathPrefix(`/oauth2/`)
+      - traefik.http.routers.oauth2.rule=(Host(`crowsnest.${DOMAIN}`) || Host(`dagster.${DOMAIN}`) || Host(`marimo.${DOMAIN}`) || Host(`apps.${DOMAIN}`)) && PathPrefix(`/oauth2/`)
       - traefik.http.routers.oauth2.entrypoints=websecure
       - traefik.http.services.oauth2-proxy.loadbalancer.server.port=4180
 
