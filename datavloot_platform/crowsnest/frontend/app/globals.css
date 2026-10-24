@@ -4,6 +4,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The default palette, as "r g b" for Tailwind (tailwind.config.js). A project's
+   branding/ overrides these at runtime: routes/branding.py, app/page.js. */
+:root {
+  --cn-accent-50: 227 239 243;
+  --cn-accent-100: 184 218 240;
+  --cn-accent-200: 168 212 232;
+  --cn-accent-400: 97 160 188;
+  --cn-accent-600: 44 128 165;
+  --cn-accent-700: 31 106 138;
+  --cn-accent-800: 26 58 74;
+  --cn-accent-900: 15 39 53;
+  --cn-surface-1: 210 234 246;
+  --cn-surface-2: 184 218 240;
+  --cn-surface-3: 144 195 220;
+  --cn-ink-0: 42 31 20;
+  --cn-ink-1: 74 53 32;
+  --cn-ink-2: 110 90 69;
+  --cn-ink-3: 155 136 112;
+}
+
 @layer base {
   body {
     @apply bg-surface-1 text-ink-0 antialiased;

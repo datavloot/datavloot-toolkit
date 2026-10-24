@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config
 from datavloot_platform.crowsnest.db import get_conn
-from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps
+from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 FRONTEND_DIR = pathlib.Path(__file__).parent / "frontend"
@@ -145,6 +145,7 @@ def create_app() -> FastAPI:
     app.include_router(catalog.router, prefix="/api/catalog", tags=["Catalog"])
     app.include_router(notebooks.router, prefix="/api/notebooks", tags=["Notebooks"])
     app.include_router(apps.router, prefix="/api/apps", tags=["Apps"])
+    app.include_router(branding.router, prefix="/api/branding", tags=["Branding"])
 
     @app.get("/api/health")
     async def health_check():
