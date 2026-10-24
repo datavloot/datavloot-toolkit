@@ -2,6 +2,7 @@
 Notebooks route — discovers and launches Marimo notebooks from the project's notebooks/ directory.
 """
 
+import atexit
 import pathlib
 import subprocess
 
@@ -83,3 +84,15 @@ async def stop_notebook():
         _marimo_process = None
     _kill_port(2718)
     return {"stopped": True}
+
+
+@atexit.register
+def _stop_server() -> None:
+    # Started in its own process group, so it would outlive the Crows Nest and
+    # go on serving a notebook from a session that is over: the next Crows Nest
+    # then shows it as running, even when the file has moved since.
+    if _marimo_process is not None and _marimo_process.poll() is None:
+        try:
+            _marimo_process.kill()
+        except Exception:
+            pass

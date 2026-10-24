@@ -15,7 +15,7 @@ pytest.importorskip("fastapi", reason="fastapi is not installed")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
-from datavloot_platform.crowsnest.routes import apps  # noqa: E402
+from datavloot_platform.crowsnest.routes import apps, notebooks  # noqa: E402
 
 DASHBOARD = '''import marimo
 
@@ -128,3 +128,18 @@ def test_an_apps_service_is_linked_to_not_started(make_client, monkeypatch):
 
 def test_a_laptop_links_the_local_apps_server(make_client):
     assert make_client().get("/api/services").json()["apps_url"] == "http://127.0.0.1:2719"
+
+
+@pytest.mark.parametrize("route", [apps, notebooks], ids=["apps", "notebooks"])
+def test_the_marimo_servers_stop_with_the_crows_nest(monkeypatch, route):
+    # Both run in their own process group; left running they serve a session
+    # that is over, which the next Crows Nest then shows as live.
+    killed = []
+
+    class _Running(_FakeProcess):
+        def kill(self):
+            killed.append(True)
+
+    monkeypatch.setattr(route, "_apps_process" if route is apps else "_marimo_process", _Running())
+    route._stop_server()
+    assert killed == [True]
