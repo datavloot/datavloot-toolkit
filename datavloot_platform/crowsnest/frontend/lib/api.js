@@ -60,6 +60,9 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  // Branding
+  getBranding: () => apiFetch('/branding'),
+
   // Health & Services
   getHealth: () => apiFetch('/health'),
   getServices: () => apiFetch('/services'),

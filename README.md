@@ -329,6 +329,26 @@ Opens [http://localhost:8080](http://localhost:8080) with six panels:
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
 | **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
 
+### Your own name, logo and colours
+
+A project can give the Crows Nest its own look with a `branding/` folder; without one it looks as above.
+
+```
+branding/
+  branding.yml   # name and colours, every key optional
+  logo.svg       # or logo.png; replaces the Optimist mark in the sidebar
+```
+
+```yaml
+name: KetenConnect
+colors:
+  accent: "#0070c0"      # active tab, buttons, links
+  text: "#002060"        # text; the muted shades are derived from it
+  background: "#f2f2f2"  # page background; hover and borders are derived from it
+```
+
+You name three colours; the Crows Nest derives every shade it uses from them. Restart is not needed: the next page load picks up a change.
+
 The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
 
 The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started from the project directory, and infers the Elementary schema from your target schema name. It reads the lake while pipelines write to it. No additional configuration is needed for standard projects. You can override any setting with environment variables:

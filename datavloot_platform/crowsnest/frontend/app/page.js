@@ -1,5 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '../lib/api';
+import { useApi } from '../lib/hooks';
 import PipelinesPanel from '../components/PipelinesPanel';
 import QualityPanel from '../components/QualityPanel';
 import QueryPanel from '../components/QueryPanel';
@@ -19,6 +21,23 @@ const TABS = [
 
 export default function CrowsNestPage() {
   const [activeTab, setActiveTab] = useState('pipelines');
+  const { data: branding } = useApi(() => api.getBranding(), []);
+
+  // The project's colours (branding/ in the project) replace the defaults in globals.css.
+  useEffect(() => {
+    if (!branding) return;
+    for (const [name, value] of Object.entries(branding.variables || {})) {
+      document.documentElement.style.setProperty(name, value);
+    }
+    // Remembered for the next page load, which applies them before the first
+    // paint (app/layout.js) instead of flashing the default colours.
+    try {
+      localStorage.setItem('cn-branding', JSON.stringify(branding.variables || {}));
+    } catch {
+      // storage blocked: the colours still arrive, a moment later
+    }
+    if (branding.name) document.title = `${branding.name} · Crows Nest`;
+  }, [branding]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -30,8 +49,14 @@ export default function CrowsNestPage() {
       <div className="flex flex-1 min-h-0">
       {/* Sidebar */}
       <aside className="w-60 bg-white border-r border-surface-3 flex flex-col fixed h-full z-10">
-        {/* Logo */}
+        {/* Logo: the project's own from branding/, else the Optimist mark */}
         <div className="px-5 py-5 border-b border-surface-3">
+          {branding?.logo ? (
+            <div className="space-y-1.5">
+              <img src={branding.logo} alt={branding.name || 'Logo'} className="max-h-9 max-w-full" />
+              <div className="text-[11px] text-ink-3">crows nest</div>
+            </div>
+          ) : (
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-datavloot-600 flex items-center justify-center">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round">
@@ -47,10 +72,11 @@ export default function CrowsNestPage() {
               </svg>
             </div>
             <div>
-              <div className="font-semibold text-sm text-ink-0 tracking-tight">Optimist</div>
+              <div className="font-semibold text-sm text-ink-0 tracking-tight">{branding?.name || 'Optimist'}</div>
               <div className="text-[11px] text-ink-3">crows nest</div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Nav */}
@@ -98,7 +124,7 @@ export default function CrowsNestPage() {
 function PipelineIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 6h16M4 12h10M4 18h6" />
     </svg>
   );
@@ -107,7 +133,7 @@ function PipelineIcon({ active }) {
 function AppsIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="9" rx="1.5" />
       <rect x="14" y="3" width="7" height="5" rx="1.5" />
       <rect x="14" y="12" width="7" height="9" rx="1.5" />
@@ -119,7 +145,7 @@ function AppsIcon({ active }) {
 function QualityIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 12l2 2 4-4" />
       <path d="M12 3a9 9 0 110 18 9 9 0 010-18z" />
     </svg>
@@ -129,7 +155,7 @@ function QualityIcon({ active }) {
 function QueryIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 9l3 3-3 3" />
       <path d="M14 15h3" />
       <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -140,7 +166,7 @@ function QueryIcon({ active }) {
 function CatalogIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
       <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
       <path d="M8 7h8M8 11h5" />
@@ -151,7 +177,7 @@ function CatalogIcon({ active }) {
 function NotebooksIcon({ active }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-      stroke={active ? '#2C80A5' : '#9b8870'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      stroke="currentColor" className={active ? 'text-datavloot-600' : 'text-ink-3'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="3" width="20" height="14" rx="2" />
       <path d="M8 21h8M12 17v4" />
       <path d="M9 8l2 2-2 2" />
