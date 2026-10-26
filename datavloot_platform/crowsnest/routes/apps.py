@@ -21,7 +21,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from datavloot_platform.crowsnest.config import get_config
-from datavloot_platform.crowsnest.processes import kill_port, start_marimo
+from datavloot_platform.crowsnest.processes import port_in_use, port_taken_message, start_marimo, stop_process
 
 router = APIRouter()
 
@@ -86,9 +86,10 @@ async def _ensure_server(url: str) -> None:
     global _apps_process
 
     if _apps_process is None or _apps_process.poll() is not None:
-        # Whatever else holds the port (a server left from an earlier session)
-        # serves another project's apps, or none.
-        kill_port(APPS_PORT)
+        # Whatever else holds the port (another project's apps, or a server left
+        # from an earlier session) is not ours to stop.
+        if port_in_use(APPS_PORT):
+            raise HTTPException(409, port_taken_message(APPS_PORT))
         _apps_process = start_marimo(
             ["run", APPS_DIR, "--headless", "--no-token", "--port", str(APPS_PORT)]
         )
@@ -116,8 +117,4 @@ async def _ensure_server(url: str) -> None:
 def _stop_server() -> None:
     # Started in its own process group, so it would outlive the Crows Nest and
     # keep serving this project's apps after `datavloot start` is stopped.
-    if _apps_process is not None and _apps_process.poll() is None:
-        try:
-            _apps_process.kill()
-        except Exception:
-            pass
+    stop_process(_apps_process)
