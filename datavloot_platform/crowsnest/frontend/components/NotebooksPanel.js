@@ -18,10 +18,21 @@ export default function NotebooksPanel() {
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
   const shared = services.data?.marimo_shared;
-  // On a laptop a running Marimo is the notebook launched last; a shared one
-  // shows a notebook only once one is picked here.
-  const showNotebook = marimoStatus === 'ok' && (notebookUrl || !shared);
+  // On a laptop only the Marimo this Crows Nest started is shown, never
+  // whatever else answers on the port; a shared one shows a notebook only once
+  // one is picked here.
+  const showNotebook = marimoStatus === 'ok' && (shared ? !!notebookUrl : !!notebooks.data?.running);
+  // Wait for the notebook list before calling the port taken: health can
+  // answer first, and our own Marimo would briefly look like someone else's.
+  const portTaken = services.data && !shared && marimoStatus === 'ok' && notebooks.data && !showNotebook;
   const frameUrl = notebookUrl || marimoUrl;
+
+  // Ask again which Marimo is ours whenever health sees one come or go: ours
+  // can end without Close (a crash, its own Shutdown), and the next one to take
+  // the port would be embedded as ours; another tab can have launched it.
+  useEffect(() => {
+    if (marimoStatus) notebooks.reload();
+  }, [marimoStatus]);
 
   // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
   useEffect(() => {
@@ -49,6 +60,9 @@ export default function NotebooksPanel() {
     } catch (err) {
       setLaunchError(err.message);
     } finally {
+      // Learn that the Marimo is ours before leaving the launching state, or
+      // the panel briefly takes it for someone else's.
+      await notebooks.reload();
       setLaunching(null);
       reloadHealth();
     }
@@ -61,7 +75,10 @@ export default function NotebooksPanel() {
       // process may already be dead
     }
     setNotebookUrl(null);
-    reloadHealth();
+    // Health first: until it has seen the port go quiet, the notebook list
+    // alone would make our closed Marimo look like someone else's.
+    await reloadHealth();
+    notebooks.reload();
   };
 
   return (
@@ -107,6 +124,7 @@ export default function NotebooksPanel() {
         <NotRunning
           marimoUrl={marimoUrl}
           running={marimoStatus === 'ok'}
+          portTaken={portTaken}
           notebooks={notebooks.data?.notebooks || []}
           notebooksAvailable={notebooks.data?.available}
           notebooksLoading={notebooks.loading}
@@ -130,7 +148,7 @@ function LaunchingState({ name }) {
   );
 }
 
-function NotRunning({ marimoUrl, running, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
+function NotRunning({ marimoUrl, running, portTaken, notebooks, notebooksAvailable, notebooksLoading, launchError, onLaunch }) {
   return (
     <div className="space-y-4">
       {launchError && (
@@ -150,14 +168,27 @@ function NotRunning({ marimoUrl, running, notebooks, notebooksAvailable, noteboo
             </svg>
           </div>
           <div>
-            {/* Running yet listed: a shared Marimo, waiting for a notebook to be picked. */}
-            <p className="text-sm font-medium text-ink-1">
-              {running ? 'Pick a notebook to open' : 'Marimo is not running'}
-            </p>
-            <p className="text-xs text-ink-3 mt-0.5">
-              {running ? 'Running at ' : 'Expected at '}
-              <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
-            </p>
+            {portTaken ? (
+              <>
+                <p className="text-sm font-medium text-ink-1">Another Marimo is using this port</p>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  Something the Crows Nest did not start answers at{' '}
+                  <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code> — another project, or one left
+                  over from an earlier session. Stop it to launch a notebook here.
+                </p>
+              </>
+            ) : (
+              <>
+                {/* Running yet listed: a shared Marimo, waiting for a notebook to be picked. */}
+                <p className="text-sm font-medium text-ink-1">
+                  {running ? 'Pick a notebook to open' : 'Marimo is not running'}
+                </p>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  {running ? 'Running at ' : 'Expected at '}
+                  <code className="font-mono bg-surface-2 px-1 rounded">{marimoUrl}</code>
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -181,10 +212,11 @@ function NotRunning({ marimoUrl, running, notebooks, notebooksAvailable, noteboo
               </div>
             ))}
             <p className="text-xs text-ink-3 pt-1">
-              Or run manually:{' '}
+              Or run it yourself with{' '}
               <code className="font-mono bg-surface-2 px-1 rounded">
                 marimo edit notebooks/{notebooks[0]?.name}
               </code>
+              ; it then opens in a browser tab of its own, not in this panel.
             </p>
           </div>
         ) : (
