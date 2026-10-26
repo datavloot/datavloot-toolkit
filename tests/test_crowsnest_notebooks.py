@@ -7,6 +7,7 @@ user's own session in another project -- and Launch refuses rather than kill it.
 """
 
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -267,3 +268,75 @@ def test_list_reports_the_notebook_it_started(app, monkeypatch, started):
     started[0].kill()
     started[0].wait(timeout=10)
     assert client.get("/api/notebooks/list").json()["running"] is None, "a dead Marimo reported as running"
+
+
+# `datavloot launch` with a stand-in for the Marimo it started: a process in a
+# session of its own, as start_marimo gives it, whose pid goes to stdout.
+LAUNCH_WITH_A_MARIMO = """
+import argparse, signal, subprocess, sys
+if sys.argv[2] == "nohup":
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+from datavloot_platform import cli
+from datavloot_platform.crowsnest.routes import notebooks
+notebooks._marimo_process = subprocess.Popen(
+    [sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True
+)
+print(notebooks._marimo_process.pid, flush=True)
+cli.cmd_crowsnest(argparse.Namespace(host="127.0.0.1", port=int(sys.argv[1]), open=False))
+"""
+
+
+def running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def launch_with_a_marimo(how=""):
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    crowsnest = subprocess.Popen(
+        [sys.executable, "-c", LAUNCH_WITH_A_MARIMO, str(port), how],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+    )
+    marimo = int(crowsnest.stdout.readline())
+    assert wait_until(lambda: serves(port), timeout=30), "the Crows Nest never served"
+    return crowsnest, marimo
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="Windows has no SIGHUP")
+@pytest.mark.parametrize("sig", ["SIGHUP", "SIGTERM"], ids=["terminal closed", "terminated"])
+def test_the_marimo_stops_when_the_crows_nest_is_signalled(app, sig):
+    """
+    Closing the terminal sends SIGHUP, which uvicorn leaves alone. uvicorn shuts
+    down on SIGTERM, but then raises it again, and Python's default for both
+    ends the process without the atexit hooks that stop Marimo; Marimo, in a
+    session of its own, would keep its port.
+    """
+    crowsnest, marimo = launch_with_a_marimo()
+    try:
+        crowsnest.send_signal(getattr(signal, sig))
+        crowsnest.wait(timeout=30)
+        assert wait_until(lambda: not running(marimo), timeout=10), f"Marimo outlived the Crows Nest on {sig}"
+    finally:
+        crowsnest.kill()
+        crowsnest.wait(timeout=10)
+        crowsnest.stdout.close()
+        kill_tree(marimo)
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="Windows has no SIGHUP")
+def test_nohup_still_keeps_the_crows_nest_running(app):
+    crowsnest, marimo = launch_with_a_marimo("nohup")
+    try:
+        crowsnest.send_signal(signal.SIGHUP)
+        time.sleep(1)
+        assert crowsnest.poll() is None, "the Crows Nest ended on a SIGHUP that nohup told it to ignore"
+    finally:
+        crowsnest.send_signal(signal.SIGINT)
+        crowsnest.wait(timeout=30)
+        crowsnest.stdout.close()
+        kill_tree(marimo)

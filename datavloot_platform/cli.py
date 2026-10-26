@@ -3,6 +3,7 @@ import importlib.metadata
 import os
 import pathlib
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -208,6 +209,15 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
     app = create_app()
+    # The Marimo servers run in a session of their own, and the atexit hooks
+    # that stop them run only when Python exits normally. uvicorn shuts down on
+    # SIGTERM and then raises it again into the handler it found, so make that
+    # one exit normally. Closing the terminal sends SIGHUP, which uvicorn does
+    # not handle: turn it into that SIGTERM, unless SIGHUP is ignored (nohup).
+    if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    if hasattr(signal, "SIGHUP") and signal.getsignal(signal.SIGHUP) is signal.SIG_DFL:
+        signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     uvicorn.run(app, host=args.host, port=args.port)
 
 
