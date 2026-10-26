@@ -1,11 +1,44 @@
 """
 The Marimo servers the Crows Nest starts on a laptop: one for notebooks
 (routes/notebooks.py) and one for apps (routes/apps.py). Behind a proxy (the
-Falcon) both are services of their own and nothing here runs.
+Falcon) both are services of their own and nothing here runs. The CLI stops
+`dagster dev` the same way the Crows Nest stops these.
 """
 
+import os
+import signal
 import subprocess
 import sys
+
+
+def terminate_tree(proc: subprocess.Popen) -> None:
+    """
+    Kill the whole process tree, not just the launcher.
+
+    `dagster dev` supervises a webserver, a daemon, and gRPC code-server children.
+    proc.terminate() signals only the launcher, orphaning the grandchildren -- they
+    keep holding port 3000 and spawning dbt runs after datavloot has exited, so every
+    failed start leaves debris that interferes with the next one.
+    """
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            # taskkill walks the tree itself: /T includes children, /F forces.
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                check=False,
+            )
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except Exception:
+        proc.terminate()
+
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 def kill_port(port: int) -> None:

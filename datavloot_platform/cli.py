@@ -3,12 +3,12 @@ import importlib.metadata
 import os
 import pathlib
 import shutil
-import signal
 import subprocess
 import sys
 import time
 
 from datavloot_platform import location
+from datavloot_platform.crowsnest.processes import terminate_tree
 
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
@@ -302,36 +302,6 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
     return f"Dagster did not become ready within {timeout} seconds ({last_detail})."
 
 
-def _terminate_tree(proc: subprocess.Popen) -> None:
-    """
-    Kill the whole process tree, not just the launcher.
-
-    `dagster dev` supervises a webserver, a daemon, and gRPC code-server children.
-    proc.terminate() signals only the launcher, orphaning the grandchildren -- they
-    keep holding port 3000 and spawning dbt runs after datavloot has exited, so every
-    failed start leaves debris that interferes with the next one.
-    """
-    if proc.poll() is not None:
-        return
-    try:
-        if os.name == "nt":
-            # taskkill walks the tree itself: /T includes children, /F forces.
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True,
-                check=False,
-            )
-        else:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    except Exception:
-        proc.terminate()
-
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
 def cmd_start(args: argparse.Namespace) -> None:
     try:
         import uvicorn  # noqa: F401
@@ -360,7 +330,7 @@ def cmd_start(args: argparse.Namespace) -> None:
     print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
     error = _wait_for_dagster(dagster_proc, graphql_url)
     if error:
-        _terminate_tree(dagster_proc)
+        terminate_tree(dagster_proc)
         sys.exit(f"Error: {error}")
 
     print("Dagster is ready.")
@@ -369,7 +339,7 @@ def cmd_start(args: argparse.Namespace) -> None:
         cmd_crowsnest(args)
     finally:
         print("\nShutting down Dagster…")
-        _terminate_tree(dagster_proc)
+        terminate_tree(dagster_proc)
 
 
 def main() -> None:
