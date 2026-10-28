@@ -109,7 +109,11 @@ class CrowsnestConfig:
 
 def get_config() -> CrowsnestConfig:
     global _config
-    if _config is None:
+    # No lake yet: look again, so the lake the first run creates shows up
+    # without a restart (#93). Once found, it is kept.
+    if _config is None or (
+        _config.ducklake_catalog_path is None and _discover_lake()[0] is not None
+    ):
         _config = CrowsnestConfig.discover()
     return _config
 
