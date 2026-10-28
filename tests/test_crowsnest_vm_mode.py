@@ -15,6 +15,7 @@ pytest.importorskip("fastapi", reason="fastapi is not installed")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
+from datavloot_platform.crowsnest import processes  # noqa: E402
 from datavloot_platform.crowsnest.routes import notebooks  # noqa: E402
 
 
@@ -61,16 +62,25 @@ def test_the_browser_gets_the_public_urls(make_client):
 
 
 def test_a_marimo_service_is_linked_to_not_started(make_client, monkeypatch):
-    started = []
+    started, stopped = [], []
     monkeypatch.setattr(notebooks.subprocess, "Popen", lambda *a, **k: started.append(a))
-    monkeypatch.setattr(notebooks, "_kill_port", lambda port: started.append(port))
+    monkeypatch.setattr(processes, "terminate_tree", stopped.append)
+    # Something the Crows Nest would stop on a laptop, so that /stop has a reason to.
+    monkeypatch.setattr(notebooks, "_marimo_process", _Running())
     client = make_client(CROWSNEST_MARIMO_PUBLIC_URL="https://marimo.example.nl")
 
     launched = client.post("/api/notebooks/launch", json={"name": "explore.py"}).json()
     assert launched["url"] == "https://marimo.example.nl/?file=explore.py"
 
     assert client.post("/api/notebooks/stop").json() == {"stopped": False}
-    assert started == [], "the Crows Nest started or killed a process next to the Marimo service"
+    assert started == [] and stopped == [], "the Crows Nest started or stopped a process next to the Marimo service"
+
+
+class _Running:
+    """A process that has not exited."""
+
+    def poll(self):
+        return None
 
 
 def test_the_panel_learns_whether_marimo_is_shared(make_client):

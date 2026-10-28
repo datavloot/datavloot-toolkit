@@ -7,6 +7,10 @@ behind a proxy (the Falcon) the apps are a service of their own, which it only
 links to. A name from the browser never reaches outside apps/.
 """
 
+import socket
+import subprocess
+import sys
+
 import pytest
 
 pytest.importorskip("duckdb", reason="duckdb is not installed")
@@ -16,6 +20,16 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
 from datavloot_platform.crowsnest.routes import apps, notebooks  # noqa: E402
+
+from .test_crowsnest_notebooks import (  # noqa: E402
+    OWN_GROUP,
+    SERVE,
+    SERVES_FROM_A_CHILD,
+    finds_the_listener,
+    kill_tree,
+    serves,
+    wait_until,
+)
 
 DASHBOARD = '''import marimo
 
@@ -34,6 +48,10 @@ def make_client(tmp_path, monkeypatch):
     for var in ("CROWSNEST_AUTH_TOKEN", "CROWSNEST_APPS_URL", "CROWSNEST_APPS_PUBLIC_URL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(apps, "_apps_process", None)
+    # A free port of its own, so an apps server the developer runs on 2719 is not in the way.
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        monkeypatch.setattr(apps, "APPS_PORT", s.getsockname()[1])
 
     def make(with_apps=True, **env) -> TestClient:
         if with_apps:
@@ -53,9 +71,6 @@ def make_client(tmp_path, monkeypatch):
 class _FakeProcess:
     def poll(self):
         return None
-
-    def kill(self):
-        pass
 
 
 def test_lists_apps_with_their_titles(make_client):
@@ -104,7 +119,6 @@ def test_a_laptop_starts_one_server_for_every_app(make_client, monkeypatch):
             return _Answers()
 
     monkeypatch.setattr(apps, "start_marimo", start)
-    monkeypatch.setattr(apps, "kill_port", lambda port: None)
     monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
     client = make_client()
 
@@ -113,12 +127,28 @@ def test_a_laptop_starts_one_server_for_every_app(make_client, monkeypatch):
 
     assert first["url"] == "http://127.0.0.1:2719/?file=traffic.py"
     assert second["url"] == "http://127.0.0.1:2719/?file=plain.py"
-    assert calls == [["run", "apps", "--headless", "--no-token", "--port", "2719"]], "one server for every app"
+    port = str(apps.APPS_PORT)
+    assert calls == [["run", "apps", "--headless", "--no-token", "--port", port]], "one server for every app"
+
+
+def test_open_leaves_a_foreign_apps_server_alone(make_client, monkeypatch):
+    """Whatever else holds the port -- another project's apps -- is not ours to stop; Open says so."""
+    monkeypatch.setattr(apps, "start_marimo", lambda args: pytest.fail("started an apps server next to a foreign one"))
+    client = make_client()
+    foreign = subprocess.Popen([sys.executable, "-c", SERVE, str(apps.APPS_PORT)], **OWN_GROUP)
+    try:
+        assert wait_until(lambda: serves(apps.APPS_PORT)), "the foreign server never listened"
+        response = client.post("/api/apps/open", json={"name": "traffic.py"})
+        assert response.status_code == 409
+        assert finds_the_listener(apps.APPS_PORT) in response.json()["detail"]
+        assert foreign.poll() is None, "the Crows Nest stopped an apps server it did not start"
+    finally:
+        foreign.kill()
+        foreign.wait(timeout=10)
 
 
 def test_an_apps_service_is_linked_to_not_started(make_client, monkeypatch):
     monkeypatch.setattr(apps, "start_marimo", lambda args: pytest.fail("started marimo next to the apps service"))
-    monkeypatch.setattr(apps, "kill_port", lambda port: pytest.fail("killed a port next to the apps service"))
     client = make_client(CROWSNEST_APPS_PUBLIC_URL="https://apps.example.nl/")
 
     opened = client.post("/api/apps/open", json={"name": "traffic.py"}).json()
@@ -133,13 +163,23 @@ def test_a_laptop_links_the_local_apps_server(make_client):
 @pytest.mark.parametrize("route", [apps, notebooks], ids=["apps", "notebooks"])
 def test_the_marimo_servers_stop_with_the_crows_nest(monkeypatch, route):
     # Both run in their own process group; left running they serve a session
-    # that is over, which the next Crows Nest then shows as live.
-    killed = []
-
-    class _Running(_FakeProcess):
-        def kill(self):
-            killed.append(True)
-
-    monkeypatch.setattr(route, "_apps_process" if route is apps else "_marimo_process", _Running())
-    route._stop_server()
-    assert killed == [True]
+    # that is over, which the next Crows Nest then shows as live. Whatever the
+    # server started goes too: `marimo edit` runs a kernel process per session.
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    server = subprocess.Popen(
+        [sys.executable, "-c", SERVES_FROM_A_CHILD, str(port), SERVE], stdout=subprocess.PIPE, **OWN_GROUP
+    )
+    child = int(server.stdout.readline())
+    monkeypatch.setattr(route, "_apps_process" if route is apps else "_marimo_process", server)
+    try:
+        assert wait_until(lambda: serves(port)), "the stand-in's child never served"
+        route._stop_server()
+        assert wait_until(lambda: server.poll() is not None, timeout=10), "the server outlived the Crows Nest"
+        assert wait_until(lambda: not serves(port), timeout=5), "a process the server started outlived the Crows Nest"
+    finally:
+        kill_tree(child)
+        kill_tree(server.pid)
+        server.wait(timeout=10)
+        server.stdout.close()

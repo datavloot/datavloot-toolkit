@@ -9,6 +9,7 @@ import sys
 import time
 
 from datavloot_platform import location
+from datavloot_platform.crowsnest.processes import terminate_tree
 
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
@@ -208,6 +209,15 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
     app = create_app()
+    # The Marimo servers run in a session of their own, and the atexit hooks
+    # that stop them run only when Python exits normally. uvicorn shuts down on
+    # SIGTERM and then raises it again into the handler it found, so make that
+    # one exit normally. Closing the terminal sends SIGHUP, which uvicorn does
+    # not handle: turn it into that SIGTERM, unless SIGHUP is ignored (nohup).
+    if signal.getsignal(signal.SIGTERM) is signal.SIG_DFL:
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    if hasattr(signal, "SIGHUP") and signal.getsignal(signal.SIGHUP) is signal.SIG_DFL:
+        signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     uvicorn.run(app, host=args.host, port=args.port)
 
 
@@ -302,36 +312,6 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
     return f"Dagster did not become ready within {timeout} seconds ({last_detail})."
 
 
-def _terminate_tree(proc: subprocess.Popen) -> None:
-    """
-    Kill the whole process tree, not just the launcher.
-
-    `dagster dev` supervises a webserver, a daemon, and gRPC code-server children.
-    proc.terminate() signals only the launcher, orphaning the grandchildren -- they
-    keep holding port 3000 and spawning dbt runs after datavloot has exited, so every
-    failed start leaves debris that interferes with the next one.
-    """
-    if proc.poll() is not None:
-        return
-    try:
-        if os.name == "nt":
-            # taskkill walks the tree itself: /T includes children, /F forces.
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True,
-                check=False,
-            )
-        else:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    except Exception:
-        proc.terminate()
-
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-
-
 def cmd_start(args: argparse.Namespace) -> None:
     try:
         import uvicorn  # noqa: F401
@@ -360,7 +340,7 @@ def cmd_start(args: argparse.Namespace) -> None:
     print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
     error = _wait_for_dagster(dagster_proc, graphql_url)
     if error:
-        _terminate_tree(dagster_proc)
+        terminate_tree(dagster_proc)
         sys.exit(f"Error: {error}")
 
     print("Dagster is ready.")
@@ -369,7 +349,7 @@ def cmd_start(args: argparse.Namespace) -> None:
         cmd_crowsnest(args)
     finally:
         print("\nShutting down Dagster…")
-        _terminate_tree(dagster_proc)
+        terminate_tree(dagster_proc)
 
 
 def main() -> None:

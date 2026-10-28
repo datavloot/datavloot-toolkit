@@ -56,6 +56,7 @@ jobs:
   # and runs the extension and storage tests that need a real DuckDB alongside them.
   # pytz: DuckDB imports it to return TIMESTAMPTZ values (the maintenance tests read
   # snapshot times); users get it through pandas, which `[optimist]` installs.
+  # uvicorn: the signal tests run `datavloot launch` in a subprocess.
   crowsnest:
     runs-on: ubuntu-latest
     steps:
@@ -66,9 +67,9 @@ jobs:
           enable-cache: true
       - run: >
           uv run --with pytest --with pyyaml --with "duckdb>=1.5,<2"
-          --with fastapi --with httpx --with pytz
+          --with fastapi --with httpx --with pytz --with uvicorn
           python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
-          tests/test_crowsnest_config.py tests/test_extensions.py tests/test_storage.py tests/test_maintenance.py -v
+          tests/test_crowsnest_config.py tests/test_crowsnest_notebooks.py tests/test_crowsnest_apps.py tests/test_extensions.py tests/test_storage.py tests/test_maintenance.py -v
 
   # The runners have compilers, so a real install there succeeds even when a
   # user's laptop would need Rust or a C compiler (cryptography 49+ on Intel Macs
