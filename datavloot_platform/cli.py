@@ -348,7 +348,11 @@ def cmd_start(args: argparse.Namespace) -> None:
     try:
         cmd_crowsnest(args)
     finally:
-        print("\nShutting down Dagster…")
+        # A closed terminal takes stdout with it, and Dagster has to stop anyway.
+        try:
+            print("\nShutting down Dagster…")
+        except OSError:
+            pass
         terminate_tree(dagster_proc)
 
 

@@ -6,6 +6,9 @@ Marimo started; any other Marimo on the port is left alone -- typically the
 user's own session in another project -- and Launch refuses rather than kill it.
 """
 
+import argparse
+import errno
+import io
 import os
 import signal
 import socket
@@ -21,6 +24,7 @@ pytest.importorskip("fastapi", reason="fastapi is not installed")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from datavloot_platform import cli  # noqa: E402
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
 from datavloot_platform.crowsnest import processes  # noqa: E402
 from datavloot_platform.crowsnest.routes import notebooks  # noqa: E402
@@ -340,3 +344,68 @@ def test_nohup_still_keeps_the_crows_nest_running(app):
         crowsnest.wait(timeout=30)
         crowsnest.stdout.close()
         kill_tree(marimo)
+
+
+class ClosedTerminal(io.StringIO):
+    def write(self, text):
+        raise OSError(errno.EIO, "Input/output error")
+
+
+def test_dagster_stops_when_the_terminal_is_gone(app, monkeypatch):
+    """
+    `dagster dev` runs in a session of its own, so only cmd_start can stop it. By
+    then a closed terminal has taken stdout with it, and printing fails.
+    """
+    dagster = object()
+    stopped = []
+
+    def terminal_closes(args):
+        monkeypatch.setattr(sys, "stdout", ClosedTerminal())
+        sys.exit(0)
+
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda *args, **kwargs: dagster)
+    monkeypatch.setattr(cli, "_wait_for_dagster", lambda *args: None)
+    monkeypatch.setattr(cli, "cmd_crowsnest", terminal_closes)
+    monkeypatch.setattr(cli, "terminate_tree", stopped.append)
+
+    with pytest.raises(SystemExit):
+        cli.cmd_start(argparse.Namespace())
+
+    assert stopped == [dagster], "Dagster outlived the closed terminal"
+
+
+# `datavloot start` up to the Crows Nest, without waiting for a Dagster that will not answer.
+START_WITHOUT_WAITING = """
+import argparse, sys
+from datavloot_platform import cli
+cli._wait_for_dagster = lambda *args: None
+cli.cmd_start(argparse.Namespace(host="127.0.0.1", port=int(sys.argv[1]), open=False))
+"""
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="Windows has no SIGHUP")
+def test_dagster_stops_when_a_real_terminal_closes(app, tmp_path, monkeypatch):
+    """The whole way, from the SIGHUP on: `dagster dev` here is a script that records its pid and sleeps."""
+    import pty
+
+    pid_file = tmp_path / "dagster.pid"
+    dagster = tmp_path / "dagster"
+    dagster.write_text(f'#!/bin/sh\necho $$ > "{pid_file}"\nexec sleep 60\n', encoding="utf-8")
+    dagster.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+
+    start, terminal = pty.fork()
+    if start == 0:
+        os.execv(sys.executable, [sys.executable, "-c", START_WITHOUT_WAITING, str(port)])
+    try:
+        assert wait_until(lambda: serves(port), timeout=30), "the Crows Nest never served"
+        os.close(terminal)
+        assert wait_until(lambda: os.waitpid(start, os.WNOHANG)[0] == start, timeout=30), "datavloot start did not end"
+        assert wait_until(lambda: not running(int(pid_file.read_text())), timeout=10), "Dagster outlived the closed terminal"
+    finally:
+        kill_tree(start)
+        if pid_file.exists():
+            kill_tree(int(pid_file.read_text()))
