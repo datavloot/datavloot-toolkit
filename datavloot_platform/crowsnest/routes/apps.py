@@ -15,6 +15,7 @@ import atexit
 import pathlib
 import re
 import subprocess
+import threading
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -32,6 +33,9 @@ APPS_PORT = 2719
 _START_TIMEOUT_SECONDS = 30
 
 _apps_process: "subprocess.Popen | None" = None
+# Held for the check and the start only, not for the wait until the server
+# answers, so a second Open is not held up by the first.
+_start_lock = threading.Lock()
 
 _APP_TITLE = re.compile(r"""app_title\s*=\s*(["'])(.+?)\1""")
 
@@ -83,16 +87,7 @@ async def open_app(req: OpenRequest):
 
 async def _ensure_server(url: str) -> None:
     """Start `marimo run apps` unless ours is running, and wait until it answers."""
-    global _apps_process
-
-    if _apps_process is None or _apps_process.poll() is not None:
-        # Whatever else holds the port (another project's apps, or a server left
-        # from an earlier session) is not ours to stop.
-        if port_in_use(APPS_PORT):
-            raise HTTPException(409, port_taken_message(APPS_PORT))
-        _apps_process = start_marimo(
-            ["run", APPS_DIR, "--headless", "--no-token", "--port", str(APPS_PORT)]
-        )
+    await asyncio.to_thread(_start_unless_running)
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + _START_TIMEOUT_SECONDS
@@ -111,6 +106,20 @@ async def _ensure_server(url: str) -> None:
                 pass
             await asyncio.sleep(0.5)
     raise HTTPException(504, f"The apps server did not answer at {url} within {_START_TIMEOUT_SECONDS}s.")
+
+
+def _start_unless_running() -> None:
+    global _apps_process
+
+    with _start_lock:
+        if _apps_process is None or _apps_process.poll() is not None:
+            # Whatever else holds the port (another project's apps, or a server left
+            # from an earlier session) is not ours to stop.
+            if port_in_use(APPS_PORT):
+                raise HTTPException(409, port_taken_message(APPS_PORT))
+            _apps_process = start_marimo(
+                ["run", APPS_DIR, "--headless", "--no-token", "--port", str(APPS_PORT)]
+            )
 
 
 @atexit.register

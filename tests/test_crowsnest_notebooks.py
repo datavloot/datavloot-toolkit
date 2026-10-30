@@ -147,6 +147,132 @@ def foreign_marimo(app):
         proc.wait(timeout=10)
 
 
+def answered_meanwhile(client) -> bool:
+    """
+    Whether another request is answered while the caller holds things up.
+
+    Called from a stand-in for a blocking step. A step that blocks the event loop
+    keeps the request from being answered, so this runs into its timeout.
+    """
+    answered = threading.Event()
+
+    def ask():
+        if client.get("/api/notebooks/list").status_code == 200:
+            answered.set()
+
+    threading.Thread(target=ask, daemon=True).start()
+    return answered.wait(timeout=3)
+
+
+def meets_the_other_request(barrier) -> bool:
+    """
+    Stand-in for the port check where two requests race: lets both past only together.
+
+    A lock keeps the second one out, so the first runs into the timeout and goes on alone.
+    """
+    try:
+        barrier.wait()
+    except threading.BrokenBarrierError:
+        pass
+    return False
+
+
+def post_twice_at_once(client, path, name) -> list:
+    """The responses to two POSTs of the same name, sent from a thread each."""
+    responses = []
+    threads = [
+        threading.Thread(target=lambda: responses.append(client.post(path, json={"name": name})))
+        for _ in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+    assert not any(thread.is_alive() for thread in threads), "a request never returned"
+    return responses
+
+
+class _RunningProcess:
+    def poll(self):
+        return None
+
+
+@pytest.mark.parametrize("step", ["stop_process", "port_in_use", "start_marimo"])
+def test_other_requests_are_answered_during_a_relaunch(app, monkeypatch, step):
+    meanwhile = []
+    results = {"stop_process": True, "port_in_use": False, "start_marimo": _RunningProcess()}
+    monkeypatch.setattr(notebooks, "_marimo_process", _RunningProcess())
+
+    with TestClient(app) as client:
+        for name, result in results.items():
+            def stand_in(*args, name=name, result=result):
+                if name == step:
+                    meanwhile.append(answered_meanwhile(client))
+                return result
+
+            monkeypatch.setattr(notebooks, name, stand_in)
+        response = client.post("/api/notebooks/launch", json={"name": "explore.py"})
+
+    assert response.status_code == 200, response.json()
+    assert meanwhile and all(meanwhile), f"{step} held up every other request"
+
+
+def test_other_requests_are_answered_during_a_close(app, monkeypatch):
+    meanwhile = []
+    monkeypatch.setattr(notebooks, "_marimo_process", _RunningProcess())
+
+    with TestClient(app) as client:
+        monkeypatch.setattr(notebooks, "stop_process", lambda proc: meanwhile.append(answered_meanwhile(client)) or True)
+        assert client.post("/api/notebooks/stop").json() == {"stopped": True}
+
+    assert meanwhile == [True], "stop_process held up every other request"
+
+
+def test_two_launches_at_once_leave_one_marimo(app, monkeypatch, started):
+    starts_sleepers(monkeypatch, started)
+    barrier = threading.Barrier(2, timeout=1)
+    monkeypatch.setattr(notebooks, "port_in_use", lambda port: meets_the_other_request(barrier))
+
+    with TestClient(app) as client:
+        responses = post_twice_at_once(client, "/api/notebooks/launch", "explore.py")
+
+    assert [response.status_code for response in responses] == [200, 200]
+    assert len(started) == 2
+    assert [proc.poll() is None for proc in started].count(True) == 1, "a Marimo was left running next to the other"
+    assert notebooks._marimo_process.poll() is None, "the Marimo that still runs is not the one it knows about"
+
+
+def test_a_close_during_a_launch_stops_the_marimo_it_started(app, monkeypatch, started):
+    """Without the lock Close finds nothing to stop yet, and the Marimo comes up after it said it stopped."""
+    starts_sleepers(monkeypatch, started)
+    start = notebooks.start_marimo
+    starting = threading.Event()
+    go_on = threading.Event()
+
+    def slow_start(args):
+        starting.set()
+        go_on.wait(timeout=10)
+        return start(args)
+
+    monkeypatch.setattr(notebooks, "start_marimo", slow_start)
+    monkeypatch.setattr(notebooks, "port_in_use", lambda port: False)
+    closed = []
+
+    with TestClient(app) as client:
+        launch = threading.Thread(target=client.post, args=("/api/notebooks/launch",), kwargs={"json": {"name": "explore.py"}})
+        close = threading.Thread(target=lambda: closed.append(client.post("/api/notebooks/stop").json()))
+        launch.start()
+        assert starting.wait(timeout=5), "the Launch never got to the start"
+        close.start()
+        time.sleep(0.2)
+        go_on.set()
+        launch.join(timeout=30)
+        close.join(timeout=30)
+
+    assert closed == [{"stopped": True}], "Close did not wait for the Launch"
+    assert started[0].poll() is not None, "the Marimo came up after Close"
+
+
 def test_relaunch_replaces_its_own_marimo(app, monkeypatch, started):
     starts_sleepers(monkeypatch, started)
     client = TestClient(app)

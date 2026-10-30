@@ -5,6 +5,7 @@ Notebooks route — discovers and launches Marimo notebooks from the project's n
 import atexit
 import pathlib
 import subprocess
+import threading
 import time
 
 from fastapi import APIRouter, HTTPException
@@ -22,6 +23,9 @@ MARIMO_PORT = 2718
 # is left alone.
 _marimo_process: "subprocess.Popen | None" = None
 _marimo_notebook: "str | None" = None
+# Launch and Close run in worker threads, so the server keeps answering while
+# Marimo starts or stops. One at a time, or two Launches would each start one.
+_marimo_lock = threading.Lock()
 
 
 def _stop_ours() -> bool:
@@ -42,7 +46,8 @@ async def list_notebooks():
     runs: on a laptop the panel embeds only that one, never a Marimo that merely
     answers on the port.
     """
-    running = _marimo_notebook if _marimo_process is not None and _marimo_process.poll() is None else None
+    process = _marimo_process  # read once: a worker thread can clear it
+    running = _marimo_notebook if process is not None and process.poll() is None else None
     notebooks_dir = pathlib.Path.cwd() / "notebooks"
     if not notebooks_dir.exists():
         return {"notebooks": [], "available": False, "running": running}
@@ -59,7 +64,7 @@ class LaunchRequest(BaseModel):
 
 
 @router.post("/launch")
-async def launch_notebook(req: LaunchRequest):
+def launch_notebook(req: LaunchRequest):
     """Start a Marimo notebook server for the given notebook file."""
     global _marimo_process, _marimo_notebook
 
@@ -77,30 +82,32 @@ async def launch_notebook(req: LaunchRequest):
         return {"launched": name, "url": f"{public_url}/?file={name}"}
 
     # Replace our own Marimo; refuse rather than stop one we did not start.
-    if _stop_ours():
-        # On Windows the port can still answer for a moment after the tree is
-        # gone. Wait for it, or the relaunch would take our own Marimo for a
-        # stranger's.
-        deadline = time.monotonic() + 5
-        while port_in_use(MARIMO_PORT) and time.monotonic() < deadline:
-            time.sleep(0.1)
-    if port_in_use(MARIMO_PORT):
-        raise HTTPException(409, port_taken_message(MARIMO_PORT))
+    with _marimo_lock:
+        if _stop_ours():
+            # On Windows the port can still answer for a moment after the tree is
+            # gone. Wait for it, or the relaunch would take our own Marimo for a
+            # stranger's.
+            deadline = time.monotonic() + 5
+            while port_in_use(MARIMO_PORT) and time.monotonic() < deadline:
+                time.sleep(0.1)
+        if port_in_use(MARIMO_PORT):
+            raise HTTPException(409, port_taken_message(MARIMO_PORT))
 
-    _marimo_process = start_marimo(
-        ["edit", "--headless", "--no-token", "--port", str(MARIMO_PORT), str(notebook_path)]
-    )
-    _marimo_notebook = name
+        _marimo_process = start_marimo(
+            ["edit", "--headless", "--no-token", "--port", str(MARIMO_PORT), str(notebook_path)]
+        )
+        _marimo_notebook = name
     return {"launched": name, "url": f"http://127.0.0.1:{MARIMO_PORT}"}
 
 
 @router.post("/stop")
-async def stop_notebook():
+def stop_notebook():
     """Stop the Marimo server the Crows Nest started."""
     if get_config().marimo_public_url:
         # Not ours to stop: the Marimo service serves everyone.
         return {"stopped": False}
-    return {"stopped": _stop_ours()}
+    with _marimo_lock:
+        return {"stopped": _stop_ours()}
 
 
 @atexit.register

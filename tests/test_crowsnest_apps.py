@@ -7,9 +7,12 @@ behind a proxy (the Falcon) the apps are a service of their own, which it only
 links to. A name from the browser never reaches outside apps/.
 """
 
+import asyncio
 import socket
 import subprocess
 import sys
+import threading
+import time
 
 import pytest
 
@@ -25,8 +28,11 @@ from .test_crowsnest_notebooks import (  # noqa: E402
     OWN_GROUP,
     SERVE,
     SERVES_FROM_A_CHILD,
+    answered_meanwhile,
     finds_the_listener,
     kill_tree,
+    meets_the_other_request,
+    post_twice_at_once,
     serves,
     wait_until,
 )
@@ -95,28 +101,32 @@ def test_open_stays_inside_apps(make_client, monkeypatch, name):
     assert response.status_code in (400, 404)
 
 
+class _Answers:
+    status_code = 200
+
+
+class _Client:
+    """httpx.AsyncClient for a server that answers right away."""
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url):
+        return _Answers()
+
+
 def test_a_laptop_starts_one_server_for_every_app(make_client, monkeypatch):
     calls = []
 
     def start(args):
         calls.append(args)
         return _FakeProcess()
-
-    class _Answers:
-        status_code = 200
-
-    class _Client:
-        def __init__(self, *a, **k):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *exc):
-            return False
-
-        async def get(self, url):
-            return _Answers()
 
     monkeypatch.setattr(apps, "start_marimo", start)
     monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
@@ -129,6 +139,76 @@ def test_a_laptop_starts_one_server_for_every_app(make_client, monkeypatch):
     assert second["url"] == "http://127.0.0.1:2719/?file=plain.py"
     port = str(apps.APPS_PORT)
     assert calls == [["run", "apps", "--headless", "--no-token", "--port", port]], "one server for every app"
+
+
+@pytest.mark.parametrize("step", ["port_in_use", "start_marimo"])
+def test_other_requests_are_answered_during_a_first_open(make_client, monkeypatch, step):
+    meanwhile = []
+    results = {"port_in_use": False, "start_marimo": _FakeProcess()}
+    monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
+
+    with make_client() as client:
+        for name, result in results.items():
+            def stand_in(*args, name=name, result=result):
+                if name == step:
+                    meanwhile.append(answered_meanwhile(client))
+                return result
+
+            monkeypatch.setattr(apps, name, stand_in)
+        response = client.post("/api/apps/open", json={"name": "traffic.py"})
+
+    assert response.status_code == 200, response.json()
+    assert meanwhile == [True], f"{step} held up every other request"
+
+
+def test_two_opens_at_once_start_one_server(make_client, monkeypatch):
+    calls = []
+
+    def start(args):
+        calls.append(args)
+        return _FakeProcess()
+
+    barrier = threading.Barrier(2, timeout=1)
+    monkeypatch.setattr(apps, "port_in_use", lambda port: meets_the_other_request(barrier))
+    monkeypatch.setattr(apps, "start_marimo", start)
+    monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
+
+    with make_client() as client:
+        responses = post_twice_at_once(client, "/api/apps/open", "traffic.py")
+
+    assert [response.status_code for response in responses] == [200, 200]
+    assert len(calls) == 1, "two apps servers started on one port"
+
+
+def test_a_second_open_does_not_wait_for_the_first(make_client, monkeypatch):
+    """The lock covers the check and the start, not the wait of up to 30 s until the server answers."""
+    second_returned = threading.Event()
+    first_is_waiting = threading.Event()
+    seen_by_the_first = []
+
+    class _SlowForTheFirst(_Client):
+        async def get(self, url):
+            if not first_is_waiting.is_set():
+                first_is_waiting.set()
+                deadline = time.monotonic() + 5
+                while not second_returned.is_set() and time.monotonic() < deadline:
+                    await asyncio.sleep(0.05)
+                seen_by_the_first.append(second_returned.is_set())
+            return _Answers()
+
+    monkeypatch.setattr(apps, "start_marimo", lambda args: _FakeProcess())
+    monkeypatch.setattr(apps.httpx, "AsyncClient", _SlowForTheFirst)
+
+    with make_client() as client:
+        first = threading.Thread(target=client.post, args=("/api/apps/open",), kwargs={"json": {"name": "traffic.py"}})
+        first.start()
+        assert first_is_waiting.wait(timeout=5), "the first Open never got to the wait"
+        assert client.post("/api/apps/open", json={"name": "plain.py"}).status_code == 200
+        second_returned.set()
+        first.join(timeout=30)
+
+    assert not first.is_alive(), "the first Open never returned"
+    assert seen_by_the_first == [True], "the second Open waited for the first"
 
 
 def test_open_leaves_a_foreign_apps_server_alone(make_client, monkeypatch):
