@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
 
@@ -15,6 +15,8 @@ export default function NotebooksPanel() {
   // notebook in a new tab, so the iframe must go to the notebook itself.
   const [notebookUrl, setNotebookUrl] = useState(null);
 
+  const closing = useRef(false);
+
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
   const shared = services.data?.marimo_shared;
@@ -27,12 +29,13 @@ export default function NotebooksPanel() {
   const portTaken = services.data && !shared && marimoStatus === 'ok' && notebooks.data && !showNotebook;
   const frameUrl = notebookUrl || marimoUrl;
 
-  // Ask again which Marimo is ours whenever health sees one come or go: ours
-  // can end without Close (a crash, its own Shutdown), and the next one to take
-  // the port would be embedded as ours; another tab can have launched it.
+  // Ask again which Marimo is ours with every health poll: ours can end without
+  // Close (a crash, its own Shutdown), and the next one to take the port would
+  // be embedded as ours, with no change in health to show it. Not during our
+  // own Close: the list says none is ours while the port still answers.
   useEffect(() => {
-    if (marimoStatus) notebooks.reload();
-  }, [marimoStatus]);
+    if (marimoStatus && !closing.current) notebooks.reload();
+  }, [healthData]);
 
   // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
   useEffect(() => {
@@ -69,6 +72,7 @@ export default function NotebooksPanel() {
   };
 
   const handleClose = async () => {
+    closing.current = true;
     try {
       await api.stopNotebook();
     } catch {
@@ -78,6 +82,7 @@ export default function NotebooksPanel() {
     // Health first: until it has seen the port go quiet, the notebook list
     // alone would make our closed Marimo look like someone else's.
     await reloadHealth();
+    closing.current = false;
     notebooks.reload();
   };
 
@@ -112,6 +117,7 @@ export default function NotebooksPanel() {
             </button>
           </div>
           <iframe
+            key={notebooks.data?.running}
             src={frameUrl}
             className="w-full border-0"
             style={{ height: 'calc(100vh - 230px)', minHeight: '560px' }}
