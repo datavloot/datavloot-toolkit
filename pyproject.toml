@@ -1,6 +1,6 @@
 [project]
 name = "datavloot"
-version = "0.2.0"
+version = "0.3.0"
 description = "Open, modular, Python-native data platform — from a laptop to a fleet, without vendor lock-in."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -54,6 +54,9 @@ optimist = [
     "httpx>=0.27,<1",
     "marimo>=0.23.9,<0.25",
     "pandas>=2.0,<3",
+    # dagster-dbt asks for sqlglot[rs], which from 30.0 pulls in sqlglotc: a C
+    # extension without wheels for Python 3.10, so pip would compile it there.
+    "sqlglot<30; python_version < '3.11'",
     "uvicorn[standard]>=0.30,<1",
 ]
 dev = [
