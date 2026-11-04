@@ -15,8 +15,8 @@ Catalog panels read:
 
 ```yaml
 packages:
-  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
-    revision: 0.1.1
+  - tarball: "https://codeload.github.com/datavloot/dbt-datavloot-optimist/tar.gz/refs/tags/0.1.1"
+    name: optimist
   - package: elementary-data/elementary
     version: [">=0.25.0", "<0.26.0"]
 ```

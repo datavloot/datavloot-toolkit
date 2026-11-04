@@ -33,7 +33,7 @@ The Optimist is a fully functional data platform that runs on your local machine
 ### Prerequisites
 
 - Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
-- Git
+- Git, to keep your own project in a repository. Installing and running a project does not need it.
 
 No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
 
@@ -436,8 +436,8 @@ The macros are the `optimist` dbt package, which has its own repository: [dbt-da
 ```yaml
 # packages.yml
 packages:
-  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
-    revision: 0.1.1       # a release tag of dbt-datavloot-optimist
+  - tarball: "https://codeload.github.com/datavloot/dbt-datavloot-optimist/tar.gz/refs/tags/0.1.1"   # a release tag of dbt-datavloot-optimist
+    name: optimist
 ```
 
 Then install:

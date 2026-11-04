@@ -8,12 +8,12 @@ The **`optimist` dbt package** has its own repository,
 decides which of its releases new projects get:
 
 - `DBT_PACKAGE_VERSION` in [`datavloot_platform/cli.py`](../datavloot_platform/cli.py) is the
-  tag that `datavloot new` and `datavloot demo` write as `revision:` in a new project's
-  `packages.yml`.
+  tag that `datavloot new` and `datavloot demo` write into a new project's `packages.yml`, as
+  the release archive of that tag (`tarball:`), so `dbt deps` does not need git.
 - To move new projects to a new dbt package release, bump the constant in a pull request. The
-  smoke test (`tests/test_scaffold_smoke.py`) installs the package at that tag from GitHub, so CI
-  checks the toolkit against exactly what new projects will get. New projects pick it up with the
-  next datavloot release.
+  smoke test (`tests/test_scaffold_smoke.py`) installs the package from that tag's archive on
+  GitHub, so CI checks the toolkit against exactly what new projects will get. New projects pick
+  it up with the next datavloot release.
 
 Until 2026-10 the dbt package lived in this repository under `dbt/optimist/`, released with bare
 `X.Y.Z` tags and a moving `X.Y.x` branch. Those tags and the `0.1.x` branch stay, because

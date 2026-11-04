@@ -54,11 +54,30 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
     assert f'"datavloot[optimist]~={importlib.metadata.version("datavloot")}"' in pyproject
 
     packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
-    (optimist,) = [p for p in packages if "git" in p]
+    (optimist,) = [p for p in packages if p.get("name") == "optimist"]
     assert optimist == {
-        "git": "https://github.com/datavloot/dbt-datavloot-optimist.git",
-        "revision": cli.DBT_PACKAGE_VERSION,
+        "tarball": (
+            "https://codeload.github.com/datavloot/dbt-datavloot-optimist/tar.gz/refs/tags/"
+            + cli.DBT_PACKAGE_VERSION
+        ),
+        "name": "optimist",
     }
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_dbt_deps_does_not_need_git(tmp_path: pathlib.Path, template: str):
+    """
+    No package in a new project is fetched with `git:`.
+
+    `dbt deps` shells out to git for a `git:` package. A clean Windows laptop has
+    no git, and on an older one installing it with winget can fail too, so the
+    first `dbt deps` of a new project failed there. Hub packages and tarballs are
+    downloaded over HTTPS by dbt itself.
+    """
+    dest = tmp_path / "project"
+    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
+    assert [p for p in packages if "git" in p] == []
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
@@ -95,7 +114,7 @@ def test_docs_show_the_pinned_dbt_package_release(repo_root: pathlib.Path, doc: 
     the examples would keep the old tag.
     """
     text = (repo_root / doc).read_text(encoding="utf-8")
-    pins = re.findall(r'dbt-datavloot-optimist\.git"\s+revision: (\S+)', text)
+    pins = re.findall(r'dbt-datavloot-optimist/tar\.gz/refs/tags/([^"\s]+)"', text)
     assert pins, f"{doc} shows no dbt-datavloot-optimist pin"
     assert set(pins) == {cli.DBT_PACKAGE_VERSION}
 
