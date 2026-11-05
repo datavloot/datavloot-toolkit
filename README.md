@@ -58,6 +58,19 @@ Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start 
 uv run datavloot start
 ```
 
+**Your own project instead of the demo.** Set `DATAVLOOT_PROJECT` to its repository first. The script then installs that project's latest tag with `datavloot new --from` (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asking for a token when the repository is private:
+
+```powershell
+$env:DATAVLOOT_PROJECT = 'https://gitlab.com/group/project'
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+```
+
+```bash
+curl -LsSf https://datavloot.nl/install.sh | DATAVLOOT_PROJECT=https://gitlab.com/group/project bash
+```
+
+`DATAVLOOT_REF` picks a tag and `DATAVLOOT_PATH` the project's folder in the repository, when it cannot be found by itself. The project lands in a folder named after the repository in your home folder.
+
 Running the install command again does the same: it finds the project and starts it, and never overwrites it. To install somewhere else, set `DATAVLOOT_DIR` first: `$env:DATAVLOOT_DIR = 'C:\dev\demo'` in PowerShell, or `curl ... | DATAVLOOT_DIR=~/dev/demo bash`. `DATAVLOOT_VERSION` picks a toolkit version (default: the latest).
 
 The script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project. `-ExecutionPolicy ByPass` in the Windows command applies to that one command only; it changes no setting.

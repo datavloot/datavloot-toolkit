@@ -70,8 +70,45 @@ def test_both_scripts_install_the_same_things():
     for text in (ps1, sh):
         assert "datavloot[optimist]@latest" in text
         assert "datavloot start" in text and "--run" in text
-        for variable in ("DATAVLOOT_DIR", "DATAVLOOT_VERSION", "DATAVLOOT_FROM"):
+        for variable in ("DATAVLOOT_DIR", "DATAVLOOT_VERSION", "DATAVLOOT_FROM",
+                         "DATAVLOOT_PROJECT", "DATAVLOOT_REF", "DATAVLOOT_PATH"):
             assert variable in text
+        # An own project goes through `datavloot new --from`, with the same options.
+        assert "datavloot new" in text and "--from" in text
+        assert "--ref" in text and "--path" in text
+
+
+def test_the_shell_script_asks_its_questions_on_the_terminal():
+    """Under curl | bash, stdin is the script: a token prompt reading it would eat the rest."""
+    assert "</dev/tty" in SH.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("url, name", [
+    ("https://gitlab.com/datavloot/ketenconnect-demo", "ketenconnect-demo"),
+    ("https://gitlab.com/datavloot/ketenconnect-demo.git", "ketenconnect-demo"),
+    ("https://gitlab.com/datavloot/ketenconnect-demo/-/tree/main", "ketenconnect-demo"),
+    ("https://github.com/owner/repo/", "repo"),
+])
+def test_the_default_folder_is_named_after_the_repository(url, name):
+    """The same name in both scripts, by running each one's own expression."""
+    bash = shutil.which("bash")
+    if bash:
+        expr = SH.read_text(encoding="utf-8")
+        lines = [l.strip() for l in expr.splitlines() if l.strip().startswith('default_name="${')]
+        script = f'project="{url}"\n' + "\n".join(lines) + '\nprintf %s "$default_name"'
+        out = subprocess.run([bash, "-c", script], capture_output=True, text=True, timeout=30)
+        assert out.stdout == name, out.stderr
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell:
+        line = next(l.strip() for l in PS1.read_text(encoding="utf-8").splitlines()
+                    if l.strip().startswith("$defaultName = ((("))
+        out = subprocess.run(
+            [shell, "-NoProfile", "-Command", f"$project = '{url}'; {line}; $defaultName"],
+            capture_output=True, text=True, timeout=60,
+        )
+        assert out.stdout.strip() == name, out.stderr
+    if not bash and not shell:
+        pytest.skip("neither bash nor PowerShell here")
 
 
 def test_the_python_version_is_one_the_demo_accepts():

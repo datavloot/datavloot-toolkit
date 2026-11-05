@@ -170,6 +170,9 @@ def cmd_new_from(args: argparse.Namespace) -> None:
         remote.install(dest, args.source, args.ref, args.subdir)
     except remote.RemoteError as e:
         sys.exit(f"Error: {e}")
+    if os.environ.get("DATAVLOOT_INSTALLER"):
+        # install.ps1 / install.sh start it themselves.
+        return
     print(f"\nReady. Start Dagster and the Crows Nest with:")
     print(f"  cd \"{dest}\"")
     print(f"  uv run datavloot start --run")
@@ -396,9 +399,11 @@ mutation Launch($params: ExecutionParams!) {
 """
 
 
-def _materialize_all(graphql_url: str) -> str:
+def materialize_all(graphql_url: str, started_by: str = "datavloot start --run") -> tuple[bool, str]:
     """
-    Start one run of every asset, as "Materialize all" in Dagster does. Return what happened.
+    Start one run of every asset, as "Materialize all" in Dagster does.
+
+    Return whether a run started, and what happened in a sentence for the user.
 
     Through Dagster's own API, so the run goes through the instance like one
     started in the UI: it shows in the Crows Nest's Pipelines panel and keeps to
@@ -413,7 +418,7 @@ def _materialize_all(graphql_url: str) -> str:
         resp = httpx.post(graphql_url, json={"query": _ASSETS_QUERY}, timeout=30)
         repos = resp.json()["data"]["repositoriesOrError"]
         if repos.get("__typename") != "RepositoryConnection":
-            return f"Could not list the assets: {repos.get('message', repos)}. {manual}"
+            return False, f"Could not list the assets: {repos.get('message', repos)}. {manual}"
 
         launched, skipped = [], 0
         for repo in repos["nodes"]:
@@ -434,7 +439,7 @@ def _materialize_all(graphql_url: str) -> str:
                     "assetSelection": selection,
                 },
                 "executionMetadata": {
-                    "tags": [{"key": "datavloot/started_by", "value": "datavloot start --run"}],
+                    "tags": [{"key": "datavloot/started_by", "value": started_by}],
                 },
             }
             resp = httpx.post(
@@ -447,18 +452,21 @@ def _materialize_all(graphql_url: str) -> str:
                 detail = result.get("message") or "; ".join(
                     e["message"] for e in result.get("errors", [])
                 ) or result["__typename"]
-                return f"Could not start the run: {detail}. {manual}"
+                return False, f"Could not start the run: {detail}. {manual}"
             launched.append(f"{len(selection)} assets in {repo['location']['name']}")
     except Exception as e:  # noqa: BLE001 -- see the docstring
-        return f"Could not start the run: {e}. {manual}"
+        return False, f"Could not start the run: {e}. {manual}"
 
     if not launched:
-        return f"Found no assets to run. {manual}"
+        return False, f"Found no assets to run. {manual}"
     note = f" ({skipped} partitioned assets left out)" if skipped else ""
-    return (
-        f"Started a run of {', '.join(launched)}{note}. "
-        "Follow it in the Crows Nest's Pipelines panel."
-    )
+    return True, f"Started a run of {', '.join(launched)}{note}."
+
+
+def _materialize_all(graphql_url: str) -> str:
+    """materialize_all, as the sentence `start --run` and `update` print."""
+    started, message = materialize_all(graphql_url)
+    return f"{message} Follow it in the Crows Nest's Pipelines panel." if started else message
 
 
 def _dagster_home(project_dir: pathlib.Path) -> dict[str, str]:

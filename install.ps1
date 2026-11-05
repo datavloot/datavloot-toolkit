@@ -12,8 +12,14 @@
 # Running it again starts the existing project; it never overwrites one.
 #
 # Settings, as environment variables (the one-liner takes no arguments):
-#   DATAVLOOT_DIR      where the project goes (default: %USERPROFILE%\optimist-demo)
-#   DATAVLOOT_VERSION  a toolkit version, e.g. 0.3.1 (default: the latest release)
+#   DATAVLOOT_PROJECT  a project of your own instead of the demo: its GitHub or GitLab
+#                      repository, e.g. https://gitlab.com/group/name (`datavloot new --from`)
+#   DATAVLOOT_REF      with DATAVLOOT_PROJECT: the tag to install (default: the latest version)
+#   DATAVLOOT_PATH     with DATAVLOOT_PROJECT: the project's folder in the repository,
+#                      when it cannot be found by itself
+#   DATAVLOOT_DIR      where the project goes (default: %USERPROFILE%\optimist-demo, or
+#                      %USERPROFILE%\<repository name> with DATAVLOOT_PROJECT)
+#   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
 # Written for Windows PowerShell 5.1, which every Windows 10 and 11 has.
@@ -107,9 +113,19 @@ function Test-Project([string]$Dir) {
 function Install-Datavloot {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-    Write-Host "Datavloot: installing the toolkit and the NOAA demo" -ForegroundColor Cyan
+    # With DATAVLOOT_PROJECT, a project of your own from its repository
+    # (`datavloot new --from`) instead of the demo.
+    $project = $env:DATAVLOOT_PROJECT
+    if ($project) {
+        Write-Host "Datavloot: installing the toolkit and $project" -ForegroundColor Cyan
+        # The repository's name: https://gitlab.com/group/name(.git)(/-/tree/main)
+        $defaultName = ((($project -replace '/-/.*$', '').TrimEnd('/') -replace '\.git$', '') -split '/')[-1]
+    } else {
+        Write-Host "Datavloot: installing the toolkit and the NOAA demo" -ForegroundColor Cyan
+        $defaultName = 'optimist-demo'
+    }
 
-    $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME 'optimist-demo' }
+    $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME $defaultName }
     $dir = [System.IO.Path]::GetFullPath($dir)
     $existing = $false
     if (Test-Path $dir) {
@@ -137,22 +153,38 @@ function Install-Datavloot {
         } else {
             'datavloot[optimist]@latest'
         }
-        # Tells `datavloot demo` not to print the steps this script takes itself.
+        # Tells `datavloot demo` and `new` not to print the steps this script takes itself.
         $env:DATAVLOOT_INSTALLER = '1'
-        Invoke-Step "Creating the demo project in $dir" {
-            uvx --python $PythonVersion --from $from datavloot demo $dir
+        if ($project) {
+            # Fetches the latest tag (or DATAVLOOT_REF), asks for a token when the
+            # repository is private and for the settings in .env.example, and
+            # runs uv sync, dbt deps and dbt parse itself.
+            $newArgs = @('--python', $PythonVersion, '--from', $from, 'datavloot', 'new', $dir, '--from', $project)
+            if ($env:DATAVLOOT_REF) { $newArgs += @('--ref', $env:DATAVLOOT_REF) }
+            if ($env:DATAVLOOT_PATH) { $newArgs += @('--path', $env:DATAVLOOT_PATH) }
+            Invoke-Step "Installing $project in $dir" { uvx @newArgs }
+        } else {
+            Invoke-Step "Creating the demo project in $dir" {
+                uvx --python $PythonVersion --from $from datavloot demo $dir
+            }
         }
     }
 
     Push-Location $dir
     try {
-        Invoke-Step "Installing Python $PythonVersion and the project's packages" {
-            uv sync --python $PythonVersion
+        # `new --from` has just done these steps. Otherwise they repair a project
+        # an earlier attempt left halfway, and are quick when nothing is missing.
+        if ($existing -or -not $project) {
+            # An installed project gets exactly the versions its maintainer locked.
+            $installed = (Test-Path 'uv.lock') -and (Test-Path '.datavloot\install.json')
+            Invoke-Step "Installing Python $PythonVersion and the project's packages" {
+                if ($installed) { uv sync --python $PythonVersion --locked } else { uv sync --python $PythonVersion }
+            }
+            if (-not (Test-Path 'dbt_packages')) {
+                Invoke-Step 'Installing the dbt packages' { uv run --no-sync dbt deps }
+            }
+            Invoke-Step 'Compiling the dbt project' { uv run --no-sync dbt parse }
         }
-        if (-not (Test-Path 'dbt_packages')) {
-            Invoke-Step 'Installing the dbt packages' { uv run --no-sync dbt deps }
-        }
-        Invoke-Step 'Compiling the dbt project' { uv run --no-sync dbt parse }
 
         Assert-PortsFree
 
@@ -163,7 +195,10 @@ function Install-Datavloot {
         Write-Host "    cd `"$dir`"; uv run datavloot start" -ForegroundColor Yellow
         Write-Host "Or have it start at every login, with a shortcut on the desktop and in the Start menu:"
         Write-Host "    cd `"$dir`"; uv run datavloot autostart on" -ForegroundColor Yellow
-        if (-not $existing) {
+        if (-not $existing -and $project) {
+            Write-Host "The first run builds every table; follow it in the Crows Nest's Pipelines panel."
+            Write-Host "Put the project's input files in place first if it reads any (often its data folder)."
+        } elseif (-not $existing) {
             Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"
             Write-Host "follow it in the Crows Nest's Pipelines panel."
         }

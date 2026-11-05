@@ -103,6 +103,34 @@ async def get_recent_runs(limit: int = 20):
         raise HTTPException(503, "Cannot connect to Dagster — is it running?")
 
 
+@router.post("/materialize-all")
+async def materialize_all_assets():
+    """
+    Start one run of every asset, as "Materialize all" in Dagster does.
+
+    The same call `datavloot start --run` makes (cli.materialize_all), so the
+    run goes through Dagster like one started in its UI. Refused while a run is
+    active: a second run of every asset would only queue behind the first, and
+    two writers on the lake make one of them fail.
+    """
+    import asyncio
+
+    from datavloot_platform.cli import materialize_all
+    from datavloot_platform.crowsnest.routes.query import _active_run
+
+    active = await _active_run()
+    if active:
+        raise HTTPException(
+            409, f"A run is already in progress ({active}). Wait until it has finished."
+        )
+    started, message = await asyncio.to_thread(
+        materialize_all, get_config().dagster_graphql_url, "Crows Nest"
+    )
+    if not started:
+        raise HTTPException(502, message)
+    return {"message": message}
+
+
 @router.get("/jobs")
 async def get_jobs():
     """Return all registered jobs/pipelines."""
