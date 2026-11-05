@@ -87,14 +87,14 @@ def quality_summary():
             WHERE n = 1 AND detected_at >= CURRENT_DATE - INTERVAL '7 days'
             GROUP BY status
             """
-        ).fetchdf()
+        ).fetchall()  # not fetchdf: a summary needs no pandas
 
         by_status: dict = {}
         last_result = None
-        for _, row in df.iterrows():
-            by_status[row["status"].lower()] = int(row["count"])
-            if last_result is None or row["last_result"] > last_result:
-                last_result = row["last_result"]
+        for status, count, latest in df:
+            by_status[status.lower()] = int(count)
+            if last_result is None or latest > last_result:
+                last_result = latest
 
         total = sum(by_status.values())
         return {
