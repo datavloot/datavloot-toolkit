@@ -172,5 +172,6 @@ def test_no_assets_starts_nothing(dagster):
 
 
 def test_an_unreachable_dagster_does_not_raise():
+    pytest.importorskip("httpx")
     message = cli._materialize_all("http://127.0.0.1:9/graphql")
     assert "Could not start the run" in message

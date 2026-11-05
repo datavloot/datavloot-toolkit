@@ -366,10 +366,10 @@ def _materialize_all(graphql_url: str) -> str:
     unpartitioned assets cannot take them. Never raises: the platform is up
     either way, and the run can be started by hand.
     """
-    import httpx
-
     manual = "Start it in Dagster instead: Asset Catalog > Materialize all."
     try:
+        import httpx
+
         resp = httpx.post(graphql_url, json={"query": _ASSETS_QUERY}, timeout=30)
         repos = resp.json()["data"]["repositoriesOrError"]
         if repos.get("__typename") != "RepositoryConnection":
