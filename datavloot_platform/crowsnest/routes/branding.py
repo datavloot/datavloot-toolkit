@@ -4,7 +4,7 @@ its colours, from an optional branding/ directory in the project.
 
     branding/
       branding.yml     name and colours, every key optional (see below)
-      logo.svg         or logo.png; replaces the Optimist mark in the sidebar
+      logo.svg         or logo.png; replaces the datavloot mark in the sidebar
 
     # branding.yml
     name: KetenConnect

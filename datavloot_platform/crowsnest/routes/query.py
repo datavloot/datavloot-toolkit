@@ -259,6 +259,20 @@ async def execute_query(req: QueryRequest, request: Request):
             conn.close()
 
 
+def _is_metadata_table(schema: str, name: str, elementary_schema: str) -> bool:
+    """
+    A table that keeps the platform going rather than holding the business's
+    data: DuckLake's own catalog, Elementary's results, dlt's bookkeeping and
+    the staging schemas dlt loads through.
+    """
+    return (
+        schema == elementary_schema
+        or name.startswith("ducklake_")
+        or name.startswith("_dlt_")
+        or schema.endswith("_staging")
+    )
+
+
 # --------------------------------------------------------------------------
 # writes
 # --------------------------------------------------------------------------
@@ -466,15 +480,19 @@ async def list_tables():
             """
         ).fetchall()
 
+        elementary_schema = get_config().elementary_schema
         tables = [
             {
                 "schema": schema,
                 "name": name,
                 "full_name": f"{schema}.{name}" if schema != "main" else name,
                 "type": ttype.lower(),
+                "metadata": _is_metadata_table(schema, name, elementary_schema),
             }
             for schema, name, ttype in result
         ]
+        # The business tables first; the frontend folds the metadata away.
+        tables.sort(key=lambda t: t["metadata"])
         return {"tables": tables}
 
     except HTTPException:

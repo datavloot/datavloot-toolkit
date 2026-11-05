@@ -21,35 +21,35 @@ export default function QualityPanel() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="page-head">
         <div className="flex items-center gap-3">
           {drillModel && (
             <button
               onClick={() => setDrillModel(null)}
-              className="text-xs text-datavloot-600 hover:text-datavloot-700 font-medium"
+              className="btn btn-ghost -ml-3"
             >
-              ← Models
+              ← Tables
             </button>
           )}
-          <h2 className="text-lg font-semibold text-ink-0 tracking-tight">
+          <h2 className="page-title">
             {drillModel ? <span className="font-mono">{drillModel}</span> : 'Data quality'}
           </h2>
         </div>
         {!drillModel && (
-          <div className="flex bg-surface-2 rounded-lg p-0.5">
+          <div className="flex bg-surface-2 rounded-md p-0.5 border border-surface-3">
             {[
-              { id: 'by-model', label: 'By model' },
+              { id: 'by-model', label: 'By table' },
               { id: 'all-tests', label: 'All tests' },
               { id: 'anomalies', label: 'Anomalies' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                className={`px-3 h-7 rounded text-xs font-semibold transition-all ${
                   view === tab.id
                     ? 'bg-white text-ink-0 shadow-sm'
-                    : 'text-ink-3 hover:text-ink-1'
+                    : 'text-ink-2 hover:text-ink-0'
                 }`}
               >
                 {tab.label}
@@ -88,7 +88,7 @@ function ByModelView({ onModelClick }) {
       <table className="w-full">
         <thead>
           <tr className="bg-surface-1">
-            <th className="table-header">Model</th>
+            <th className="table-header">Table</th>
             <th className="table-header text-center">Pass</th>
             <th className="table-header text-center">Fail</th>
             <th className="table-header text-center">Warn</th>
@@ -166,7 +166,7 @@ function ModelDrillView({ model, onTestClick }) {
           {tests.length === 0 && (
             <tr>
               <td colSpan={7} className="px-4 py-12 text-center text-ink-3 text-sm">
-                No test results found for this model.
+                No test results found for this table.
               </td>
             </tr>
           )}
@@ -240,7 +240,7 @@ function AllTestsView({ testFilter, onClearFilter }) {
             <tr className="bg-surface-1">
               <th className="table-header">Status</th>
               <th className="table-header">Test</th>
-              <th className="table-header">Model</th>
+              <th className="table-header">Table</th>
               <th className="table-header">Column</th>
               <th className="table-header">Time</th>
             </tr>

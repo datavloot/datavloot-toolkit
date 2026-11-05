@@ -3,28 +3,35 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApi, formatTimestamp } from '../lib/hooks';
 
+// How dbt made the table, said in a word next to its name; a model needs none.
+const KIND_LABEL = { seed: 'seed', source: 'source' };
+
 export default function CatalogPanel() {
   const [search, setSearch] = useState('');
   const [selectedModel, setSelectedModel] = useState(null);
+  const [showMetadata, setShowMetadata] = useState(false);
 
   const { data, loading, error } = useApi(
     () => api.getCatalogModels(search || undefined),
     [search],
   );
 
-  // Group models by schema regardless of source
-  const bySchema = {};
-  (data?.models || []).forEach((m) => {
-    const s = m.schema || 'main';
-    if (!bySchema[s]) bySchema[s] = [];
-    bySchema[s].push(m);
-  });
-  const schemaEntries = Object.entries(bySchema);
+  const all = data?.models || [];
+  const business = all.filter((m) => !m.metadata);
+  const metadata = all.filter((m) => m.metadata);
+  // While searching, show what matches, in either group.
+  const metadataOpen = showMetadata || (search && metadata.length > 0);
+
+  const select = (m) => setSelectedModel(m);
+  const isSelected = (m) => selectedModel?.name === m.name && selectedModel?.schema === m.schema;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Data catalog</h2>
+    <div className="space-y-5">
+      <div className="page-head">
+        <div>
+          <h2 className="page-title">Data catalog</h2>
+          <p className="page-lede">Every table in the lakehouse, with its columns, tests and a sample of its rows.</p>
+        </div>
       </div>
 
       <div className="relative">
@@ -34,10 +41,10 @@ export default function CatalogPanel() {
         </svg>
         <input
           type="text"
-          placeholder="Search models..."
+          placeholder="Search tables..."
           value={search}
           onChange={(e) => { setSearch(e.target.value); setSelectedModel(null); }}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-surface-3 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-datavloot-200 focus:border-datavloot-400 transition-all"
+          className="w-full pl-10 pr-4 h-10 bg-white border border-surface-3 rounded-md text-sm placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-highlight/30 focus:border-highlight transition-all"
         />
       </div>
 
@@ -52,29 +59,37 @@ export default function CatalogPanel() {
               <div className="px-4 py-8 text-center text-sm text-ink-2">{error}</div>
             ) : (
               <div className="max-h-[600px] overflow-y-auto">
-                {schemaEntries.length === 0 && (
+                {all.length === 0 && (
                   <div className="px-4 py-12 text-center text-sm text-ink-3">
-                    {search ? `No models matching "${search}"` : 'No models found in catalog'}
+                    {search ? `No tables matching "${search}"` : 'No tables found in the catalog'}
                   </div>
                 )}
-                {schemaEntries.map(([schema, models]) => (
-                  <div key={schema}>
-                    <div className="px-4 py-1.5 text-[9px] font-semibold text-ink-3 uppercase tracking-widest bg-surface-1 border-b border-surface-2 sticky top-0">
-                      {schema}
-                    </div>
-                    {models.map((m) => (
-                      <button
-                        key={m.unique_id || m.name}
-                        onClick={() => setSelectedModel(m)}
-                        className={`w-full text-left px-4 py-2.5 border-b border-surface-2 hover:bg-surface-1 transition-colors ${
-                          selectedModel?.name === m.name && selectedModel?.schema === m.schema ? 'bg-datavloot-50' : ''
-                        }`}
-                      >
-                        <span className="text-sm font-medium font-mono text-ink-0">{m.name}</span>
-                      </button>
-                    ))}
+                <TableGroups tables={business} onSelect={select} isSelected={isSelected} />
+
+                {metadata.length > 0 && (
+                  <div>
+                    <button
+                      onClick={() => setShowMetadata(!metadataOpen)}
+                      aria-expanded={!!metadataOpen}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left border-b border-surface-2 bg-surface-1 hover:bg-surface-2 transition-colors"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                        className={`text-ink-3 transition-transform ${metadataOpen ? 'rotate-90' : ''}`}>
+                        <path d="M9 6l6 6-6 6" />
+                      </svg>
+                      <span className="text-xs font-semibold text-ink-2">Metadata</span>
+                      <span className="text-xs text-ink-3">{metadata.length} tables</span>
+                    </button>
+                    {metadataOpen && (
+                      <>
+                        <p className="px-4 py-2 text-xs text-ink-3 border-b border-surface-2">
+                          Tables of dbt packages such as Elementary: run results, test results and the like.
+                        </p>
+                        <TableGroups tables={metadata} onSelect={select} isSelected={isSelected} />
+                      </>
+                    )}
                   </div>
-                ))}
+                )}
                 {data?.source === 'information_schema' && (
                   <div className="px-4 py-2 bg-amber-50 text-xs text-amber-700">
                     Showing tables from information_schema — Elementary catalog not available
@@ -90,13 +105,45 @@ export default function CatalogPanel() {
             <ModelDetail model={selectedModel} />
           ) : (
             <div className="card px-4 py-16 text-center">
-              <p className="text-sm text-ink-3">Select a model to see details</p>
+              <p className="text-sm text-ink-3">Select a table to see details</p>
             </div>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function TableGroups({ tables, onSelect, isSelected }) {
+  const bySchema = {};
+  tables.forEach((m) => {
+    const s = m.schema || 'main';
+    if (!bySchema[s]) bySchema[s] = [];
+    bySchema[s].push(m);
+  });
+  return Object.entries(bySchema).map(([schema, list]) => (
+    <div key={schema}>
+      <div className="px-4 py-1.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider bg-surface-1 border-b border-surface-2 sticky top-0">
+        {schema}
+      </div>
+      {list.map((m) => (
+        <button
+          key={m.unique_id || m.name}
+          onClick={() => onSelect(m)}
+          className={`w-full flex items-center gap-2 text-left px-4 py-2.5 border-b border-surface-2 hover:bg-surface-1 transition-colors ${
+            isSelected(m) ? 'bg-datavloot-50' : ''
+          }`}
+        >
+          <span className="flex-1 truncate text-sm font-medium font-mono text-ink-0">{m.name}</span>
+          {KIND_LABEL[m.kind] && (
+            <span className="text-[10px] font-medium text-ink-3 ring-1 ring-inset ring-surface-3 rounded px-1.5 py-px">
+              {KIND_LABEL[m.kind]}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  ));
 }
 
 function ModelDetail({ model: selected }) {
@@ -132,7 +179,7 @@ function ModelDetail({ model: selected }) {
     );
   }
 
-  // When Elementary is unavailable the detail endpoint 404s; fall back to selected model info
+  // When Elementary is unavailable the detail endpoint 404s; fall back to the selected table
   const model = data?.model || selected;
   const columns = data?.columns || [];
   const tests = data?.recent_tests || [];
@@ -148,12 +195,13 @@ function ModelDetail({ model: selected }) {
           <button
             onClick={loadSample}
             disabled={sampleLoading}
-            className="shrink-0 text-xs px-3 py-1.5 bg-datavloot-600 text-white rounded-lg hover:bg-datavloot-700 disabled:opacity-50 transition-colors"
+            className="btn btn-primary shrink-0"
           >
             {sampleLoading ? 'Loading…' : 'Sample data'}
           </button>
         </div>
         <div className="flex gap-4 mt-3 flex-wrap">
+          {(model.kind || selected.kind) && <Detail label="Kind" value={model.kind || selected.kind} />}
           {model.schema && <Detail label="Schema" value={model.schema} />}
           {model.database && <Detail label="Database" value={model.database} />}
           {model.last_run && <Detail label="Last run" value={formatTimestamp(model.last_run)} />}

@@ -38,8 +38,8 @@ export default function AppsPanel() {
 
   return (
     <div className="space-y-4 flex flex-col flex-1 min-h-0">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">
+      <div className="page-head">
+        <h2 className="page-title">
           {current?.title || 'Dashboards'}
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
@@ -48,10 +48,10 @@ export default function AppsPanel() {
               <button
                 key={app.name}
                 onClick={() => open(app.name)}
-                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                className={`btn ${
                   app.name === selected
-                    ? 'bg-datavloot-600 text-white border-datavloot-600'
-                    : 'text-ink-1 border-surface-3 hover:bg-surface-2'
+                    ? 'btn-primary'
+                    : ''
                 }`}
               >
                 {app.title}
@@ -62,7 +62,7 @@ export default function AppsPanel() {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
+              className="btn"
             >
               Open in new tab ↗
             </a>
