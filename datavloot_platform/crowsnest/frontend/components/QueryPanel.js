@@ -1,8 +1,9 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
+import { indexSchema, sqlCompletions } from '../lib/sqlCompletion';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -17,19 +18,56 @@ export default function QueryPanel() {
   const [error, setError] = useState(null);
 
   const tables = useApi(() => api.getTables(), []);
+  const mode = useApi(() => api.getQueryMode(), []);
+  const canWrite = !!mode.data?.write;
 
   // Ref so the Monaco keybinding always sees the latest sql value
   const sqlRef = useRef(sql);
   sqlRef.current = sql;
+  const reloadTables = useRef(tables.reload);
+  reloadTables.current = tables.reload;
 
-  const executeQuery = useCallback(async () => {
-    const currentSql = sqlRef.current;
+  // Autocomplete reads the schema through a ref: the provider is registered
+  // once, on mount, and has to see the schema as reloaded after a write.
+  const schema = useApi(() => api.getSchema(), []);
+  const schemaIndex = useMemo(() => indexSchema(schema.data), [schema.data]);
+  const schemaIndexRef = useRef(schemaIndex);
+  schemaIndexRef.current = schemaIndex;
+  const reloadSchema = useRef(schema.reload);
+  reloadSchema.current = schema.reload;
+
+  // Monaco keeps completion providers per language for the whole page, so the
+  // one registered on mount is removed on unmount, or each visit adds another.
+  const completionProvider = useRef(null);
+  useEffect(() => () => completionProvider.current?.dispose(), []);
+
+  // `fromEditor` is the text in Monaco right now. The keybinding passes it:
+  // sqlRef only catches up on the next render, so Ctrl+Enter straight after
+  // typing ran the statement as it was a few keystrokes earlier -- with write
+  // access, a DELETE with half its WHERE.
+  const executeQuery = useCallback(async (fromEditor) => {
+    const currentSql = typeof fromEditor === 'string' ? fromEditor : sqlRef.current;
     if (!currentSql.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.executeQuery(currentSql);
+      let res = await api.executeQuery(currentSql);
+      // A DROP, TRUNCATE, or DELETE/UPDATE without WHERE: the server ran nothing
+      // and asks first.
+      if (res.confirmation_required) {
+        if (!window.confirm(`${res.confirmation_required}\n\nRun it?`)) {
+          // Clear the last result, so an earlier "Done" cannot read as this one.
+          setResult(null);
+          return;
+        }
+        res = await api.executeQuery(currentSql, 1000, true);
+      }
       setResult(res);
+      if (res.write) {
+        // A CREATE, DROP or ALTER changes what there is to show and suggest.
+        reloadTables.current();
+        reloadSchema.current();
+      }
     } catch (err) {
       setError(err.message);
       setResult(null);
@@ -43,7 +81,14 @@ export default function QueryPanel() {
       id: 'execute-query',
       label: 'Execute Query',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
-      run: () => executeQuery(),
+      run: (ed) => executeQuery(ed.getValue()),
+    });
+
+    completionProvider.current?.dispose();
+    completionProvider.current = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.'],
+      provideCompletionItems: (model, position) =>
+        sqlCompletions(monaco, schemaIndexRef.current, model, position),
     });
   };
 
@@ -56,7 +101,25 @@ export default function QueryPanel() {
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-4">
       <div className="flex items-center justify-between shrink-0">
-        <h2 className="page-title">SQL editor</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="page-title">SQL editor</h2>
+          {mode.data && (
+            <span
+              className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${
+                canWrite
+                  ? 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200'
+                  : 'text-ink-2 ring-1 ring-inset ring-surface-3'
+              }`}
+              title={
+                canWrite
+                  ? 'Statements that change the lakehouse run here. Set CROWSNEST_SQL_WRITE=0 to make the editor read-only.'
+                  : 'Only reading statements run here. Set CROWSNEST_SQL_WRITE=1 to let the editor change the lakehouse.'
+              }
+            >
+              {canWrite ? 'read-write' : 'read-only'}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-ink-3">Ctrl+Enter to run</span>
           <button
@@ -122,7 +185,32 @@ export default function QueryPanel() {
             </div>
           )}
 
-          {result && (
+          {result?.write && (
+            <div className="card border-amber-200 bg-amber-50 px-4 py-3 shrink-0 space-y-1">
+              <p className="text-sm text-amber-900">
+                Done
+                {result.rows_affected !== null &&
+                  ` · ${result.rows_affected} row${result.rows_affected !== 1 ? 's' : ''} affected`}
+                {result.snapshot !== null && ` · snapshot ${result.snapshot}`}
+                <span className="ml-2 text-xs text-amber-700 font-mono">{result.duration_ms}ms</span>
+              </p>
+              {result.snapshot_before !== null ? (
+                <p className="text-xs text-amber-800">
+                  To undo, read the lakehouse as it was before this change, for example{' '}
+                  <code className="font-mono">
+                    SELECT * FROM &lt;table&gt; AT (VERSION =&gt; {result.snapshot_before})
+                  </code>
+                  . Lake maintenance keeps snapshots for about a week.
+                </p>
+              ) : (
+                <p className="text-xs text-amber-800">
+                  This database keeps no snapshots, so this change cannot be undone from here.
+                </p>
+              )}
+            </div>
+          )}
+
+          {result && !result.write && (
             <div className="card overflow-hidden flex-1 min-h-0 flex flex-col">
               <div className="panel-header shrink-0">
                 <span className="panel-title">

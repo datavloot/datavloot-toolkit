@@ -187,8 +187,13 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
             "Install it with: pip install datavloot[optimist]"
         )
 
-    from datavloot_platform.crowsnest.config import get_config
+    from datavloot_platform.crowsnest.config import get_config, sql_write_enabled
     from datavloot_platform.crowsnest.server import create_app
+
+    try:
+        sql_write = sql_write_enabled(args.host)
+    except ValueError as e:
+        sys.exit(f"Error: {e}")
 
     config = get_config()
     print(f"Starting Crows Nest on http://{args.host}:{args.port}")
@@ -200,6 +205,10 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
     print(f"  Marimo:  {config.marimo_url}")
     from datavloot_platform.crowsnest.auth import get_auth_token
     print(f"  Auth:    {'token required' if get_auth_token() else 'none (set CROWSNEST_AUTH_TOKEN to require one)'}")
+    if sql_write:
+        print("  SQL:     read-write (set CROWSNEST_SQL_WRITE=0 to make the editor read-only)")
+    else:
+        print("  SQL:     read-only (set CROWSNEST_SQL_WRITE=1 to let the editor change the lake)")
     print()
 
     if args.open:
@@ -208,7 +217,7 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         url = f"http://{'localhost' if args.host == '127.0.0.1' else args.host}:{args.port}"
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
-    app = create_app()
+    app = create_app(host=args.host)
     # The Marimo servers run in a session of their own, and the atexit hooks
     # that stop them run only when Python exits normally. uvicorn shuts down on
     # SIGTERM (and on Windows SIGBREAK) and then raises it again into the handler

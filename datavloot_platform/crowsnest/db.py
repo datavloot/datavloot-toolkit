@@ -54,14 +54,18 @@ _HARDENING = (
 
 
 def _harden(
-    conn: duckdb.DuckDBPyConnection, lake_data: str | None = None
+    conn: duckdb.DuckDBPyConnection,
+    lake_data: str | None = None,
+    db_file: str | None = None,
 ) -> duckdb.DuckDBPyConnection:
     """
     Lock a connection down to reading what is already attached.
 
     Applied after any ATTACH, which must happen while external access is still
     permitted. With `lake_data`, the file system stays open for that directory
-    only, as a DuckLake needs.
+    only, as a DuckLake needs. With `db_file` -- a read-write connection to a
+    .duckdb file -- it stays open for that file, its write-ahead log and its
+    spill directory only, which committing a write needs.
     """
     statements = _HARDENING
     if lake_data:
@@ -71,9 +75,35 @@ def _harden(
             "SET enable_external_access=false",
             "SET lock_configuration=true",
         )
+    elif db_file:
+        path = pathlib.Path(db_file).as_posix()
+        statements = (
+            f"SET allowed_paths=['{path}', '{path}.wal']",
+            f"SET allowed_directories=['{path}.tmp/']",
+            "SET enable_external_access=false",
+            "SET lock_configuration=true",
+        )
     for statement in statements:
         conn.execute(statement)
     return conn
+
+
+# How DuckDB says another process holds the database. The OS part of the message
+# is in the OS's language ("being used by another process" is "door een ander
+# proces wordt gebruikt" on a Dutch Windows), so match DuckDB's own words too.
+_LOCK_MARKERS = (
+    "already open in",      # DuckDB, a .duckdb file opened by another process
+    "conflicting lock",     # DuckDB on Linux and macOS
+    "could not set lock",
+    "another process",      # English Windows
+    "database is locked",   # a lake's SQLite catalog held by another writer
+)
+
+
+def is_lock_error(message: str) -> bool:
+    """True when `message` says another process holds the database."""
+    message = message.lower()
+    return any(marker in message for marker in _LOCK_MARKERS)
 
 
 def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
@@ -99,11 +129,12 @@ def get_conn(read_only: bool = True) -> duckdb.DuckDBPyConnection:
                 return _harden(conn, lake_data=config.ducklake_data_path)
             else:
                 return _harden(
-                    duckdb.connect(config.duckdb_path, read_only=read_only)
+                    duckdb.connect(config.duckdb_path, read_only=read_only),
+                    db_file=None if read_only else config.duckdb_path,
                 )
         except Exception as e:
             last_exc = e
-            if attempt < 2 and "another process" in str(e).lower():
+            if attempt < 2 and is_lock_error(str(e)):
                 time.sleep(0.15 * (attempt + 1))
                 continue
             break
