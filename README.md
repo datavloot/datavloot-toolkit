@@ -28,6 +28,52 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 ---
 
+## Installing
+
+To try Datavloot on your own laptop, one command installs it and opens the Crows Nest on the NOAA demo. It needs no Python, git or admin rights.
+
+**Windows** (PowerShell or Command Prompt):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+```
+
+**macOS and Linux:**
+
+```bash
+curl -LsSf https://datavloot.nl/install.sh | bash
+```
+
+The script:
+
+1. Installs [uv](https://docs.astral.sh/uv/) for your user, if it is not there yet.
+2. Creates the demo project in `optimist-demo` in your home folder.
+3. Gives the project its own Python 3.12 and packages, and installs the dbt packages.
+4. Starts Dagster and the Crows Nest, and opens [http://localhost:8080](http://localhost:8080).
+5. Starts the first run, which downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
+
+Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder:
+
+```bash
+uv run datavloot start
+```
+
+Running the install command again does the same: it finds the project and starts it, and never overwrites it. To install somewhere else, set `DATAVLOOT_DIR` first: `$env:DATAVLOOT_DIR = 'C:\dev\demo'` in PowerShell, or `curl ... | DATAVLOOT_DIR=~/dev/demo bash`. `DATAVLOOT_VERSION` picks a toolkit version (default: the latest).
+
+The script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project. `-ExecutionPolicy ByPass` in the Windows command applies to that one command only; it changes no setting.
+
+**Upgrading.** A project pins the toolkit to its minor version (`datavloot[optimist]~=0.3.0`). To get the latest patch release, run this in the project folder:
+
+```bash
+uv sync --upgrade-package datavloot
+```
+
+Moving to a newer minor version is a change to `pyproject.toml` and `packages.yml` (see [#55](https://github.com/datavloot/datavloot-toolkit/issues/55)).
+
+To build a project of your own rather than try the demo, follow the steps below.
+
+---
+
 ## Getting started
 
 ### Prerequisites

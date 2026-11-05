@@ -1,0 +1,189 @@
+# Install Datavloot and open the Crows Nest on the NOAA demo, in one command:
+#
+#   powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+#
+# No Python, git or admin rights needed. The script:
+#   1. installs uv (https://docs.astral.sh/uv/) for the current user, if missing
+#   2. creates the demo project in %USERPROFILE%\optimist-demo with `datavloot demo`
+#   3. gives it its own Python and packages (`uv sync`), and runs `dbt deps` and `dbt parse`
+#   4. starts Dagster and the Crows Nest, opens http://localhost:8080 and, the
+#      first time, starts the run that downloads the demo data and builds the models
+#
+# Running it again starts the existing project; it never overwrites one.
+#
+# Settings, as environment variables (the one-liner takes no arguments):
+#   DATAVLOOT_DIR      where the project goes (default: %USERPROFILE%\optimist-demo)
+#   DATAVLOOT_VERSION  a toolkit version, e.g. 0.3.1 (default: the latest release)
+#   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
+#
+# Written for Windows PowerShell 5.1, which every Windows 10 and 11 has.
+
+$PythonVersion = '3.12'
+$DagsterPort = 3000
+$CrowsNestPort = 8080
+
+function Stop-Install([string]$Message) {
+    throw "DATAVLOOT_STOP: $Message"
+}
+
+function Invoke-Step([string]$What, [scriptblock]$Command) {
+    Write-Host ""
+    Write-Host "==> $What" -ForegroundColor Cyan
+    & $Command
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Install "$What failed (exit code $LASTEXITCODE). The output above says why."
+    }
+}
+
+function Test-Internet {
+    try {
+        Invoke-WebRequest -Uri 'https://pypi.org/simple/datavloot/' -Method Head `
+            -UseBasicParsing -TimeoutSec 20 | Out-Null
+    } catch {
+        Stop-Install ("Cannot reach pypi.org: $($_.Exception.Message)`n" +
+            "Check the internet connection. Behind a proxy, set HTTPS_PROXY " +
+            "(for example `$env:HTTPS_PROXY = 'http://proxy:8080') and run this again.")
+    }
+}
+
+function Install-Uv {
+    $userBin = Join-Path $HOME '.local\bin'
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        if (Test-Path (Join-Path $userBin 'uv.exe')) {
+            $env:Path = "$userBin;$env:Path"
+        } else {
+            # uv's own installer, for the current user: no admin rights. In a
+            # process of its own, so whatever it does on exit stays there.
+            Invoke-Step 'Installing uv' {
+                powershell -NoProfile -ExecutionPolicy ByPass -Command `
+                    "irm https://astral.sh/uv/install.ps1 | iex"
+            }
+            $env:Path = "$userBin;$env:Path"
+            if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+                Stop-Install "uv was installed but is not found in $userBin. Open a new terminal and run this again."
+            }
+        }
+    }
+    Write-Host "uv: $(uv --version)"
+}
+
+function Get-PortUser([int]$Port) {
+    # Who listens on the port, or $null when it is free. Asking Windows first:
+    # binding 127.0.0.1 can succeed while another program listens on 0.0.0.0.
+    try {
+        $owner = (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop |
+            Select-Object -First 1).OwningProcess
+        try { return (Get-Process -Id $owner -ErrorAction Stop).ProcessName } catch { return "process $owner" }
+    } catch {
+        # None listening, or Get-NetTCPConnection is unavailable: try the port itself.
+    }
+    $listener = $null
+    try {
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
+        $listener.Start()
+        return $null
+    } catch {
+        return 'another program'
+    } finally {
+        if ($listener) { $listener.Stop() }
+    }
+}
+
+function Assert-PortsFree {
+    foreach ($entry in @(@($CrowsNestPort, 'the Crows Nest'), @($DagsterPort, 'Dagster'))) {
+        $user = Get-PortUser $entry[0]
+        if ($user) {
+            Stop-Install ("Port $($entry[0]), which $($entry[1]) needs, is in use by $user.`n" +
+                "If Datavloot is already running, open http://localhost:$CrowsNestPort. " +
+                "Otherwise close that program and run this again.")
+        }
+    }
+}
+
+function Test-Project([string]$Dir) {
+    (Test-Path (Join-Path $Dir 'dbt_project.yml')) -and (Test-Path (Join-Path $Dir 'pyproject.toml'))
+}
+
+function Install-Datavloot {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+    Write-Host "Datavloot: installing the toolkit and the NOAA demo" -ForegroundColor Cyan
+
+    $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME 'optimist-demo' }
+    $dir = [System.IO.Path]::GetFullPath($dir)
+    $existing = $false
+    if (Test-Path $dir) {
+        if (Test-Project $dir) {
+            $existing = $true
+        } elseif (-not (Get-ChildItem -Force $dir | Select-Object -First 1)) {
+            Remove-Item $dir   # empty: `datavloot demo` wants to create it itself
+        } else {
+            Stop-Install ("'$dir' already exists and is not a Datavloot project. " +
+                "Nothing in it was changed. Set DATAVLOOT_DIR to another folder and run this again.")
+        }
+    }
+
+    Test-Internet
+    Install-Uv
+
+    if ($existing) {
+        Write-Host ""
+        Write-Host "Found the project in $dir; its files stay as they are."
+    } else {
+        $from = if ($env:DATAVLOOT_FROM) {
+            $env:DATAVLOOT_FROM
+        } elseif ($env:DATAVLOOT_VERSION) {
+            "datavloot[optimist]==$($env:DATAVLOOT_VERSION)"
+        } else {
+            'datavloot[optimist]@latest'
+        }
+        # Tells `datavloot demo` not to print the steps this script takes itself.
+        $env:DATAVLOOT_INSTALLER = '1'
+        Invoke-Step "Creating the demo project in $dir" {
+            uvx --python $PythonVersion --from $from datavloot demo $dir
+        }
+    }
+
+    Push-Location $dir
+    try {
+        Invoke-Step "Installing Python $PythonVersion and the project's packages" {
+            uv sync --python $PythonVersion
+        }
+        if (-not (Test-Path 'dbt_packages')) {
+            Invoke-Step 'Installing the dbt packages' { uv run --no-sync dbt deps }
+        }
+        Invoke-Step 'Compiling the dbt project' { uv run --no-sync dbt parse }
+
+        Assert-PortsFree
+
+        Write-Host ""
+        Write-Host "==> Starting Dagster and the Crows Nest" -ForegroundColor Cyan
+        Write-Host "The Crows Nest opens at http://localhost:$CrowsNestPort. Keep this window open;"
+        Write-Host "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
+        Write-Host "    cd `"$dir`"; uv run datavloot start" -ForegroundColor Yellow
+        if (-not $existing) {
+            Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"
+            Write-Host "follow it in the Crows Nest's Pipelines panel."
+        }
+        Write-Host ""
+        $startArgs = @('run', '--no-sync', 'datavloot', 'start')
+        if (-not $existing) { $startArgs += '--run' }
+        & uv @startArgs
+    } finally {
+        Pop-Location
+    }
+}
+
+# Errors are reported here rather than with `exit`: under `irm | iex` in an open
+# PowerShell window, `exit` would close that window.
+try {
+    Install-Datavloot
+} catch {
+    $message = $_.Exception.Message
+    if ($message.StartsWith('DATAVLOOT_STOP: ')) {
+        $message = $message.Substring('DATAVLOOT_STOP: '.Length)
+    }
+    Write-Host ""
+    Write-Host "Error: $message" -ForegroundColor Red
+    $global:LASTEXITCODE = 1
+}
