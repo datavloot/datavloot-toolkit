@@ -7,10 +7,22 @@ import { useApi, formatTimestamp } from '../lib/hooks';
 // that says what needs attention today. Colour only where something needs doing.
 // Everything comes from the endpoints the other panels use.
 export default function OverviewPanel({ onNavigate, branding }) {
-  const health = useApi(() => api.getHealth(), [], 30000);
+  // Every 3 seconds while Dagster is starting, so the page follows it; then
+  // every 30, and the pipelines load again the moment Dagster is up.
+  const [healthEvery, setHealthEvery] = useState(30000);
+  const health = useApi(() => api.getHealth(), [], healthEvery);
   const services = useApi(() => api.getServices(), []);
   const pipelines = useApi(() => api.getPipelineSummary(), [], 30000);
   const runs = useApi(() => api.getPipelineRuns(5), [], 30000);
+  const dagsterStatus = health.data?.services?.dagster;
+  useEffect(() => {
+    setHealthEvery(dagsterStatus === 'starting' ? 3000 : 30000);
+    if (dagsterStatus === 'ok') {
+      pipelines.reload();
+      runs.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dagsterStatus]);
   const quality = useApi(() => api.getQualitySummary(), [], 30000);
   const models = useApi(() => api.getCatalogModels(), []);
   const apps = useApi(() => api.getApps(), []);
@@ -43,9 +55,9 @@ export default function OverviewPanel({ onNavigate, branding }) {
     },
     {
       title: 'A first pipeline run succeeded',
-      help: 'Materialize the assets in Dagster to load your sources into the lakehouse.',
+      help: 'Put your source files in place (often the data folder), then Materialize all in Pipelines.',
       done: (p.success || 0) > 0,
-      action: { label: 'Open Dagster', href: dagsterUrl },
+      action: { label: 'Pipelines', tab: 'pipelines' },
     },
     {
       title: 'Tables in the lakehouse',
@@ -108,7 +120,7 @@ export default function OverviewPanel({ onNavigate, branding }) {
 
       {/* Three numbers; the first in navy */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PipelinesKpi summary={pipelines.data} error={pipelines.data?.error || pipelines.error} onClick={() => onNavigate('pipelines')} />
+        <PipelinesKpi summary={pipelines.data} error={pipelines.data?.error || pipelines.error} dagster={s.dagster} onClick={() => onNavigate('pipelines')} />
         <QualityKpi quality={q} onClick={() => onNavigate('quality')} />
         <button onClick={() => onNavigate('catalog')} className="card p-5 text-left hover:border-datavloot-200 transition-colors">
           <div className="text-xs font-semibold text-ink-2">Lakehouse</div>
@@ -120,7 +132,8 @@ export default function OverviewPanel({ onNavigate, branding }) {
       {/* Hints: colour only in the stripe, the icon and the link */}
       <Hints
         s={s}
-        p={p}
+        dagsterError={health.data?.dagster_error}
+        failing={pipelines.data?.failing_jobs || []}
         q={q}
         steps={steps}
         stepsDone={stepsDone}
@@ -149,7 +162,9 @@ export default function OverviewPanel({ onNavigate, branding }) {
                     <td className="table-cell font-medium">{run.job}</td>
                     <td className="table-cell text-ink-2">{formatTimestamp(run.started_at)}</td>
                     <td className="table-cell text-right">
-                      <span className={`status-badge status-${run.status}`}>{run.status}</span>
+                      <span className={`status-badge status-${run.status} ${run.error ? 'cursor-help' : ''}`} title={run.error || undefined}>
+                        {run.status}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -289,32 +304,40 @@ function Checklist({ steps, done, onNavigate }) {
   );
 }
 
-function PipelinesKpi({ summary, error, onClick }) {
-  const by = summary?.by_status || {};
-  const failed = by.failure || 0;
-  const ok = by.success || 0;
-  const running = by.running || 0;
+// The tile takes the colour of the latest run: green when it succeeded, red
+// when it failed. Which jobs are still failing is in the hints below it.
+const LAST_RUN = {
+  success: { text: 'Last run succeeded', tile: 'bg-emerald-700 hover:bg-emerald-800' },
+  failure: { text: 'Last run failed', tile: 'bg-red-700 hover:bg-red-800' },
+  running: { text: 'Running', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
+  queued: { text: 'Queued', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
+  cancelled: { text: 'Last run cancelled', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
+};
+
+function PipelinesKpi({ summary, error, dagster, onClick }) {
+  const last = summary?.latest_run;
+  const look = (last && LAST_RUN[last.status]) || { text: 'No runs yet', tile: 'bg-datavloot-800 hover:bg-datavloot-900' };
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg p-5 text-left transition-colors ${
-        failed > 0 ? 'bg-red-700 hover:bg-red-800' : 'bg-datavloot-800 hover:bg-datavloot-900'
-      } text-white shadow-sm`}
+      className={`rounded-lg p-5 text-left transition-colors ${error ? 'bg-datavloot-800 hover:bg-datavloot-900' : look.tile} text-white shadow-sm`}
     >
       <div className="text-xs font-semibold text-white/70">Pipelines</div>
-      {error ? (
+      {error && dagster === 'starting' ? (
+        <>
+          <div className="text-3xl font-semibold tracking-tight mt-2">Starting…</div>
+          <div className="text-sm text-white/70 mt-1">Dagster is loading the project →</div>
+        </>
+      ) : error ? (
         <>
           <div className="text-3xl font-semibold tracking-tight mt-2">Offline</div>
           <div className="text-sm text-white/70 mt-1">Dagster is not reachable →</div>
         </>
       ) : (
         <>
-          <div className="text-3xl font-semibold tracking-tight mt-2 tabular-nums">
-            {failed > 0 ? `${failed} failed` : `${ok} ok`}
-          </div>
-          <div className="text-sm text-white/70 mt-1">
-            {failed > 0 ? `${ok} succeeded` : 'recent runs'}
-            {running > 0 && `, ${running} running`} →
+          <div className="text-2xl font-semibold tracking-tight mt-2">{look.text}</div>
+          <div className="text-sm text-white/70 mt-1 truncate">
+            {last ? `${last.job} · ${formatTimestamp(last.started_at)}` : 'Materialize all in Pipelines'} →
           </div>
         </>
       )}
@@ -336,29 +359,43 @@ function QualityKpi({ quality, onClick }) {
         <div className={`h-full rounded-full ${bar}`} style={{ width: `${score ?? 0}%` }} />
       </div>
       <div className="text-sm text-ink-2 mt-2">
-        {total > 0 ? `${total} tests in the last 7 days →` : 'No test results yet →'}
+        {total > 0 ? `${total} tests, latest result of each →` : 'No test results yet →'}
       </div>
     </button>
   );
 }
 
-function Hints({ s, p, q, steps, stepsDone, dagsterUrl, onNavigate }) {
+function Hints({ s, dagsterError, failing, q, steps, stepsDone, dagsterUrl, onNavigate }) {
   const hints = [];
-  if ((p.failure || 0) > 0) {
-    hints.push({ tone: 'bad', text: `${p.failure} pipeline run${p.failure > 1 ? 's' : ''} failed.`, link: 'See the runs', tab: 'pipelines' });
+  // Only jobs whose latest run failed: one that succeeded since is fine again.
+  for (const run of failing) {
+    hints.push({
+      tone: 'bad',
+      text: `${run.job}: the last run failed ${formatTimestamp(run.started_at)}.`,
+      title: run.error,
+      link: 'See the runs',
+      tab: 'pipelines',
+    });
   }
   if ((q?.by_status?.fail || 0) > 0) {
-    hints.push({ tone: 'bad', text: `${q.by_status.fail} test${q.by_status.fail > 1 ? 's' : ''} failing this week.`, link: 'See the tests', tab: 'quality' });
+    hints.push({ tone: 'bad', text: `${q.by_status.fail} test${q.by_status.fail > 1 ? 's' : ''} failing.`, link: 'See the tests', tab: 'quality' });
+  }
+  if (s.dagster === 'failed') {
+    hints.push({ tone: 'bad', text: `Dagster did not start: ${dagsterError || 'see the log'}`, title: dagsterError, link: 'Open Dagster', href: dagsterUrl });
+  }
+  if (s.dagster === 'starting') {
+    hints.push({ tone: 'note', text: 'Dagster is starting and loading the project; the pipelines appear in a moment.', link: 'Pipelines', tab: 'pipelines' });
   }
   if (s.dagster === 'offline') {
     hints.push({ tone: 'warn', text: 'Dagster is not running, so no pipeline runs right now. Start it with datavloot start.', link: 'Open Dagster', href: dagsterUrl });
   }
   if ((q?.by_status?.warn || 0) > 0) {
-    hints.push({ tone: 'warn', text: `${q.by_status.warn} test warning${q.by_status.warn > 1 ? 's' : ''} this week.`, link: 'See the tests', tab: 'quality' });
+    hints.push({ tone: 'warn', text: `${q.by_status.warn} test warning${q.by_status.warn > 1 ? 's' : ''}.`, link: 'See the tests', tab: 'quality' });
   }
   const next = steps.find((step) => !step.done);
-  // Dagster offline already has its own hint above; then the next step after it.
-  const nextShown = s.dagster === 'offline' ? steps.slice(1).find((step) => !step.done) : next;
+  // Dagster not up already has its own hint above; then the next step after it.
+  const dagsterDown = ['offline', 'starting', 'failed'].includes(s.dagster);
+  const nextShown = dagsterDown ? steps.slice(1).find((step) => !step.done) : next;
   if (nextShown) {
     hints.push({ tone: 'note', text: `${stepsDone} of ${steps.length} setup steps done. Next: ${nextShown.title}.`, link: nextShown.action.label, tab: nextShown.action.tab, href: nextShown.action.href });
   }
@@ -367,7 +404,7 @@ function Hints({ s, p, q, steps, stepsDone, dagsterUrl, onNavigate }) {
   const tones = {
     bad: { stripe: 'bg-red-600', icon: 'text-red-600', link: 'text-red-700' },
     warn: { stripe: 'bg-amber-500', icon: 'text-amber-600', link: 'text-amber-800' },
-    note: { stripe: 'bg-highlight', icon: 'text-highlight', link: 'text-[#9C6A15]' },
+    note: { stripe: 'bg-highlight', icon: 'text-highlight', link: 'text-highlight-700' },
   };
   return (
     <div className="space-y-2">
@@ -383,9 +420,9 @@ function Hints({ s, p, q, steps, stepsDone, dagsterUrl, onNavigate }) {
         );
         const cls = 'card relative overflow-hidden flex items-center gap-3 pl-5 pr-4 py-3 w-full text-left hover:bg-surface-1 transition-colors';
         return hint.href ? (
-          <a key={hint.text} href={hint.href} target="_blank" rel="noopener noreferrer" className={cls}>{body}</a>
+          <a key={hint.text} href={hint.href} target="_blank" rel="noopener noreferrer" className={cls} title={hint.title || undefined}>{body}</a>
         ) : (
-          <button key={hint.text} onClick={() => onNavigate(hint.tab)} className={cls}>{body}</button>
+          <button key={hint.text} onClick={() => onNavigate(hint.tab)} className={cls} title={hint.title || undefined}>{body}</button>
         );
       })}
     </div>

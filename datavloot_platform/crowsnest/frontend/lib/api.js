@@ -69,4 +69,5 @@ export const api = {
   // Health & Services
   getHealth: () => apiFetch('/health'),
   getServices: () => apiFetch('/services'),
+  shutdown: () => apiFetch('/shutdown', { method: 'POST' }),
 };

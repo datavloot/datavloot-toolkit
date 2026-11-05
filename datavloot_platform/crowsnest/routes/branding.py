@@ -9,14 +9,17 @@ its colours, from an optional branding/ directory in the project.
     # branding.yml
     name: KetenConnect
     colors:
-      accent: "#0070c0"      # active tab, buttons, links, spinner
+      accent: "#0070c0"      # buttons, links, spinner
       text: "#002060"        # text; muted text is derived from it
       background: "#f2f2f2"  # page background; hover and borders are derived from it
+      sidebar: "#002060"     # the sidebar; without it, the accent darkened
+      highlight: "#00b050"   # the active tab's marker, focus rings, notes
 
 The frontend's colours are CSS variables (app/globals.css holds the defaults).
-This route turns the three colours into the full set of shades the frontend
-uses, so a project names its colours once and never a shade. Without branding/
-the Crows Nest looks as it always has.
+This route turns the colours into the full set of shades the frontend uses, so
+a project names its colours once and never a shade. Without branding/ the Crows
+Nest looks as it always has. With a logo, the sidebar shows the logo without
+the name next to it: a logo usually carries the name already.
 """
 
 import pathlib
@@ -63,6 +66,8 @@ def shades(colors: dict) -> dict[str, str]:
     accent = _rgb(colors.get("accent"))
     text = _rgb(colors.get("text"))
     background = _rgb(colors.get("background"))
+    sidebar = _rgb(colors.get("sidebar"))
+    highlight = _rgb(colors.get("highlight"))
 
     if accent:
         for step, share in ((50, 0.10), (100, 0.25), (200, 0.38), (400, 0.75)):
@@ -70,6 +75,14 @@ def shades(colors: dict) -> dict[str, str]:
         variables["--cn-accent-600"] = _css(accent)
         for step, share in ((700, 0.15), (800, 0.40), (900, 0.55)):
             variables[f"--cn-accent-{step}"] = _css(_mix(accent, _BLACK, share))
+        # The sidebar follows the accent, unless the project names its own below.
+        variables["--cn-sidebar"] = variables["--cn-accent-900"]
+    if sidebar:
+        variables["--cn-sidebar"] = _css(sidebar)
+    if highlight:
+        variables["--cn-highlight"] = _css(highlight)
+        # Darkened for text on white, where the colour itself can be too light to read.
+        variables["--cn-highlight-700"] = _css(_mix(highlight, _BLACK, 0.30))
     if text:
         # Lightened toward white, not alpha, so muted text keeps its contrast
         # on any surface; ink-3, the faintest, still reads on white.

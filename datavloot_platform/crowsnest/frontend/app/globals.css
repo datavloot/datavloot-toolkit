@@ -27,6 +27,8 @@
   --cn-ink-2: 78 100 112;        /* muted */
   --cn-ink-3: 108 130 141;       /* dim, still readable on white */
   --cn-highlight: 201 138 31;    /* ochre: the active tab, focus, brand touches */
+  --cn-highlight-700: 156 106 21; /* ochre, darker: links in a note on white */
+  --cn-sidebar: 24 47 62;        /* deep navy: the sidebar (accent-900 unless branding names one) */
 }
 
 @layer base {

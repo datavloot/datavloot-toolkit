@@ -62,6 +62,22 @@ export default function CrowsNestPage() {
   const { data: branding } = useApi(() => api.getBranding(), []);
   const { data: services } = useApi(() => api.getServices(), []);
 
+  // After Shut down the server is gone; the page says so instead of erroring.
+  const [stopped, setStopped] = useState(false);
+  const shutDown = async () => {
+    if (!window.confirm(
+      'Shut down Datavloot? Dagster and the Crows Nest stop. A pipeline run that is still going is cancelled.'
+    )) {
+      return;
+    }
+    try {
+      await api.shutdown();
+      setStopped(true);
+    } catch (err) {
+      window.alert(`Could not shut down: ${err.message}`);
+    }
+  };
+
   // The project's colours (branding/ in the project) replace the defaults in globals.css.
   useEffect(() => {
     if (!branding) return;
@@ -78,6 +94,21 @@ export default function CrowsNestPage() {
     if (branding.name) document.title = `${branding.name} · Crows Nest`;
   }, [branding]);
 
+  if (stopped) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-surface-1 px-6">
+        <div className="card max-w-md w-full px-8 py-10 text-center">
+          <h1 className="text-xl font-semibold text-ink-0 tracking-tight">Datavloot is shut down</h1>
+          <p className="text-sm text-ink-2 mt-3 leading-relaxed">
+            Dagster and the Crows Nest have stopped. You can close this tab. To start again, use the
+            shortcut{branding?.name ? ` for ${branding.name}` : ''}, or run <code className="font-mono">datavloot start</code> in
+            the project folder.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* TEST BANNER — uncomment when iterating on the Crows Nest to confirm the correct build is deployed */}
@@ -86,25 +117,30 @@ export default function CrowsNestPage() {
       </div> */}
 
       <div className="flex flex-1 min-h-0">
-      {/* Sidebar: datavloot's deep navy (a project's branding darkens its own accent) */}
-      <aside className="w-60 bg-datavloot-900 text-white flex flex-col fixed h-full z-10">
-        {/* Logo: the project's own from branding/, else datavloot's */}
+      {/* Sidebar: datavloot's deep navy, a project's own colour (branding.yml
+          `sidebar`), or else its accent darkened */}
+      <aside className="w-60 bg-sidebar text-white flex flex-col fixed h-full z-10">
+        {/* Logo: the project's own from branding/, else datavloot's. A project's
+            logo usually carries its name already, so the name is not repeated. */}
         <div className="px-5 pt-5 pb-4">
-          <div className="flex items-center gap-3">
-            {branding?.logo ? (
-              <span className="h-10 max-w-[7.5rem] shrink-0 rounded-md bg-white px-2 py-1.5 flex items-center">
+          {branding?.logo ? (
+            <div>
+              <span className="h-11 max-w-full inline-flex rounded-md bg-white px-2.5 py-1.5 items-center">
                 <img src={branding.logo} alt={branding.name || 'Logo'} className="max-h-full max-w-full" />
               </span>
-            ) : (
-              <img src="/datavloot-logo.png" alt="" className="w-10 h-10 shrink-0" />
-            )}
-            <div className="min-w-0">
-              <div className="font-semibold text-[15px] leading-tight tracking-tight truncate">
-                {branding?.name || 'datavloot'}
-              </div>
-              <div className="text-[11px] text-white/55 leading-tight mt-0.5">crows nest</div>
+              <div className="text-[11px] text-white/55 leading-tight mt-2">crows nest</div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <img src="/datavloot-logo.png" alt="" className="w-10 h-10 shrink-0" />
+              <div className="min-w-0">
+                <div className="font-semibold text-[15px] leading-tight tracking-tight truncate">
+                  {branding?.name || 'datavloot'}
+                </div>
+                <div className="text-[11px] text-white/55 leading-tight mt-0.5">crows nest</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Nav, in groups */}
@@ -133,6 +169,20 @@ export default function CrowsNestPage() {
           ))}
         </nav>
 
+        {/* Stop Datavloot: only on a laptop (routes in server.py, /api/shutdown) */}
+        {services?.can_shutdown && (
+          <div className="px-3 pb-2">
+            <button
+              onClick={shutDown}
+              className="sidebar-link sidebar-link-inactive w-full"
+              title="Stop Dagster and the Crows Nest"
+            >
+              <PowerIcon />
+              Shut down
+            </button>
+          </div>
+        )}
+
         {/* Footer: datavloot, the toolkit the Crows Nest comes with; also under a project's own branding */}
         <div className="mx-3 px-3 py-3 border-t border-white/10">
           <div className="flex items-center gap-2 text-[11px] text-white/50">
@@ -160,6 +210,16 @@ export default function CrowsNestPage() {
       </main>
       </div>
     </div>
+  );
+}
+
+function PowerIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" className="opacity-80" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v9" />
+      <path d="M6.3 6.3a8 8 0 1011.4 0" />
+    </svg>
   );
 }
 

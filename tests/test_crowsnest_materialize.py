@@ -1,5 +1,5 @@
 """
-The Pipelines panel's "Run everything" button: POST /api/pipelines/materialize-all.
+The Pipelines panel's "Materialize all" button: POST /api/pipelines/materialize-all.
 
 It makes the call `datavloot start --run` makes (cli.materialize_all, tested in
 test_install_scripts.py); these tests cover what the route adds around it.
