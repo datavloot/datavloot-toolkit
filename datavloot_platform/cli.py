@@ -133,6 +133,10 @@ def _pin_versions(dest: pathlib.Path, versions: dict[str, str]) -> None:
 
 
 def cmd_new(args: argparse.Namespace) -> None:
+    if getattr(args, "source", None):
+        return cmd_new_from(args)
+    if getattr(args, "ref", None) or getattr(args, "subdir", None):
+        sys.exit("Error: --ref and --path go with --from <repository>.")
     dest = pathlib.Path(args.path).resolve()
     project_name = _to_identifier(dest.name)
     versions = _versions()
@@ -152,6 +156,42 @@ def cmd_new(args: argparse.Namespace) -> None:
     print(f"  5. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
     print(f"\nSee data-instructions.md or hand it to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions, then start adding your data sources.")
+
+
+def cmd_new_from(args: argparse.Namespace) -> None:
+    """`datavloot new <path> --from <repository>`: see datavloot_platform/remote.py."""
+    from datavloot_platform import remote
+
+    dest = pathlib.Path(args.path).resolve()
+    # Before the download, so a warning is read while there is still time to
+    # choose another folder.
+    _warn_about_location(dest, _to_identifier(dest.name))
+    try:
+        remote.install(dest, args.source, args.ref, args.subdir)
+    except remote.RemoteError as e:
+        sys.exit(f"Error: {e}")
+    print(f"\nReady. Start Dagster and the Crows Nest with:")
+    print(f"  cd \"{dest}\"")
+    print(f"  uv run datavloot start --run")
+    print(f"The --run builds every table the first time. Later, `datavloot update` in that")
+    print(f"folder installs a newer version of the project.")
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """`datavloot update`: see datavloot_platform/remote.py."""
+    from datavloot_platform import remote
+    from datavloot_platform.crowsnest.config import get_config
+
+    project = pathlib.Path.cwd()
+    _warn_about_location(project, _to_identifier(project.name))
+    try:
+        result = remote.update(project, args.ref)
+    except remote.RemoteError as e:
+        sys.exit(f"Error: {e}")
+    if result is None:
+        return
+    print(f"\n{remote.run_after_update(project, get_config().dagster_graphql_url, args.run)}")
+    print(f"\nUpdated from {result[0]} to {result[1]}.")
 
 
 def cmd_demo(args: argparse.Namespace) -> None:
@@ -486,7 +526,30 @@ def main() -> None:
         "new", help="Scaffold a new project at the given path"
     )
     new_parser.add_argument("path", help="Path where the project will be created")
+    new_parser.add_argument(
+        "--from", dest="source", metavar="URL",
+        help="Install an existing project from a tag of this GitHub or GitLab repository",
+    )
+    new_parser.add_argument(
+        "--ref", metavar="TAG", help="With --from: the tag to install (default: the latest version)"
+    )
+    new_parser.add_argument(
+        "--path", dest="subdir", metavar="FOLDER",
+        help="With --from: the project's folder in the repository, when it cannot be found by itself",
+    )
     new_parser.set_defaults(func=cmd_new)
+
+    update_parser = subparsers.add_parser(
+        "update", help="Install another tag of a project installed with `new --from`"
+    )
+    update_parser.add_argument(
+        "--ref", metavar="TAG", help="The tag to go to, also an older one (default: the latest version)"
+    )
+    update_parser.add_argument(
+        "--no-run", dest="run", action="store_false",
+        help="Do not start a run of every asset afterwards",
+    )
+    update_parser.set_defaults(func=cmd_update, run=True)
 
     demo_parser = subparsers.add_parser(
         "demo", help="Copy the NOAA worked example to a local directory"

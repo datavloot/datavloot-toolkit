@@ -265,6 +265,56 @@ In older projects `profiles.yml` has one target, `dev`, that writes to the produ
 
 ---
 
+## Installing a project on other machines
+
+When one person maintains a project and others only run it and use the Crows Nest, those machines can install it from a tag of its GitHub or GitLab repository, without git:
+
+```
+datavloot new C:\dev\harbor --from https://gitlab.com/<group>/harbor
+```
+
+This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`. The target folder must be new or empty; an existing project is never overwritten.
+
+An installation is a copy of one tag, not a working copy: it is meant to be run, not changed.
+
+### Preparing a project for this
+
+- **A repository** on github.com, gitlab.com or a self-hosted GitLab. The project may sit in a subfolder (`ketenconnect/` next to other files): the folder with both `dbt_project.yml` and `pyproject.toml` is found by itself. Only that folder is installed. If the repository has none or several, name it with `--path <folder>`.
+- **A tag per version**, such as `v1.0.0`. The latest tag is the highest by semantic version (a leading `v` is fine); tags that are not versions are ignored, and so are pre-releases such as `v2.0.0-rc.1` unless there is no release at all. Install one on purpose with `--ref`.
+- **A `uv.lock`** next to `pyproject.toml`, so every machine gets the versions you tested. `uv sync --locked` stops when it does not match `pyproject.toml`: run `uv lock` before tagging.
+- **A `.env.example`** with every setting the project reads, such as where the input files are and credentials for sources, each with a comment above it. The comment is shown when the value is asked for, and the value after `=` is the default. Values of names with `TOKEN`, `PASSWORD`, `SECRET` or `KEY` are asked for without showing them. Keep `.env` itself out of the repository.
+
+  ```
+  # Folder with the KetenConnect exports (.xlsx)
+  EXPORT_DIR=data
+
+  # Password for the source database
+  SOURCE_PASSWORD=
+  ```
+- **Local state in `.gitignore`**: `.env`, `.venv/`, `lake/`, `target/`, `dbt_packages/`, `logs/`, and data files in `data/`. What is in the repository is what gets installed.
+
+A **private repository** needs a read-only token, asked for when the host refuses without one:
+
+- GitLab: a project access token, or a personal access token, with the `read_api` scope. A deploy token does not work: it cannot use the API for tags and archives.
+- GitHub: a fine-grained personal access token with access to the repository and the permission Contents: read.
+
+The token is stored for later updates in the system's credential store (Windows Credential Manager, the macOS Keychain, the Secret Service on Linux), under the repository's host and path. Where there is none, it goes into `tokens.json` in the user's config folder (`%APPDATA%\datavloot` on Windows), readable only by that user, and the command says so. It is never written into the project. To install without a prompt, set `DATAVLOOT_TOKEN`. When a token expires, the next command asks for a new one.
+
+### Rolling out a new version
+
+Tag the new version in the repository, then on each machine, in the project's folder:
+
+```
+uv run datavloot update              # to the latest tag
+uv run datavloot update --ref v1.1.0 # to a given tag, also an older one
+```
+
+`update` downloads and unpacks the tag first; if that fails (no internet, an expired token, an unknown tag) the installation is left as it was. Then it replaces exactly the files the previous tag installed, listed with their hashes in `.datavloot/install.json`: files the new tag no longer has are removed, the others overwritten. Everything else stays: `.env`, `data/`, `lake/`, `.venv`, `logs/`, `target/`, `dbt_packages/` and notebooks someone made. A file of the installation that was changed on the machine is overwritten too, with a warning. It then asks only for settings that `.env.example` gained, and runs `uv sync`, `dbt deps` and `dbt parse` again.
+
+Finally it rebuilds the tables with the new models: when this project's Dagster is running, it reloads the code and starts a run of every asset (leave that out with `--no-run`); when it is not, it says how to start it. Restart Dagster and the Crows Nest afterwards so they run the new version. On Windows, a running Dagster can keep `uv sync` from replacing files in `.venv`; if it fails on that, close Dagster and the Crows Nest and run `uv sync` and the steps after it again.
+
+---
+
 ## Example project
 
 The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) is a complete consuming project built on this toolkit. It uses
