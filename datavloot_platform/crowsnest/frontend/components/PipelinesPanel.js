@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApi, formatDuration, formatTimestamp } from '../lib/hooks';
 
@@ -11,6 +12,28 @@ export default function PipelinesPanel() {
   const services = useApi(() => api.getServices(), []);
   const dagsterUrl = services.data?.dagster_url || 'http://localhost:3000';
 
+  // "Run everything": one run of every asset, as Materialize all in Dagster.
+  const [starting, setStarting] = useState(false);
+  const [notice, setNotice] = useState(null); // {kind: 'ok' | 'error', text}
+  const running = (data?.runs || []).some((r) => r.status === 'running' || r.status === 'queued');
+
+  const runEverything = async () => {
+    if (!window.confirm('Start a run of every asset? It loads every source again and rebuilds every table.')) {
+      return;
+    }
+    setStarting(true);
+    setNotice(null);
+    try {
+      const res = await api.materializeAll();
+      setNotice({ kind: 'ok', text: res.message });
+      reload();
+    } catch (err) {
+      setNotice({ kind: 'error', text: err.message });
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="page-head">
@@ -19,6 +42,14 @@ export default function PipelinesPanel() {
           <p className="page-lede">The last 30 runs in Dagster, refreshed every 15 seconds.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={runEverything}
+            disabled={starting || running}
+            className="btn btn-primary disabled:opacity-50"
+            title={running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all in Dagster'}
+          >
+            {starting ? 'Starting...' : 'Run everything'}
+          </button>
           <a
             href={dagsterUrl}
             target="_blank"
@@ -35,6 +66,16 @@ export default function PipelinesPanel() {
           </button>
         </div>
       </div>
+
+      {notice && (
+        <div
+          className={`card px-4 py-3 text-sm ${
+            notice.kind === 'ok' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         {loading && !data ? (
@@ -56,16 +97,16 @@ export default function PipelinesPanel() {
               {data?.runs?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-ink-3 text-sm">
-                    No pipeline runs yet.{' '}
+                    No pipeline runs yet. Click <strong>Run everything</strong> above, or{' '}
                     <a
                       href={dagsterUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-datavloot-600 hover:underline"
                     >
-                      Open Dagster
+                      open Dagster
                     </a>
-                    {' '}to start your first run.
+                    {' '}to choose what to run.
                   </td>
                 </tr>
               )}

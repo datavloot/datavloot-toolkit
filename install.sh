@@ -13,8 +13,14 @@
 # Running it again starts the existing project; it never overwrites one.
 #
 # Settings, as environment variables (`curl ... | DATAVLOOT_DIR=~/demo bash`):
-#   DATAVLOOT_DIR      where the project goes (default: ~/optimist-demo)
-#   DATAVLOOT_VERSION  a toolkit version, e.g. 0.3.1 (default: the latest release)
+#   DATAVLOOT_PROJECT  a project of your own instead of the demo: its GitHub or GitLab
+#                      repository, e.g. https://gitlab.com/group/name (`datavloot new --from`)
+#   DATAVLOOT_REF      with DATAVLOOT_PROJECT: the tag to install (default: the latest version)
+#   DATAVLOOT_PATH     with DATAVLOOT_PROJECT: the project's folder in the repository,
+#                      when it cannot be found by itself
+#   DATAVLOOT_DIR      where the project goes (default: ~/optimist-demo, or
+#                      ~/<repository name> with DATAVLOOT_PROJECT)
+#   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
 # Written for the bash 3.2 that macOS ships.
@@ -46,9 +52,19 @@ port_user() {
 }
 
 main() {
-    printf '\033[36mDatavloot: installing the toolkit and the NOAA demo\033[0m\n'
+    # With DATAVLOOT_PROJECT, a project of your own from its repository
+    # (`datavloot new --from`) instead of the demo.
+    local project="${DATAVLOOT_PROJECT:-}" default_name=optimist-demo
+    if [ -n "$project" ]; then
+        printf '\033[36mDatavloot: installing the toolkit and %s\033[0m\n' "$project"
+        # The repository's name: https://gitlab.com/group/name(.git)(/-/tree/main)
+        default_name="${project%%/-/*}"; default_name="${default_name%/}"
+        default_name="${default_name%.git}"; default_name="${default_name##*/}"
+    else
+        printf '\033[36mDatavloot: installing the toolkit and the NOAA demo\033[0m\n'
+    fi
 
-    local dir="${DATAVLOOT_DIR:-$HOME/optimist-demo}"
+    local dir="${DATAVLOOT_DIR:-$HOME/$default_name}"
     case "$dir" in "~"*) dir="$HOME${dir#\~}" ;; esac
     local existing=false
     if [ -e "$dir" ]; then
@@ -86,18 +102,38 @@ main() {
         else
             from="datavloot[optimist]@latest"
         fi
-        # DATAVLOOT_INSTALLER: `datavloot demo` leaves out the steps this script takes itself.
-        run_step "Creating the demo project in $dir" \
-            env DATAVLOOT_INSTALLER=1 uvx --python "$PYTHON_VERSION" --from "$from" datavloot demo "$dir"
+        # DATAVLOOT_INSTALLER: `datavloot demo` and `new` leave out the steps this script takes itself.
+        if [ -n "$project" ]; then
+            # Fetches the latest tag (or DATAVLOOT_REF), asks for a token when the
+            # repository is private and for the settings in .env.example, and runs
+            # uv sync, dbt deps and dbt parse itself. Its questions read the
+            # terminal: under curl | bash, this script's own stdin is the script.
+            set -- --python "$PYTHON_VERSION" --from "$from" datavloot new "$dir" --from "$project"
+            if [ -n "${DATAVLOOT_REF:-}" ]; then set -- "$@" --ref "$DATAVLOOT_REF"; fi
+            if [ -n "${DATAVLOOT_PATH:-}" ]; then set -- "$@" --path "$DATAVLOOT_PATH"; fi
+            step "Installing $project in $dir"
+            env DATAVLOOT_INSTALLER=1 uvx "$@" </dev/tty \
+                || fail "Installing $project failed (exit code $?). The output above says why."
+        else
+            run_step "Creating the demo project in $dir" \
+                env DATAVLOOT_INSTALLER=1 uvx --python "$PYTHON_VERSION" --from "$from" datavloot demo "$dir"
+        fi
     fi
 
     cd "$dir"
-    run_step "Installing Python $PYTHON_VERSION and the project's packages" \
-        uv sync --python "$PYTHON_VERSION"
-    if [ ! -d dbt_packages ]; then
-        run_step "Installing the dbt packages" uv run --no-sync dbt deps
+    # `new --from` has just done these steps. Otherwise they repair a project an
+    # earlier attempt left halfway, and are quick when nothing is missing.
+    if $existing || [ -z "$project" ]; then
+        # An installed project gets exactly the versions its maintainer locked.
+        local locked=""
+        if [ -f uv.lock ] && [ -f .datavloot/install.json ]; then locked="--locked"; fi
+        run_step "Installing Python $PYTHON_VERSION and the project's packages" \
+            uv sync --python "$PYTHON_VERSION" $locked
+        if [ ! -d dbt_packages ]; then
+            run_step "Installing the dbt packages" uv run --no-sync dbt deps
+        fi
+        run_step "Compiling the dbt project" uv run --no-sync dbt parse
     fi
-    run_step "Compiling the dbt project" uv run --no-sync dbt parse
 
     local port name user
     for port in "$CROWSNEST_PORT" "$DAGSTER_PORT"; do
@@ -112,7 +148,14 @@ main() {
     echo "The Crows Nest opens at http://localhost:$CROWSNEST_PORT. Keep this terminal open;"
     echo "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
     printf '\033[33m    cd "%s" && uv run datavloot start\033[0m\n' "$dir"
-    if ! $existing; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+        echo "Or have it start at every login, with an app in ~/Applications:"
+        printf '\033[33m    cd "%s" && uv run datavloot autostart on\033[0m\n' "$dir"
+    fi
+    if ! $existing && [ -n "$project" ]; then
+        echo "The first run builds every table; follow it in the Crows Nest's Pipelines panel."
+        echo "Put the project's input files in place first if it reads any (often its data folder)."
+    elif ! $existing; then
         echo "The first run downloads the demo's AIS data (41 MB) and builds the models;"
         echo "follow it in the Crows Nest's Pipelines panel."
     fi

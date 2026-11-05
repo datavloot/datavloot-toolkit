@@ -19,6 +19,7 @@ export const api = {
   getPipelineRuns: (limit = 20) => apiFetch(`/pipelines/runs?limit=${limit}`),
   getPipelineSummary: () => apiFetch('/pipelines/summary'),
   getJobs: () => apiFetch('/pipelines/jobs'),
+  materializeAll: () => apiFetch('/pipelines/materialize-all', { method: 'POST' }),
 
   // Data Quality
   getTestResults: (limit = 100) => apiFetch(`/quality/test-results?limit=${limit}`),

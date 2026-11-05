@@ -11,6 +11,35 @@ import socket
 import subprocess
 import sys
 
+# Not in subprocess outside Windows; the value is Windows' own.
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+
+
+def has_console() -> bool:
+    """
+    Whether this process has a console window, as python.exe in a terminal does
+    and pythonw.exe (autostart, the shortcut) does not. Always True off Windows.
+    """
+    if sys.platform != "win32":
+        return True
+    import ctypes
+
+    return bool(ctypes.windll.kernel32.GetConsoleWindow())
+
+
+def console_child_flags() -> int:
+    """
+    creationflags for a console program (dagster, taskkill) started from here.
+
+    Started from pythonw, which has no console, Windows gives every console
+    child a console window of its own, in front of the user, unless it gets
+    CREATE_NO_WINDOW; that hidden console is then shared by its own children
+    (Dagster's webserver, daemon, code servers, dbt). From a terminal the child
+    shares the terminal instead, which is what makes Ctrl+C and closing the
+    window reach it: there the flag is left off.
+    """
+    return CREATE_NO_WINDOW if sys.platform == "win32" and not has_console() else 0
+
 
 def terminate_tree(proc: subprocess.Popen) -> None:
     """
@@ -30,6 +59,8 @@ def terminate_tree(proc: subprocess.Popen) -> None:
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                 capture_output=True,
                 check=False,
+                # taskkill is a console program: no window under pythonw.
+                creationflags=CREATE_NO_WINDOW,
             )
         else:
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
@@ -89,6 +120,10 @@ def start_marimo(args: list[str]) -> subprocess.Popen:
     python.exe (not pythonw.exe — that breaks marimo's asyncio kernel).
     STARTUPINFO with SW_HIDE hides the console window at the Win32 show-window
     level, which is more reliable for console apps than CREATE_NO_WINDOW alone.
+    Both, because under pythonw (autostart) there is no console to share and
+    SW_HIDE alone still lets a console window flash up. Its own (hidden)
+    console changes nothing for stopping it: terminate_tree uses taskkill /T,
+    which follows parent process ids, not consoles or process groups.
     """
     kwargs: dict = {
         "stdout": subprocess.DEVNULL,
@@ -100,7 +135,7 @@ def start_marimo(args: list[str]) -> subprocess.Popen:
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         si.wShowWindow = 0  # SW_HIDE
         kwargs["startupinfo"] = si
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     else:
         kwargs["start_new_session"] = True
 

@@ -8,8 +8,8 @@ import subprocess
 import sys
 import time
 
-from datavloot_platform import location
-from datavloot_platform.crowsnest.processes import terminate_tree
+from datavloot_platform import autostart, location
+from datavloot_platform.crowsnest.processes import console_child_flags, port_in_use, terminate_tree
 
 TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 
@@ -133,6 +133,10 @@ def _pin_versions(dest: pathlib.Path, versions: dict[str, str]) -> None:
 
 
 def cmd_new(args: argparse.Namespace) -> None:
+    if getattr(args, "source", None):
+        return cmd_new_from(args)
+    if getattr(args, "ref", None) or getattr(args, "subdir", None):
+        sys.exit("Error: --ref and --path go with --from <repository>.")
     dest = pathlib.Path(args.path).resolve()
     project_name = _to_identifier(dest.name)
     versions = _versions()
@@ -152,6 +156,45 @@ def cmd_new(args: argparse.Namespace) -> None:
     print(f"  5. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
     print(f"\nSee data-instructions.md or hand it to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions, then start adding your data sources.")
+
+
+def cmd_new_from(args: argparse.Namespace) -> None:
+    """`datavloot new <path> --from <repository>`: see datavloot_platform/remote.py."""
+    from datavloot_platform import remote
+
+    dest = pathlib.Path(args.path).resolve()
+    # Before the download, so a warning is read while there is still time to
+    # choose another folder.
+    _warn_about_location(dest, _to_identifier(dest.name))
+    try:
+        remote.install(dest, args.source, args.ref, args.subdir)
+    except remote.RemoteError as e:
+        sys.exit(f"Error: {e}")
+    if os.environ.get("DATAVLOOT_INSTALLER"):
+        # install.ps1 / install.sh start it themselves.
+        return
+    print(f"\nReady. Start Dagster and the Crows Nest with:")
+    print(f"  cd \"{dest}\"")
+    print(f"  uv run datavloot start --run")
+    print(f"The --run builds every table the first time. Later, `datavloot update` in that")
+    print(f"folder installs a newer version of the project.")
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """`datavloot update`: see datavloot_platform/remote.py."""
+    from datavloot_platform import remote
+    from datavloot_platform.crowsnest.config import get_config
+
+    project = pathlib.Path.cwd()
+    _warn_about_location(project, _to_identifier(project.name))
+    try:
+        result = remote.update(project, args.ref)
+    except remote.RemoteError as e:
+        sys.exit(f"Error: {e}")
+    if result is None:
+        return
+    print(f"\n{remote.run_after_update(project, get_config().dagster_graphql_url, args.run)}")
+    print(f"\nUpdated from {result[0]} to {result[1]}.")
 
 
 def cmd_demo(args: argparse.Namespace) -> None:
@@ -356,9 +399,11 @@ mutation Launch($params: ExecutionParams!) {
 """
 
 
-def _materialize_all(graphql_url: str) -> str:
+def materialize_all(graphql_url: str, started_by: str = "datavloot start --run") -> tuple[bool, str]:
     """
-    Start one run of every asset, as "Materialize all" in Dagster does. Return what happened.
+    Start one run of every asset, as "Materialize all" in Dagster does.
+
+    Return whether a run started, and what happened in a sentence for the user.
 
     Through Dagster's own API, so the run goes through the instance like one
     started in the UI: it shows in the Crows Nest's Pipelines panel and keeps to
@@ -373,7 +418,7 @@ def _materialize_all(graphql_url: str) -> str:
         resp = httpx.post(graphql_url, json={"query": _ASSETS_QUERY}, timeout=30)
         repos = resp.json()["data"]["repositoriesOrError"]
         if repos.get("__typename") != "RepositoryConnection":
-            return f"Could not list the assets: {repos.get('message', repos)}. {manual}"
+            return False, f"Could not list the assets: {repos.get('message', repos)}. {manual}"
 
         launched, skipped = [], 0
         for repo in repos["nodes"]:
@@ -394,7 +439,7 @@ def _materialize_all(graphql_url: str) -> str:
                     "assetSelection": selection,
                 },
                 "executionMetadata": {
-                    "tags": [{"key": "datavloot/started_by", "value": "datavloot start --run"}],
+                    "tags": [{"key": "datavloot/started_by", "value": started_by}],
                 },
             }
             resp = httpx.post(
@@ -407,21 +452,53 @@ def _materialize_all(graphql_url: str) -> str:
                 detail = result.get("message") or "; ".join(
                     e["message"] for e in result.get("errors", [])
                 ) or result["__typename"]
-                return f"Could not start the run: {detail}. {manual}"
+                return False, f"Could not start the run: {detail}. {manual}"
             launched.append(f"{len(selection)} assets in {repo['location']['name']}")
     except Exception as e:  # noqa: BLE001 -- see the docstring
-        return f"Could not start the run: {e}. {manual}"
+        return False, f"Could not start the run: {e}. {manual}"
 
     if not launched:
-        return f"Found no assets to run. {manual}"
+        return False, f"Found no assets to run. {manual}"
     note = f" ({skipped} partitioned assets left out)" if skipped else ""
-    return (
-        f"Started a run of {', '.join(launched)}{note}. "
-        "Follow it in the Crows Nest's Pipelines panel."
-    )
+    return True, f"Started a run of {', '.join(launched)}{note}."
+
+
+def _materialize_all(graphql_url: str) -> str:
+    """materialize_all, as the sentence `start --run` and `update` print."""
+    started, message = materialize_all(graphql_url)
+    return f"{message} Follow it in the Crows Nest's Pipelines panel." if started else message
+
+
+def _dagster_home(project_dir: pathlib.Path) -> dict[str, str]:
+    """
+    DAGSTER_HOME for `dagster dev`: the one set, else <project>/.dagster.
+
+    Without DAGSTER_HOME, `dagster dev` makes a temporary home per start, and
+    a restart forgets the run history, which schedules and sensors are on, and
+    what a sensor already picked up. A home inside the project keeps all that.
+    Dagster reads its instance settings (dagster.yaml) from DAGSTER_HOME only,
+    so the project's copy goes there on every start: an edit to it then counts
+    from the next start, and without it the lake's one-writer pool is gone.
+    """
+    if os.environ.get("DAGSTER_HOME"):
+        return {}
+    home = project_dir / ".dagster"
+    home.mkdir(exist_ok=True)
+    settings, copy = project_dir / "dagster.yaml", home / "dagster.yaml"
+    if settings.is_file():
+        shutil.copyfile(settings, copy)
+    else:
+        copy.unlink(missing_ok=True)
+    return {"DAGSTER_HOME": str(home)}
 
 
 def cmd_start(args: argparse.Namespace) -> None:
+    # `start` runs from the project directory, which may have been created or
+    # moved without going through `new`.
+    project_dir = pathlib.Path.cwd()
+    # First, so that with --log (autostart) even a missing uvicorn is in the log.
+    log = autostart.redirect_output(project_dir, getattr(args, "log", None))
+
     try:
         import uvicorn  # noqa: F401
     except ImportError:
@@ -434,26 +511,60 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     graphql_url = get_config().dagster_graphql_url
 
-    # `start` runs from the project directory, which may have been created or
-    # moved without going through `new`.
-    project_dir = pathlib.Path.cwd()
     _warn_about_location(project_dir, _to_identifier(project_dir.name))
 
-    print("Starting Dagster…")
+    # Before Dagster, so a second start fails at once and says why, instead of
+    # after Dagster has loaded, in a line of uvicorn's.
+    port = getattr(args, "port", None)
+    if port and port_in_use(port):
+        sys.exit(
+            f"Error: port {port}, which the Crows Nest needs, is in use. If Datavloot is "
+            f"already running, open http://localhost:{port}; otherwise stop the program "
+            "that holds the port and start again."
+        )
+
     # This environment's scripts first on the PATH, for Dagster and the dbt it
     # runs: started without activating the venv (a shortcut, autostart), the
     # PATH can hold another dbt -- a global dbt Fusion fails on the profile.
     scripts = str(pathlib.Path(sys.executable).parent)
     env = {**os.environ, "PATH": scripts + os.pathsep + os.environ.get("PATH", "")}
+    env.update(_dagster_home(project_dir))
+    print(f"Starting Dagster, with its state in {env['DAGSTER_HOME']}…")
+    if (project_dir / "dagster.yaml").is_file():
+        # dagster dev warns about the dagster.yaml it finds in the working
+        # directory; the copy in DAGSTER_HOME is the one it uses.
+        print("  (Dagster's warning that dagster.yaml will not be used is about the original; it uses the copy.)")
+
+    with autostart.start_marker(project_dir):
+        _start(args, graphql_url, scripts, env, log)
+
+
+def _start(args, graphql_url, scripts, env, log) -> None:
     # POSIX: own session, so the whole tree can be signalled as one group.
+    # Windows without a console (pythonw): no console window for Dagster
+    # either (console_child_flags). A child in a console of its own writes to
+    # that console unless it is handed output handles, and Popen hands them
+    # down only when one of the three is set: hence stdin, which Dagster does
+    # not read. With a log, Dagster's output goes there too.
+    flags = console_child_flags()
+    stdio: dict = {"stdin": subprocess.DEVNULL} if flags or log else {}
+    if log:
+        stdio.update(stdout=log, stderr=subprocess.STDOUT)
     dagster_proc = subprocess.Popen(
         [shutil.which("dagster", path=scripts) or "dagster", "dev"],
         env=env,
         start_new_session=(os.name != "nt"),
+        creationflags=flags,
+        **stdio,
     )
 
     print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
-    error = _wait_for_dagster(dagster_proc, graphql_url)
+    try:
+        error = _wait_for_dagster(dagster_proc, graphql_url)
+    except BaseException:
+        # Ctrl+C while waiting: Dagster in a console of its own would not get it.
+        terminate_tree(dagster_proc)
+        raise
     if error:
         terminate_tree(dagster_proc)
         sys.exit(f"Error: {error}")
@@ -475,6 +586,14 @@ def cmd_start(args: argparse.Namespace) -> None:
         terminate_tree(dagster_proc)
 
 
+def cmd_autostart(args: argparse.Namespace) -> None:
+    autostart.main(args.action, pathlib.Path.cwd())
+
+
+def cmd_open(args: argparse.Namespace) -> None:
+    sys.exit(autostart.open_crowsnest(pathlib.Path.cwd()))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="datavloot",
@@ -486,7 +605,30 @@ def main() -> None:
         "new", help="Scaffold a new project at the given path"
     )
     new_parser.add_argument("path", help="Path where the project will be created")
+    new_parser.add_argument(
+        "--from", dest="source", metavar="URL",
+        help="Install an existing project from a tag of this GitHub or GitLab repository",
+    )
+    new_parser.add_argument(
+        "--ref", metavar="TAG", help="With --from: the tag to install (default: the latest version)"
+    )
+    new_parser.add_argument(
+        "--path", dest="subdir", metavar="FOLDER",
+        help="With --from: the project's folder in the repository, when it cannot be found by itself",
+    )
     new_parser.set_defaults(func=cmd_new)
+
+    update_parser = subparsers.add_parser(
+        "update", help="Install another tag of a project installed with `new --from`"
+    )
+    update_parser.add_argument(
+        "--ref", metavar="TAG", help="The tag to go to, also an older one (default: the latest version)"
+    )
+    update_parser.add_argument(
+        "--no-run", dest="run", action="store_false",
+        help="Do not start a run of every asset afterwards",
+    )
+    update_parser.set_defaults(func=cmd_update, run=True)
 
     demo_parser = subparsers.add_parser(
         "demo", help="Copy the NOAA worked example to a local directory"
@@ -530,7 +672,28 @@ def main() -> None:
         "--run", action="store_true",
         help="Once Dagster is ready, start one run of every asset (Materialize all)"
     )
+    start_parser.add_argument(
+        "--log", metavar="FILE",
+        help="Write all output to FILE, relative to the project (autostart uses "
+        f"{autostart.LOG_FILE.as_posix()})"
+    )
     start_parser.set_defaults(func=cmd_start, open=True)
+
+    autostart_parser = subparsers.add_parser(
+        "autostart",
+        help="Start this project's Datavloot at login, with a shortcut to the Crows Nest",
+    )
+    autostart_parser.add_argument(
+        "action", choices=["on", "off", "status"],
+        help="on: start at login and make the shortcut; off: remove both; status: show what is there",
+    )
+    autostart_parser.set_defaults(func=cmd_autostart)
+
+    open_parser = subparsers.add_parser(
+        "open",
+        help="Open the Crows Nest, starting Datavloot in the background if it is not running",
+    )
+    open_parser.set_defaults(func=cmd_open)
 
     args = parser.parse_args()
     args.func(args)
