@@ -10,11 +10,12 @@ import pathlib
 from importlib.metadata import PackageNotFoundError, version
 
 import httpx
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
-from datavloot_platform.crowsnest.config import get_config, sql_write_enabled
+from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
+from datavloot_platform.crowsnest import startup
 from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
@@ -147,6 +148,12 @@ def create_app(host: str | None = None) -> FastAPI:
         version=VERSION,
     )
     app.state.sql_write = sql_write_enabled(host)
+    # The Shut down button: only on a laptop, where the Crows Nest listens on
+    # this machine alone. On a shared host anyone signed in could stop the
+    # service for everyone. `server` is the uvicorn server the CLI runs this app
+    # in (cli.cmd_crowsnest); without one there is nothing this app can stop.
+    app.state.can_shutdown = is_loopback(host)
+    app.state.server = None
 
     # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
     # covers the API and the static dashboard alike -- serving the UI to anyone
@@ -199,7 +206,15 @@ def create_app(host: str | None = None) -> FastAPI:
         dagster_status, duckdb_status, marimo_status = await asyncio.gather(
             dagster(), asyncio.to_thread(duckdb), marimo()
         )
-        return {"services": {"dagster": dagster_status, "duckdb": duckdb_status, "marimo": marimo_status}}
+        # Not answering is "starting" while `datavloot start` waits for Dagster
+        # to load the project, and "failed", with the reason, when that failed.
+        started, error = startup.dagster()
+        result = {"services": {"dagster": dagster_status, "duckdb": duckdb_status, "marimo": marimo_status}}
+        if dagster_status != "ok" and started in ("starting", "failed"):
+            result["services"]["dagster"] = started
+            if error:
+                result["dagster_error"] = error
+        return result
 
     @app.get("/api/services")
     async def get_services():
@@ -213,7 +228,42 @@ def create_app(host: str | None = None) -> FastAPI:
             "apps_url": config.apps_public_url or config.apps_url,
             "duckdb_path": config.duckdb_path,
             "version": VERSION,
+            "can_shutdown": _can_shutdown(),
         }
+
+    def _can_shutdown() -> bool:
+        return bool(app.state.can_shutdown and app.state.server is not None)
+
+    @app.post("/api/shutdown")
+    async def shutdown(background: BackgroundTasks):
+        """
+        Stop Datavloot: the Crows Nest, and with it the Dagster `datavloot start`
+        runs and the Marimo servers.
+
+        The uvicorn server is asked to exit once this response has gone out, so
+        the browser still hears that it worked. uvicorn then returns to the CLI,
+        which stops Dagster's process tree on its way out (cli.cmd_start), and
+        the normal exit runs the hooks that stop Marimo -- the same as closing
+        the terminal `datavloot start` runs in.
+        """
+        if not app.state.can_shutdown:
+            raise HTTPException(
+                403,
+                "Shutting down from the Crows Nest works only when it listens on this "
+                "machine alone; stop the service where it runs.",
+            )
+        server = app.state.server
+        if server is None:
+            raise HTTPException(
+                409, "This Crows Nest was not started with `datavloot start` or `launch`; stop it where it runs."
+            )
+        # Runs still going are cancelled first: their processes go down with
+        # Dagster, and Dagster would otherwise keep them "Started" for good.
+        from datavloot_platform.cli import cancel_runs
+
+        cancelled = await asyncio.to_thread(cancel_runs, get_config().dagster_graphql_url)
+        background.add_task(setattr, server, "should_exit", True)
+        return {"message": "Datavloot is stopping.", "cancelled_runs": cancelled}
 
     warning = check_static_freshness()
     if warning:

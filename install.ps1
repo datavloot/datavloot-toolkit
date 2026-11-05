@@ -196,15 +196,20 @@ function Install-Datavloot {
         Write-Host "Or have it start at every login, with a shortcut on the desktop and in the Start menu:"
         Write-Host "    cd `"$dir`"; uv run datavloot autostart on" -ForegroundColor Yellow
         if (-not $existing -and $project) {
-            Write-Host "The first run builds every table; follow it in the Crows Nest's Pipelines panel."
-            Write-Host "Put the project's input files in place first if it reads any (often its data folder)."
+            # No run of its own: a project usually reads files that are not in
+            # its repository, and a run before they are there only fails.
+            Write-Host "No run has started yet. First put the project's input files in place, usually in"
+            Write-Host "    $(Join-Path $dir 'data')" -ForegroundColor Yellow
+            Write-Host "(its data folder says what goes there), then click Materialize all in the Crows Nest's"
+            Write-Host "Pipelines panel."
         } elseif (-not $existing) {
             Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"
             Write-Host "follow it in the Crows Nest's Pipelines panel."
         }
         Write-Host ""
         $startArgs = @('run', '--no-sync', 'datavloot', 'start')
-        if (-not $existing) { $startArgs += '--run' }
+        # The demo fetches its own data, so it can run straight away.
+        if (-not $existing -and -not $project) { $startArgs += '--run' }
         & uv @startArgs
     } finally {
         Pop-Location

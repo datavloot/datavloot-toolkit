@@ -179,7 +179,8 @@ From the next login, Datavloot starts by itself, for this user only, without adm
 | Shortcut | Start menu and desktop | an app in `~/Applications` |
 
 - **Log.** Everything Datavloot prints goes to `logs/datavloot-start.log` in the project. When the shortcut cannot start the Crows Nest (a port in use, a broken install), it opens that log, with the reason in it.
-- **Switching it off.** `datavloot autostart off` removes the login entry and the shortcuts. A Datavloot that is running keeps running until you log out. `datavloot autostart status` shows what is installed and whether the Crows Nest answers.
+- **Stopping it.** Started at login or from the shortcut, Datavloot has no window to close: **Shut down**, at the bottom of the Crows Nest's sidebar, stops Dagster, the Crows Nest and the Marimo servers it started, after cancelling a run that is still going. The button is there only when the Crows Nest listens on this machine alone, as on a laptop. A run cut off some other way (a forced stop, a logout, a laptop switching off) would stay "Started" in Dagster; `datavloot start` marks such runs as cancelled once Dagster is up again.
+- **Switching it off.** `datavloot autostart off` removes the login entry and the shortcuts. A Datavloot that is running keeps running until you shut it down or log out. `datavloot autostart status` shows what is installed and whether the Crows Nest answers.
 - **Scheduled runs happen only while the machine is on and you are logged in.** Datavloot runs as your user, not as a service. A run whose time passed while the laptop was off or asleep is not made up afterwards; start it by hand in Dagster.
 - One project at a time: the Crows Nest and Dagster use ports 8080 and 3000, so autostart for a second project fails at login with "port in use" in its log.
 - The macOS half has not yet been tried on a real Mac.
@@ -456,7 +457,7 @@ Opens [http://localhost:8080](http://localhost:8080) with six panels:
 
 | Panel | What it shows |
 |---|---|
-| **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Auto-refreshes every 15 seconds. |
+| **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Hover over a failed run's label for the part of its error that says what went wrong. **Materialize all** starts a run of every asset. Auto-refreshes every 15 seconds. |
 | **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
 | **SQL editor** | SQL editor connected directly to your lake. On a laptop it can also change it: delete rows, drop a table, and so on (see [Changing data in the SQL editor](#changing-data-in-the-sql-editor)); on a shared host it is read-only. Autocomplete suggests schemas, tables and columns, also after an alias (`FROM vessels v WHERE v.`). Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
@@ -470,20 +471,22 @@ A project can give the Crows Nest its own look with a `branding/` folder; withou
 ```
 branding/
   branding.yml   # name and colours, every key optional
-  logo.svg       # or logo.png; replaces the Optimist mark in the sidebar
+  logo.svg       # or logo.png; replaces the datavloot mark in the sidebar
 ```
 
 ```yaml
 name: KetenConnect
 colors:
-  accent: "#0070c0"      # active tab, buttons, links
+  accent: "#0070c0"      # buttons, links
   text: "#002060"        # text; the muted shades are derived from it
   background: "#f2f2f2"  # page background; hover and borders are derived from it
+  sidebar: "#002060"     # the sidebar; without it, the accent darkened
+  highlight: "#00b050"   # the active tab's marker, focus rings, notes
 ```
 
-You name three colours; the Crows Nest derives every shade it uses from them. Restart is not needed: the next page load picks up a change.
+You name a few colours; the Crows Nest derives every shade it uses from them. With a logo, the sidebar shows the logo without the name next to it, since a logo usually carries the name already; the name still titles the browser tab. Restart is not needed: the next page load picks up a change.
 
-The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
+The **health banner** at the top of every panel shows how things stand now. Pipelines counts jobs by their latest run, so a job that failed and then succeeded counts as ok; hover over "failing" for the errors. Quality counts each test by its latest result. The service dots are green when Dagster, DuckDB and Marimo are reachable and red when not, except Marimo, which is amber until it starts with the first notebook. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
 
 The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started from the project directory, and infers the Elementary schema from your target schema name. It reads the lake while pipelines write to it. No additional configuration is needed for standard projects. You can override any setting with environment variables:
 

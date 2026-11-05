@@ -173,11 +173,12 @@ def cmd_new_from(args: argparse.Namespace) -> None:
     if os.environ.get("DATAVLOOT_INSTALLER"):
         # install.ps1 / install.sh start it themselves.
         return
-    print(f"\nReady. Start Dagster and the Crows Nest with:")
+    print(f"\nReady. Put the project's input files in place first, usually in {dest / 'data'}.")
+    print(f"Then start Dagster and the Crows Nest with:")
     print(f"  cd \"{dest}\"")
-    print(f"  uv run datavloot start --run")
-    print(f"The --run builds every table the first time. Later, `datavloot update` in that")
-    print(f"folder installs a newer version of the project.")
+    print(f"  uv run datavloot start")
+    print(f"and click Materialize all in the Crows Nest's Pipelines panel to build every table.")
+    print(f"Later, `datavloot update` in that folder installs a newer version of the project.")
 
 
 def cmd_update(args: argparse.Namespace) -> None:
@@ -276,7 +277,12 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         signal.signal(signal.SIGBREAK, lambda *_: sys.exit(0))
     if hasattr(signal, "SIGHUP") and signal.getsignal(signal.SIGHUP) is signal.SIG_DFL:
         signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
-    uvicorn.run(app, host=args.host, port=args.port)
+    # A server of our own rather than uvicorn.run, so the Crows Nest's Shut down
+    # button can ask it to exit (server.py, /api/shutdown); it then returns here
+    # like after Ctrl+C, and cmd_start stops Dagster.
+    server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port))
+    app.state.server = server
+    server.run()
 
 
 # GraphQL probe: is the webserver up, and did every code location load?
@@ -463,6 +469,73 @@ def materialize_all(graphql_url: str, started_by: str = "datavloot start --run")
     return True, f"Started a run of {', '.join(launched)}{note}."
 
 
+_ACTIVE_RUNS_QUERY = """
+query ActiveRuns($statuses: [RunStatus!]) {
+  runsOrError(filter: {statuses: $statuses}, limit: 100) {
+    __typename
+    ... on Runs { results { runId updateTime } }
+  }
+}
+"""
+
+_CANCEL_MUTATION = """
+mutation Cancel($runId: String!) {
+  terminateRun(runId: $runId, terminatePolicy: MARK_AS_CANCELED_IMMEDIATELY) {
+    __typename
+    ... on TerminateRunFailure { message }
+    ... on PythonError { message }
+  }
+}
+"""
+
+
+def cancel_runs(
+    graphql_url: str,
+    statuses: tuple[str, ...] = ("STARTING", "STARTED", "CANCELING", "QUEUED"),
+    not_updated_since: float | None = None,
+) -> list[str]:
+    """
+    Mark runs as cancelled in Dagster, and stop their processes if any are left.
+    Return the ids of the runs it cancelled.
+
+    Two callers. The Crows Nest's Shut down, before Datavloot stops: a run
+    still going would otherwise stay "Started" forever, since its process dies
+    with Dagster before Dagster can record it. And `datavloot start`, once
+    Dagster is ready, for the runs an earlier Datavloot left that way -- after
+    a forced stop, a logout or a laptop that switched off mid-run. Dagster's
+    run launcher on a laptop runs a run inside Dagster's own processes, so after
+    a restart no run of the previous one can still be going; `not_updated_since`
+    (the moment this Dagster started) keeps a run this Dagster just started out
+    of it. Never raises: cleaning up must not stop a start or a shutdown.
+    """
+    cancelled: list[str] = []
+    try:
+        import httpx
+
+        resp = httpx.post(
+            graphql_url,
+            json={"query": _ACTIVE_RUNS_QUERY, "variables": {"statuses": list(statuses)}},
+            timeout=10,
+        )
+        runs = resp.json()["data"]["runsOrError"].get("results") or []
+        for run in runs:
+            updated = run.get("updateTime")
+            if not_updated_since is not None and (updated is None or updated >= not_updated_since):
+                continue
+            result = httpx.post(
+                graphql_url,
+                json={"query": _CANCEL_MUTATION, "variables": {"runId": run["runId"]}},
+                timeout=30,
+            ).json()["data"]["terminateRun"]
+            if result.get("__typename") == "TerminateRunSuccess":
+                cancelled.append(run["runId"])
+            else:
+                print(f"Could not cancel run {run['runId']}: {result.get('message', result)}", flush=True)
+    except Exception as e:  # noqa: BLE001 -- see the docstring
+        print(f"Could not check for runs to cancel: {e}", flush=True)
+    return cancelled
+
+
 def _materialize_all(graphql_url: str) -> str:
     """materialize_all, as the sentence `start --run` and `update` print."""
     started, message = materialize_all(graphql_url)
@@ -550,6 +623,8 @@ def _start(args, graphql_url, scripts, env, log) -> None:
     stdio: dict = {"stdin": subprocess.DEVNULL} if flags or log else {}
     if log:
         stdio.update(stdout=log, stderr=subprocess.STDOUT)
+    # Runs not updated since this moment were left by an earlier Dagster (cancel_runs).
+    dagster_started = time.time()
     dagster_proc = subprocess.Popen(
         [shutil.which("dagster", path=scripts) or "dagster", "dev"],
         env=env,
@@ -558,22 +633,43 @@ def _start(args, graphql_url, scripts, env, log) -> None:
         **stdio,
     )
 
-    print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
-    try:
+    # The Crows Nest starts now, not once Dagster is ready: loading a project
+    # takes Dagster half a minute or more, and from a shortcut nothing showed
+    # in that time. Dagster's readiness is watched beside it; the Crows Nest
+    # says "starting" meanwhile, and the error if loading fails (startup.py).
+    from datavloot_platform.crowsnest import startup
+
+    startup.set_dagster("starting")
+
+    def watch() -> None:
+        print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
         error = _wait_for_dagster(dagster_proc, graphql_url)
-    except BaseException:
-        # Ctrl+C while waiting: Dagster in a console of its own would not get it.
-        terminate_tree(dagster_proc)
-        raise
-    if error:
-        terminate_tree(dagster_proc)
-        sys.exit(f"Error: {error}")
+        if error:
+            # The Crows Nest stays up to show it; Dagster's leftovers go.
+            terminate_tree(dagster_proc)
+            startup.set_dagster("failed", error)
+            print(f"Error: {error}", flush=True)
+            return
+        startup.set_dagster("ready")
+        print("Dagster is ready.", flush=True)
+        left = cancel_runs(
+            graphql_url,
+            statuses=("STARTING", "STARTED", "CANCELING"),
+            not_updated_since=dagster_started,
+        )
+        if left:
+            print(
+                f"Marked {len(left)} run(s) as cancelled that an earlier Datavloot left "
+                f"running when it stopped: {', '.join(r[:8] for r in left)}.",
+                flush=True,
+            )
+        if getattr(args, "run", False):
+            # Not fatal: the platform is up, and the run can be started by hand.
+            print(_materialize_all(graphql_url), flush=True)
 
-    print("Dagster is ready.")
+    import threading
 
-    if getattr(args, "run", False):
-        # Not fatal: the platform is up, and the run can be started by hand.
-        print(_materialize_all(graphql_url), flush=True)
+    threading.Thread(target=watch, name="dagster-ready", daemon=True).start()
 
     try:
         cmd_crowsnest(args)

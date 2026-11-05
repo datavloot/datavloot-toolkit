@@ -121,7 +121,6 @@ def sql_write_enabled(host: Optional[str]) -> bool:
     Falcon's `--host 0.0.0.0`) it stays read-only until someone turns it on.
     No host known -- an app built without the CLI -- counts as not loopback.
     """
-    import ipaddress
     import os
 
     setting = (os.environ.get("CROWSNEST_SQL_WRITE") or "").strip().lower()
@@ -134,6 +133,17 @@ def sql_write_enabled(host: Optional[str]) -> bool:
             f"CROWSNEST_SQL_WRITE={setting!r} is not understood: use 1 to let the "
             "SQL editor write, 0 to keep it read-only, or leave it unset."
         )
+    return is_loopback(host)
+
+
+def is_loopback(host: Optional[str]) -> bool:
+    """
+    Whether the Crows Nest listens on this machine only: the laptop, where
+    whoever reaches it already has the project in hand. No host known -- an app
+    built without the CLI -- counts as not loopback.
+    """
+    import ipaddress
+
     if not host:
         return False
     host = host.strip().strip("[]")

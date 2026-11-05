@@ -12,7 +12,7 @@ export default function PipelinesPanel() {
   const services = useApi(() => api.getServices(), []);
   const dagsterUrl = services.data?.dagster_url || 'http://localhost:3000';
 
-  // "Run everything": one run of every asset, as Materialize all in Dagster.
+  // "Materialize all": one run of every asset, as the same button in Dagster.
   const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState(null); // {kind: 'ok' | 'error', text}
   const running = (data?.runs || []).some((r) => r.status === 'running' || r.status === 'queued');
@@ -46,9 +46,9 @@ export default function PipelinesPanel() {
             onClick={runEverything}
             disabled={starting || running}
             className="btn btn-primary disabled:opacity-50"
-            title={running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all in Dagster'}
+            title={running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all does in Dagster'}
           >
-            {starting ? 'Starting...' : 'Run everything'}
+            {starting ? 'Starting...' : 'Materialize all'}
           </button>
           <a
             href={dagsterUrl}
@@ -97,7 +97,7 @@ export default function PipelinesPanel() {
               {data?.runs?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-ink-3 text-sm">
-                    No pipeline runs yet. Click <strong>Run everything</strong> above, or{' '}
+                    No pipeline runs yet. Put your source files in place, then click <strong>Materialize all</strong> above, or{' '}
                     <a
                       href={dagsterUrl}
                       target="_blank"
@@ -113,7 +113,7 @@ export default function PipelinesPanel() {
               {data?.runs?.map((run) => (
                 <tr key={run.id} className="table-row">
                   <td className="table-cell">
-                    <StatusBadge status={run.status} />
+                    <StatusBadge status={run.status} error={run.error} />
                   </td>
                   <td className="table-cell font-medium">{run.job}</td>
                   <td className="table-cell">
@@ -140,9 +140,14 @@ export default function PipelinesPanel() {
   );
 }
 
-function StatusBadge({ status }) {
+// A failed run's label carries the part of its error that says what went
+// wrong (routes/pipelines.py error_summary), as a tooltip.
+function StatusBadge({ status, error }) {
   return (
-    <span className={`status-badge status-${status}`}>
+    <span
+      className={`status-badge status-${status} ${error ? 'cursor-help' : ''}`}
+      title={error || undefined}
+    >
       {status}
     </span>
   );

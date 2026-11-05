@@ -153,14 +153,19 @@ main() {
         printf '\033[33m    cd "%s" && uv run datavloot autostart on\033[0m\n' "$dir"
     fi
     if ! $existing && [ -n "$project" ]; then
-        echo "The first run builds every table; follow it in the Crows Nest's Pipelines panel."
-        echo "Put the project's input files in place first if it reads any (often its data folder)."
+        # No run of its own: a project usually reads files that are not in its
+        # repository, and a run before they are there only fails.
+        echo "No run has started yet. First put the project's input files in place, usually in"
+        printf '\033[33m    %s/data\033[0m\n' "$dir"
+        echo "(its data folder says what goes there), then click Materialize all in the Crows Nest's"
+        echo "Pipelines panel."
     elif ! $existing; then
         echo "The first run downloads the demo's AIS data (41 MB) and builds the models;"
         echo "follow it in the Crows Nest's Pipelines panel."
     fi
     echo
-    if $existing; then
+    # The demo fetches its own data, so it can run straight away.
+    if $existing || [ -n "$project" ]; then
         exec uv run --no-sync datavloot start
     else
         exec uv run --no-sync datavloot start --run

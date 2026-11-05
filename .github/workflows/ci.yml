@@ -74,7 +74,7 @@ jobs:
           --with fastapi --with httpx --with pytz --with uvicorn
           python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
           tests/test_crowsnest_config.py tests/test_crowsnest_notebooks.py tests/test_crowsnest_apps.py tests/test_extensions.py tests/test_storage.py tests/test_maintenance.py tests/test_remote.py
-          tests/test_install_scripts.py tests/test_crowsnest_materialize.py -v
+          tests/test_install_scripts.py tests/test_crowsnest_materialize.py tests/test_crowsnest_status.py tests/test_crowsnest_shutdown.py tests/test_crowsnest_startup.py -v
 
   # The runners have compilers, so a real install there succeeds even when a
   # user's laptop would need Rust or a C compiler (cryptography 49+ on Intel Macs

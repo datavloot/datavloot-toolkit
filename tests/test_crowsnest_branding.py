@@ -60,7 +60,19 @@ def test_name_logo_and_colours_come_from_branding(project):
     # Every shade the frontend uses is set, so no default shade shows through.
     expected = {f"--cn-accent-{s}" for s in (50, 100, 200, 400, 600, 700, 800, 900)}
     expected |= {f"--cn-ink-{s}" for s in range(4)} | {f"--cn-surface-{s}" for s in (1, 2, 3)}
+    # The sidebar follows the accent when the project names no sidebar colour.
+    expected |= {"--cn-sidebar"}
     assert set(variables) == expected
+    assert variables["--cn-sidebar"] == variables["--cn-accent-900"]
+
+
+def test_a_sidebar_and_highlight_colour_of_its_own():
+    """KetenConnect: the website's navy for the sidebar, its green for the highlight."""
+    variables = branding.shades({"accent": "#0070c0", "sidebar": "#002060", "highlight": "#00b050"})
+    assert variables["--cn-sidebar"] == "0 32 96"
+    assert variables["--cn-highlight"] == "0 176 80"
+    darker = variables["--cn-highlight-700"]
+    assert sum(int(c) for c in darker.split()) < sum((0, 176, 80))
 
 
 def test_shades_run_from_light_to_dark():

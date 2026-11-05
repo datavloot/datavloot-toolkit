@@ -39,7 +39,12 @@ module.exports = {
           3: v('ink-3'),          // text-dim
         },
         // ochre, for the active tab and focus; not for buttons
-        highlight: v('highlight'),
+        highlight: {
+          DEFAULT: v('highlight'),
+          700: v('highlight-700'),
+        },
+        // the sidebar's background
+        sidebar: v('sidebar'),
       },
     },
   },

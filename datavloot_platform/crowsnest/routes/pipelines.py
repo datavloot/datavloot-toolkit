@@ -70,9 +70,90 @@ async def _dagster_query(query: str, variables: dict | None = None) -> dict:
         return resp.json()
 
 
+RUN_ERRORS_QUERY = """
+query RunErrors($runId: ID!) {
+  logsForRun(runId: $runId, limit: 5000) {
+    __typename
+    ... on EventConnection {
+      events {
+        __typename
+        ... on ExecutionStepFailureEvent {
+          stepKey
+          error { message causes { message } }
+        }
+        ... on RunFailureEvent { message }
+      }
+    }
+  }
+}
+"""
+
+# Failed runs whose error is fetched for the runs list: one Dagster query each.
+_MAX_ERRORS = 10
+_ERROR_CHARS = 400
+_DBT_ERRORS = "Errors parsed from dbt logs:"
+
+
+def error_summary(events: list[dict]) -> str | None:
+    """
+    The part of a failed run's error a person needs, in a line or three.
+
+    The first failed step, with its deepest cause: a Python error raised in an
+    asset comes wrapped in Dagster's own "Error occurred while executing op",
+    and the cause is what went wrong. From a dbt failure, only the errors dbt
+    reported, not the command line and log path dagster-dbt puts around them.
+    A run that failed without a failed step (its worker died) has only Dagster's
+    run failure message.
+    """
+    for event in events:
+        if event.get("__typename") != "ExecutionStepFailureEvent":
+            continue
+        error = event.get("error") or {}
+        messages = [error.get("message") or ""] + [
+            cause.get("message") or "" for cause in error.get("causes") or []
+        ]
+        text = next((m for m in reversed(messages) if m.strip()), "")
+        if _DBT_ERRORS in text:
+            text = text.split(_DBT_ERRORS, 1)[1]
+        lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+        text = " ".join(lines[:3])
+        if len(text) > _ERROR_CHARS:
+            text = text[:_ERROR_CHARS - 1].rstrip() + "…"
+        step = event.get("stepKey")
+        return f"{step}: {text}" if step else text
+    for event in events:
+        if event.get("__typename") == "RunFailureEvent" and event.get("message"):
+            return event["message"].strip()
+    return None
+
+
+async def _run_error(run_id: str) -> str | None:
+    try:
+        data = await _dagster_query(RUN_ERRORS_QUERY, {"runId": run_id})
+        logs = data.get("data", {}).get("logsForRun") or {}
+        return error_summary(logs.get("events") or [])
+    except Exception:  # noqa: BLE001 -- a missing tooltip must not break the list
+        return None
+
+
+async def _add_errors(runs: list[dict], limit: int = _MAX_ERRORS) -> None:
+    """Give the first `limit` failed runs an `error`, fetched side by side."""
+    import asyncio
+
+    failed = [r for r in runs if r["status"] == "failure"][:limit]
+    errors = await asyncio.gather(*(_run_error(r["id"]) for r in failed))
+    for run, error in zip(failed, errors):
+        run["error"] = error
+
+
 @router.get("/runs")
-async def get_recent_runs(limit: int = 20):
-    """Return recent pipeline runs with normalized status."""
+async def get_recent_runs(limit: int = 20, errors: bool = True):
+    """
+    Return recent pipeline runs with normalized status.
+
+    With `errors`, the first failed runs carry `error`: the part of the error
+    message that says what went wrong (error_summary), for a tooltip.
+    """
     try:
         data = await _dagster_query(RUNS_QUERY, {"limit": limit})
         runs_data = data.get("data", {}).get("runsOrError", {})
@@ -97,6 +178,8 @@ async def get_recent_runs(limit: int = 20):
                 }
             )
 
+        if errors:
+            await _add_errors(runs)
         return {"runs": runs, "total": len(runs)}
 
     except httpx.ConnectError:
@@ -160,11 +243,37 @@ async def get_jobs():
         raise HTTPException(503, "Cannot connect to Dagster — is it running?")
 
 
+# Statuses that settle how a job stands. A run in progress has not settled it
+# yet, and a cancelled one never does: it says nothing about whether the job works.
+_SETTLED = ("success", "failure")
+
+
+def job_states(runs: list[dict]) -> dict[str, dict]:
+    """
+    Each job's latest settled run, by the job as `job` labels it; runs newest first.
+
+    A job that failed and then succeeded is fine again: only its latest settled
+    run counts, so an old failure does not keep a job red.
+    """
+    latest: dict[str, dict] = {}
+    for run in runs:
+        if run["status"] in _SETTLED and run["job"] not in latest:
+            latest[run["job"]] = run
+    return latest
+
+
 @router.get("/summary")
 async def pipeline_summary(limit: int = 50):
-    """High-level pipeline health summary for the banner."""
+    """
+    How the pipelines stand, for the banner and the overview.
+
+    `latest_run` is the most recent run; `jobs_by_status` counts jobs by their
+    latest settled run (job_states), and `failing_jobs` lists those whose latest
+    settled run failed, newest first, with its error. `by_status` still counts
+    the recent runs one by one.
+    """
     try:
-        runs_resp = await get_recent_runs(limit=limit)
+        runs_resp = await get_recent_runs(limit=limit, errors=False)
         runs = runs_resp["runs"]
 
         status_counts: dict = {}
@@ -172,10 +281,20 @@ async def pipeline_summary(limit: int = 50):
             s = r["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
 
+        states = job_states(runs)
+        jobs_by_status: dict = {}
+        for run in states.values():
+            jobs_by_status[run["status"]] = jobs_by_status.get(run["status"], 0) + 1
+        failing = [run for run in states.values() if run["status"] == "failure"]
+        await _add_errors(failing)
+
         return {
             "total_runs": len(runs),
             "by_status": status_counts,
             "latest_run": runs[0] if runs else None,
+            "jobs_by_status": jobs_by_status,
+            "failing_jobs": failing,
+            "running": sum(1 for r in runs if r["status"] in ("running", "queued")),
         }
 
     except HTTPException:
@@ -183,6 +302,9 @@ async def pipeline_summary(limit: int = 50):
             "total_runs": 0,
             "by_status": {},
             "latest_run": None,
+            "jobs_by_status": {},
+            "failing_jobs": [],
+            "running": 0,
             "error": "Cannot connect to Dagster",
         }
 
