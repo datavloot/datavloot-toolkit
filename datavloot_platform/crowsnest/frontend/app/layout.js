@@ -2,7 +2,8 @@ import './globals.css';
 
 export const metadata = {
   title: "Crows Nest",
-  description: 'Unified dashboard for the Optimist data platform',
+  description: 'The datavloot data platform at a glance: pipelines, data quality, SQL and notebooks',
+  icons: { icon: '/datavloot-logo.png' },
 };
 
 // Applies the branding colours remembered by app/page.js before the first paint.

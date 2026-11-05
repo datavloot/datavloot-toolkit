@@ -7,7 +7,7 @@ import { useApi } from '../lib/hooks';
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 const DEFAULT_SQL = `-- Write your SQL here
--- Tables are available from your DuckDB warehouse
+-- Pick a table on the left, or query the lakehouse directly
 SELECT 1 as hello;`;
 
 export default function QueryPanel() {
@@ -47,25 +47,22 @@ export default function QueryPanel() {
     });
   };
 
-  // Group tables by schema
-  const tablesBySchema = {};
-  (tables.data?.tables || []).forEach((t) => {
-    const s = t.schema || 'main';
-    if (!tablesBySchema[s]) tablesBySchema[s] = [];
-    tablesBySchema[s].push(t);
-  });
-  const schemaEntries = Object.entries(tablesBySchema);
+  // The business tables in view; DuckLake's, Elementary's and dlt's folded away.
+  const allTables = tables.data?.tables || [];
+  const businessTables = allTables.filter((t) => !t.metadata);
+  const metadataTables = allTables.filter((t) => t.metadata);
+  const pickTable = (t) => setSql(`SELECT *\nFROM ${t.full_name}\nLIMIT 100;`);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-4">
       <div className="flex items-center justify-between shrink-0">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">SQL editor</h2>
+        <h2 className="page-title">SQL editor</h2>
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-ink-3">Ctrl+Enter to run</span>
           <button
             onClick={executeQuery}
             disabled={loading}
-            className="px-4 py-2 bg-datavloot-600 text-white text-sm font-medium rounded-lg hover:bg-datavloot-700 disabled:opacity-50 transition-colors"
+            className="btn btn-primary h-9 px-4 text-sm"
           >
             {loading ? 'Running...' : 'Run query'}
           </button>
@@ -74,33 +71,21 @@ export default function QueryPanel() {
 
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Table sidebar */}
-        <div className="w-48 shrink-0">
+        <div className="w-60 shrink-0">
           <div className="card p-3">
-            <h3 className="text-xs font-medium text-ink-3 uppercase tracking-wider mb-2">Tables</h3>
-            <div className="space-y-0.5 max-h-[400px] overflow-y-auto">
+            <h3 className="text-[11px] font-semibold text-ink-3 uppercase tracking-wider mb-2 px-2">Tables</h3>
+            <div className="space-y-0.5 max-h-[520px] overflow-y-auto">
               {tables.loading ? (
-                <p className="text-xs text-ink-3">Loading...</p>
-              ) : schemaEntries.length === 0 ? (
-                <p className="text-xs text-ink-3">No tables found</p>
+                <p className="text-xs text-ink-3 px-2">Loading...</p>
+              ) : allTables.length === 0 ? (
+                <p className="text-xs text-ink-3 px-2">No tables found</p>
               ) : (
-                schemaEntries.map(([schema, schemaTables]) => (
-                  <div key={schema}>
-                    <div className="px-2 pt-2 pb-0.5 text-[9px] font-semibold text-ink-3 uppercase tracking-widest">
-                      {schema}
-                    </div>
-                    {schemaTables.map((t) => (
-                      <button
-                        key={t.full_name}
-                        onClick={() => setSql(`SELECT *\nFROM ${t.full_name}\nLIMIT 100;`)}
-                        className="block w-full text-left px-2 py-1.5 text-xs font-mono text-ink-2 hover:bg-surface-2 rounded transition-colors truncate"
-                        title={t.full_name}
-                      >
-                        {t.type === 'view' && <span className="text-ink-3 mr-1">v</span>}
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                ))
+                <>
+                  <TableTree tables={businessTables} onPick={pickTable} />
+                  {metadataTables.length > 0 && (
+                    <MetadataGroup tables={metadataTables} onPick={pickTable} />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -179,6 +164,55 @@ export default function QueryPanel() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TableTree({ tables, onPick }) {
+  const bySchema = {};
+  tables.forEach((t) => {
+    const s = t.schema || 'main';
+    if (!bySchema[s]) bySchema[s] = [];
+    bySchema[s].push(t);
+  });
+  return Object.entries(bySchema).map(([schema, schemaTables]) => (
+    <div key={schema}>
+      <div className="px-2 pt-2 pb-0.5 text-[10px] font-semibold text-ink-3 uppercase tracking-wider">
+        {schema}
+      </div>
+      {schemaTables.map((t) => (
+        <button
+          key={t.full_name}
+          onClick={() => onPick(t)}
+          className="block w-full text-left px-2 py-1.5 text-xs font-mono text-ink-1 hover:bg-surface-2 rounded transition-colors truncate"
+          title={t.full_name}
+        >
+          {t.type === 'view' && <span className="text-ink-3 mr-1">v</span>}
+          {t.name}
+        </button>
+      ))}
+    </div>
+  ));
+}
+
+// DuckLake's catalog, Elementary's results, dlt's bookkeeping: there to query, out of the way.
+function MetadataGroup({ tables, onPick }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="pt-2 mt-2 border-t border-surface-2">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-surface-2 transition-colors"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+          className={`text-ink-3 transition-transform ${open ? 'rotate-90' : ''}`}>
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+        <span className="text-xs font-semibold text-ink-2">Metadata</span>
+        <span className="text-xs text-ink-3">{tables.length}</span>
+      </button>
+      {open && <TableTree tables={tables} onPick={onPick} />}
     </div>
   );
 }

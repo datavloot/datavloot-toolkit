@@ -20,29 +20,29 @@ export default function HealthBanner() {
   const qWarn = qData?.by_status?.warn || 0;
 
   return (
-    <div className="bg-white border-b border-surface-3 px-6 py-3">
-      <div className="flex items-center gap-8 text-sm flex-wrap">
+    <div className="bg-white border-b border-surface-3 px-8 h-12 flex items-center shrink-0">
+      <div className="flex items-center gap-6 text-sm flex-wrap">
         {/* Pipeline status */}
         <div className="flex items-center gap-2">
-          <span className="text-ink-3 text-xs font-medium uppercase tracking-wider">Pipelines</span>
+          <span className="text-ink-3 text-[11px] font-semibold uppercase tracking-wider">Pipelines</span>
           {pipelines.loading ? (
             <span className="text-ink-3 text-xs">loading...</span>
           ) : pipelines.error ? (
-            <span className="health-pill bg-gray-100 text-gray-500">offline</span>
+            <span className="health-pill text-ink-3 ring-1 ring-inset ring-surface-3">offline</span>
           ) : (
             <div className="flex items-center gap-2">
               {pipelineOk > 0 && (
-                <span className="health-pill bg-emerald-50 text-emerald-700">
-                  <Dot /> {pipelineOk} ok
+                <span className="health-pill px-0 text-ink-2">
+                  <Dot className="text-emerald-600" /> {pipelineOk} ok
                 </span>
               )}
               {pipelineFail > 0 && (
-                <span className="health-pill bg-red-50 text-red-700">
+                <span className="health-pill bg-red-50 text-red-700 ring-1 ring-inset ring-red-200">
                   <Dot /> {pipelineFail} failed
                 </span>
               )}
               {pipelineRunning > 0 && (
-                <span className="health-pill bg-blue-50 text-blue-700">
+                <span className="health-pill bg-datavloot-50 text-datavloot-700">
                   <Dot className="pulse-dot" /> {pipelineRunning} running
                 </span>
               )}
@@ -57,30 +57,30 @@ export default function HealthBanner() {
 
         {/* Quality status */}
         <div className="flex items-center gap-2">
-          <span className="text-ink-3 text-xs font-medium uppercase tracking-wider">Quality</span>
+          <span className="text-ink-3 text-[11px] font-semibold uppercase tracking-wider">Quality</span>
           {quality.loading ? (
             <span className="text-ink-3 text-xs">loading...</span>
           ) : quality.error ? (
-            <span className="health-pill bg-gray-100 text-gray-500">offline</span>
+            <span className="health-pill text-ink-3 ring-1 ring-inset ring-surface-3">offline</span>
           ) : (
             <div className="flex items-center gap-2">
               {qScore !== null && (
                 <span className={`health-pill ${
-                  qScore >= 95 ? 'bg-emerald-50 text-emerald-700' :
-                  qScore >= 80 ? 'bg-amber-50 text-amber-700' :
-                  'bg-red-50 text-red-700'
+                  qScore >= 95 ? 'px-0 text-ink-2' :
+                  qScore >= 80 ? 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200' :
+                  'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200'
                 }`}>
-                  {qScore}% healthy
+                  {qScore >= 95 && <Dot className="text-emerald-600" />}{qScore}% healthy
                 </span>
               )}
               {qTotal > 0 && (
                 <span className="text-ink-3 text-xs">{qTotal} tests (7d)</span>
               )}
               {qFail > 0 && (
-                <span className="health-pill bg-red-50 text-red-700">{qFail} failing</span>
+                <span className="health-pill bg-red-50 text-red-700 ring-1 ring-inset ring-red-200">{qFail} failing</span>
               )}
               {qWarn > 0 && (
-                <span className="health-pill bg-amber-50 text-amber-700">{qWarn} warnings</span>
+                <span className="health-pill bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200">{qWarn} warnings</span>
               )}
             </div>
           )}
@@ -90,7 +90,7 @@ export default function HealthBanner() {
 
         {/* Service status dots */}
         <div className="flex items-center gap-3">
-          <span className="text-ink-3 text-xs font-medium uppercase tracking-wider">Services</span>
+          <span className="text-ink-3 text-[11px] font-semibold uppercase tracking-wider">Services</span>
           <ServiceDot label="Dagster" status={hData.dagster} />
           <ServiceDot label="DuckDB" status={hData.duckdb} />
           <ServiceDot label="Marimo" status={hData.marimo} />
@@ -107,9 +107,9 @@ function Dot({ className }) {
 }
 
 function ServiceDot({ label, status }) {
-  const color = status === 'ok' ? 'bg-emerald-400' : status === 'offline' ? 'bg-red-400' : 'bg-gray-300';
+  const color = status === 'ok' ? 'bg-emerald-500' : status === 'offline' ? 'bg-red-500' : 'bg-surface-3';
   return (
-    <span className="flex items-center gap-1 text-xs text-ink-3">
+    <span className="flex items-center gap-1.5 text-xs text-ink-2" title={`${label}: ${status || 'unknown'}`}>
       <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
       {label}
     </span>

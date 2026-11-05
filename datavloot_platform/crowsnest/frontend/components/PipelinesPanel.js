@@ -12,21 +12,24 @@ export default function PipelinesPanel() {
   const dagsterUrl = services.data?.dagster_url || 'http://localhost:3000';
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Pipeline runs</h2>
+    <div className="space-y-5">
+      <div className="page-head">
+        <div>
+          <h2 className="page-title">Pipeline runs</h2>
+          <p className="page-lede">The last 30 runs in Dagster, refreshed every 15 seconds.</p>
+        </div>
         <div className="flex items-center gap-2">
           <a
             href={dagsterUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
+            className="btn"
           >
             Open Dagster ↗
           </a>
           <button
             onClick={reload}
-            className="text-xs text-ink-3 hover:text-ink-1 px-3 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
+            className="btn btn-ghost"
           >
             Refresh
           </button>
@@ -99,7 +102,6 @@ export default function PipelinesPanel() {
 function StatusBadge({ status }) {
   return (
     <span className={`status-badge status-${status}`}>
-      {status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-current pulse-dot" />}
       {status}
     </span>
   );

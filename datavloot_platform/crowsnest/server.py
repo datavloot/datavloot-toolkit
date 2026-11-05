@@ -5,6 +5,7 @@ Serves the REST API at /api/* and the pre-built frontend static files at /*.
 Both run on the same port so no CORS configuration is needed.
 """
 
+import asyncio
 import pathlib
 from importlib.metadata import PackageNotFoundError, version
 
@@ -158,35 +159,41 @@ def create_app() -> FastAPI:
     async def health_check():
         """Live connectivity check for all platform services."""
         config = get_config()
-        results: dict = {}
+        # The three at once. A short connect timeout, because on Windows a refused
+        # connection (a service that is not running) takes two seconds to fail.
+        timeout = httpx.Timeout(2.0, connect=0.75)
 
-        # Dagster: probe the GraphQL endpoint
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.post(
-                    config.dagster_graphql_url,
-                    json={"query": "{ __typename }"},
-                )
-                results["dagster"] = "ok" if resp.status_code == 200 else "offline"
-        except Exception:
-            results["dagster"] = "offline"
+        async def dagster() -> str:
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.post(
+                        config.dagster_graphql_url,
+                        json={"query": "{ __typename }"},
+                    )
+                    return "ok" if resp.status_code == 200 else "offline"
+            except Exception:
+                return "offline"
 
-        # DuckDB: open a connection the way the routes do, lake or file
-        try:
-            get_conn(read_only=True).close()
-            results["duckdb"] = "ok"
-        except Exception:
-            results["duckdb"] = "offline"
+        def duckdb() -> str:
+            # Open a connection the way the routes do, lake or file.
+            try:
+                get_conn(read_only=True).close()
+                return "ok"
+            except Exception:
+                return "offline"
 
-        # Marimo: probe its root URL
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(config.marimo_url)
-                results["marimo"] = "ok" if resp.status_code < 500 else "offline"
-        except Exception:
-            results["marimo"] = "offline"
+        async def marimo() -> str:
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.get(config.marimo_url)
+                    return "ok" if resp.status_code < 500 else "offline"
+            except Exception:
+                return "offline"
 
-        return {"services": results}
+        dagster_status, duckdb_status, marimo_status = await asyncio.gather(
+            dagster(), asyncio.to_thread(duckdb), marimo()
+        )
+        return {"services": {"dagster": dagster_status, "duckdb": duckdb_status, "marimo": marimo_status}}
 
     @app.get("/api/services")
     async def get_services():

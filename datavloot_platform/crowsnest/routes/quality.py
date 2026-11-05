@@ -25,7 +25,7 @@ def _records(df) -> list:
 
 
 @router.get("/test-results")
-async def get_test_results(limit: int = 100):
+def get_test_results(limit: int = 100):
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -59,7 +59,7 @@ async def get_test_results(limit: int = 100):
 
 
 @router.get("/summary")
-async def quality_summary():
+def quality_summary():
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -93,7 +93,7 @@ async def quality_summary():
 
 
 @router.get("/by-model")
-async def quality_by_model():
+def quality_by_model():
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -127,7 +127,7 @@ async def quality_by_model():
 
 
 @router.get("/anomalies")
-async def get_anomalies(limit: int = 50):
+def get_anomalies(limit: int = 50):
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -159,7 +159,7 @@ async def get_anomalies(limit: int = 50):
 
 
 @router.get("/by-test")
-async def quality_by_test(model: str):
+def quality_by_test(model: str):
     conn = None
     try:
         conn = get_conn(read_only=True)
