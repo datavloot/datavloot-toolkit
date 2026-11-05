@@ -141,12 +141,35 @@ datavloot start
 
 This starts Dagster and the Crows Nest together and opens the dashboard at [http://localhost:8080](http://localhost:8080). Dagster is available separately at [http://localhost:3000](http://localhost:3000). Press Ctrl+C to stop both.
 
+Dagster keeps its state (run history, which schedules and sensors are on, what a sensor already picked up) in `.dagster/` in the project, so a restart forgets none of it. `datavloot start` copies the project's `dagster.yaml` there on every start; edit the one in the project. If you set `DAGSTER_HOME` yourself, that directory is used instead, and `dagster.yaml` has to be copied into it by you.
+
 If you prefer two terminals, you can start them independently:
 
 ```bash
 dagster dev          # terminal 1 — Dagster at http://localhost:3000
 datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
 ```
+
+### Starting at login
+
+For someone who only uses the Crows Nest, run this once from the project directory:
+
+```bash
+datavloot autostart on
+```
+
+From the next login, Datavloot starts by itself, for this user only, without admin rights and without a terminal window. It also makes a shortcut named after the project (`name` in `branding/branding.yml`, else the folder's name) with the project's icon (`branding/icon.png`, else `branding/logo.png`, else the datavloot mark; an SVG logo cannot be turned into an icon). The shortcut opens the Crows Nest, and starts Datavloot in the background first when it is not running.
+
+| | Windows | macOS |
+|---|---|---|
+| At login | a shortcut in the Startup folder (`shell:startup`) | a LaunchAgent in `~/Library/LaunchAgents` |
+| Shortcut | Start menu and desktop | an app in `~/Applications` |
+
+- **Log.** Everything Datavloot prints goes to `logs/datavloot-start.log` in the project. When the shortcut cannot start the Crows Nest (a port in use, a broken install), it opens that log, with the reason in it.
+- **Switching it off.** `datavloot autostart off` removes the login entry and the shortcuts. A Datavloot that is running keeps running until you log out. `datavloot autostart status` shows what is installed and whether the Crows Nest answers.
+- **Scheduled runs happen only while the machine is on and you are logged in.** Datavloot runs as your user, not as a service. A run whose time passed while the laptop was off or asleep is not made up afterwards; start it by hand in Dagster.
+- One project at a time: the Crows Nest and Dagster use ports 8080 and 3000, so autostart for a second project fails at login with "port in use" in its log.
+- The macOS half has not yet been tried on a real Mac.
 
 ---
 
@@ -540,6 +563,8 @@ By default, assets are materialised manually in the Dagster UI. To run pipelines
 | [Schedules](https://docs.dagster.io/guides/automate/schedules) | You want assets to run on a fixed cron interval (e.g. nightly at 02:00) |
 | [Sensors](https://docs.dagster.io/guides/automate/sensors) | You want to react to an event — a new file, an API update, a threshold breach |
 | [Declarative automation](https://docs.dagster.io/guides/automate/declarative-automation) | You want Dagster to decide when to materialise based on asset freshness and upstream changes |
+
+Schedules and sensors run only while Dagster runs. On a laptop, `datavloot autostart on` starts it at every login (see [Starting at login](#starting-at-login)); runs still happen only while the machine is on and you are logged in.
 
 Schedules and sensors are defined in `definitions.py` alongside the existing assets. See the [Dagster automation docs](https://docs.dagster.io/guides/automate) for full examples, and `dbt_packages/optimist/data-instructions.md` for guidance on choosing the right approach for your sources.
 

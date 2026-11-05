@@ -112,6 +112,10 @@ main() {
     echo "The Crows Nest opens at http://localhost:$CROWSNEST_PORT. Keep this terminal open;"
     echo "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
     printf '\033[33m    cd "%s" && uv run datavloot start\033[0m\n' "$dir"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        echo "Or have it start at every login, with an app in ~/Applications:"
+        printf '\033[33m    cd "%s" && uv run datavloot autostart on\033[0m\n' "$dir"
+    fi
     if ! $existing; then
         echo "The first run downloads the demo's AIS data (41 MB) and builds the models;"
         echo "follow it in the Crows Nest's Pipelines panel."

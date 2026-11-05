@@ -161,6 +161,8 @@ function Install-Datavloot {
         Write-Host "The Crows Nest opens at http://localhost:$CrowsNestPort. Keep this window open;"
         Write-Host "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
         Write-Host "    cd `"$dir`"; uv run datavloot start" -ForegroundColor Yellow
+        Write-Host "Or have it start at every login, with a shortcut on the desktop and in the Start menu:"
+        Write-Host "    cd `"$dir`"; uv run datavloot autostart on" -ForegroundColor Yellow
         if (-not $existing) {
             Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"
             Write-Host "follow it in the Crows Nest's Pipelines panel."
