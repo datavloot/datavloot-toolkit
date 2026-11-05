@@ -411,6 +411,46 @@ async def _execute_write(statement, confirmed: bool) -> QueryResponse:
             conn.close()
 
 
+@router.get("/schema")
+async def get_schema():
+    """
+    Every schema, table and column with its type, in one request: what the
+    editor's autocomplete suggests from.
+
+    Only the database queries run against (the lake, or the .duckdb file), not
+    every attached catalog: a lake's own metadata catalog
+    (`__ducklake_metadata_<lake>`) holds DuckLake's bookkeeping, which is no
+    table to suggest -- and with write access, no table to change by accident.
+    """
+    conn = None
+    try:
+        conn = get_conn(read_only=True)
+        rows = conn.execute(
+            """
+            SELECT table_schema, table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_catalog = current_database()
+              AND table_schema NOT IN ('information_schema', 'pg_catalog')
+            ORDER BY table_schema, table_name, ordinal_position
+            """
+        ).fetchall()
+
+        schemas: dict[str, dict[str, list[dict]]] = {}
+        for schema, table, column, dtype in rows:
+            schemas.setdefault(schema, {}).setdefault(table, []).append(
+                {"name": column, "type": dtype}
+            )
+        return {"schemas": schemas}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Cannot read the schema: {e}")
+    finally:
+        if conn is not None:
+            conn.close()
+
+
 @router.get("/tables")
 async def list_tables():
     """List all tables available for querying."""

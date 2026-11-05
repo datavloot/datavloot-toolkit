@@ -1,8 +1,9 @@
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
+import { indexSchema, sqlCompletions } from '../lib/sqlCompletion';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -26,6 +27,20 @@ export default function QueryPanel() {
   const reloadTables = useRef(tables.reload);
   reloadTables.current = tables.reload;
 
+  // Autocomplete reads the schema through a ref: the provider is registered
+  // once, on mount, and has to see the schema as reloaded after a write.
+  const schema = useApi(() => api.getSchema(), []);
+  const schemaIndex = useMemo(() => indexSchema(schema.data), [schema.data]);
+  const schemaIndexRef = useRef(schemaIndex);
+  schemaIndexRef.current = schemaIndex;
+  const reloadSchema = useRef(schema.reload);
+  reloadSchema.current = schema.reload;
+
+  // Monaco keeps completion providers per language for the whole page, so the
+  // one registered on mount is removed on unmount, or each visit adds another.
+  const completionProvider = useRef(null);
+  useEffect(() => () => completionProvider.current?.dispose(), []);
+
   // `fromEditor` is the text in Monaco right now. The keybinding passes it:
   // sqlRef only catches up on the next render, so Ctrl+Enter straight after
   // typing ran the statement as it was a few keystrokes earlier -- with write
@@ -48,7 +63,11 @@ export default function QueryPanel() {
         res = await api.executeQuery(currentSql, 1000, true);
       }
       setResult(res);
-      if (res.write) reloadTables.current();
+      if (res.write) {
+        // A CREATE, DROP or ALTER changes what there is to show and suggest.
+        reloadTables.current();
+        reloadSchema.current();
+      }
     } catch (err) {
       setError(err.message);
       setResult(null);
@@ -63,6 +82,13 @@ export default function QueryPanel() {
       label: 'Execute Query',
       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
       run: (ed) => executeQuery(ed.getValue()),
+    });
+
+    completionProvider.current?.dispose();
+    completionProvider.current = monaco.languages.registerCompletionItemProvider('sql', {
+      triggerCharacters: ['.'],
+      provideCompletionItems: (model, position) =>
+        sqlCompletions(monaco, schemaIndexRef.current, model, position),
     });
   };
 

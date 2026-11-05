@@ -33,7 +33,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ sql, limit, confirm }),
     }),
-  getQueryMode: () => apiFetch('/query/mode'),  getTables: () => apiFetch('/query/tables'),
+  getQueryMode: () => apiFetch('/query/mode'),
+  getSchema: () => apiFetch('/query/schema'),
+  getTables: () => apiFetch('/query/tables'),
   getColumns: (table) => apiFetch(`/query/columns/${table}`),
 
   // Catalog
