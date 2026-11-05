@@ -167,6 +167,9 @@ def cmd_demo(args: argparse.Namespace) -> None:
     # The demo keeps its own name (noaa), unlike a scaffolded project.
     _warn_about_location(dest, "noaa")
     print(f"NOAA demo project created at '{dest}'.\n")
+    if os.environ.get("DATAVLOOT_INSTALLER"):
+        # install.ps1 / install.sh take the next steps themselves.
+        return
     print("Next steps:")
     print(f"  1. cd {dest}")
     print(f"  2. pip install -e .   # install the demo's Python package")
@@ -324,6 +327,100 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
     return f"Dagster did not become ready within {timeout} seconds ({last_detail})."
 
 
+_ASSETS_QUERY = """
+{
+  repositoriesOrError {
+    __typename
+    ... on RepositoryConnection {
+      nodes {
+        name
+        location { name }
+        assetNodes { assetKey { path } isMaterializable isPartitioned jobNames }
+      }
+    }
+    ... on PythonError { message }
+  }
+}
+"""
+
+_LAUNCH_MUTATION = """
+mutation Launch($params: ExecutionParams!) {
+  launchRun(executionParams: $params) {
+    __typename
+    ... on LaunchRunSuccess { run { runId } }
+    ... on PythonError { message }
+    ... on InvalidSubsetError { message }
+    ... on RunConfigValidationInvalid { errors { message } }
+  }
+}
+"""
+
+
+def _materialize_all(graphql_url: str) -> str:
+    """
+    Start one run of every asset, as "Materialize all" in Dagster does. Return what happened.
+
+    Through Dagster's own API, so the run goes through the instance like one
+    started in the UI: it shows in the Crows Nest's Pipelines panel and keeps to
+    the "lake" pool (dagster.yaml). Partitioned assets are left out: a run of
+    unpartitioned assets cannot take them. Never raises: the platform is up
+    either way, and the run can be started by hand.
+    """
+    manual = "Start it in Dagster instead: Asset Catalog > Materialize all."
+    try:
+        import httpx
+
+        resp = httpx.post(graphql_url, json={"query": _ASSETS_QUERY}, timeout=30)
+        repos = resp.json()["data"]["repositoriesOrError"]
+        if repos.get("__typename") != "RepositoryConnection":
+            return f"Could not list the assets: {repos.get('message', repos)}. {manual}"
+
+        launched, skipped = [], 0
+        for repo in repos["nodes"]:
+            assets = [a for a in repo["assetNodes"] if a["isMaterializable"]]
+            selection = [{"path": a["assetKey"]["path"]} for a in assets if not a["isPartitioned"]]
+            skipped += len(assets) - len(selection)
+            jobs = {
+                job for a in assets if not a["isPartitioned"]
+                for job in a["jobNames"] if job.startswith("__ASSET_JOB")
+            }
+            if not selection or len(jobs) != 1:
+                continue
+            params = {
+                "selector": {
+                    "repositoryLocationName": repo["location"]["name"],
+                    "repositoryName": repo["name"],
+                    "pipelineName": jobs.pop(),
+                    "assetSelection": selection,
+                },
+                "executionMetadata": {
+                    "tags": [{"key": "datavloot/started_by", "value": "datavloot start --run"}],
+                },
+            }
+            resp = httpx.post(
+                graphql_url,
+                json={"query": _LAUNCH_MUTATION, "variables": {"params": params}},
+                timeout=60,
+            )
+            result = resp.json()["data"]["launchRun"]
+            if result["__typename"] != "LaunchRunSuccess":
+                detail = result.get("message") or "; ".join(
+                    e["message"] for e in result.get("errors", [])
+                ) or result["__typename"]
+                return f"Could not start the run: {detail}. {manual}"
+            launched.append(f"{len(selection)} assets in {repo['location']['name']}")
+    except Exception as e:  # noqa: BLE001 -- see the docstring
+        return f"Could not start the run: {e}. {manual}"
+
+    if not launched:
+        return f"Found no assets to run. {manual}"
+    note = f" ({skipped} partitioned assets left out)" if skipped else ""
+    return (
+        f"Started a run of {', '.join(launched)}{note}. "
+        "Follow it in the Crows Nest's Pipelines panel."
+    )
+
+
 def cmd_start(args: argparse.Namespace) -> None:
     try:
         import uvicorn  # noqa: F401
@@ -343,9 +440,15 @@ def cmd_start(args: argparse.Namespace) -> None:
     _warn_about_location(project_dir, _to_identifier(project_dir.name))
 
     print("Starting Dagster…")
+    # This environment's scripts first on the PATH, for Dagster and the dbt it
+    # runs: started without activating the venv (a shortcut, autostart), the
+    # PATH can hold another dbt -- a global dbt Fusion fails on the profile.
+    scripts = str(pathlib.Path(sys.executable).parent)
+    env = {**os.environ, "PATH": scripts + os.pathsep + os.environ.get("PATH", "")}
     # POSIX: own session, so the whole tree can be signalled as one group.
     dagster_proc = subprocess.Popen(
-        ["dagster", "dev"],
+        [shutil.which("dagster", path=scripts) or "dagster", "dev"],
+        env=env,
         start_new_session=(os.name != "nt"),
     )
 
@@ -356,6 +459,10 @@ def cmd_start(args: argparse.Namespace) -> None:
         sys.exit(f"Error: {error}")
 
     print("Dagster is ready.")
+
+    if getattr(args, "run", False):
+        # Not fatal: the platform is up, and the run can be started by hand.
+        print(_materialize_all(graphql_url), flush=True)
 
     try:
         cmd_crowsnest(args)
@@ -418,6 +525,10 @@ def main() -> None:
     start_parser.add_argument(
         "--no-open", dest="open", action="store_false",
         help="Do not open the browser automatically"
+    )
+    start_parser.add_argument(
+        "--run", action="store_true",
+        help="Once Dagster is ready, start one run of every asset (Materialize all)"
     )
     start_parser.set_defaults(func=cmd_start, open=True)
 
