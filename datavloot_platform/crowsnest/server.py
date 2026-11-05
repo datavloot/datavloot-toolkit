@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
-from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.config import get_config, sql_write_enabled
 from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
@@ -134,12 +134,18 @@ class _CacheControlledStatic(StaticFiles):
         return response
 
 
-def create_app() -> FastAPI:
+def create_app(host: str | None = None) -> FastAPI:
+    """
+    The Crows Nest app. `host` is the address it will listen on: it decides
+    whether the SQL editor may write when CROWSNEST_SQL_WRITE is unset (see
+    config.sql_write_enabled). Without it, the editor stays read-only.
+    """
     app = FastAPI(
         title="Crows Nest",
         description="Unified dashboard for the Optimist data platform",
         version=VERSION,
     )
+    app.state.sql_write = sql_write_enabled(host)
 
     # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
     # covers the API and the static dashboard alike -- serving the UI to anyone

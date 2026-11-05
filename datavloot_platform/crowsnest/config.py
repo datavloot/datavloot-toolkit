@@ -107,6 +107,44 @@ class CrowsnestConfig:
         )
 
 
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off"}
+
+
+def sql_write_enabled(host: Optional[str]) -> bool:
+    """
+    Whether the SQL editor may change the lake (CROWSNEST_SQL_WRITE).
+
+    Set, it decides. Unset, it follows where the Crows Nest listens: on loopback
+    only (the laptop, `datavloot start`) whoever reaches the editor can open the
+    lake with DuckDB anyway, so it may write; on any other address (a VM, the
+    Falcon's `--host 0.0.0.0`) it stays read-only until someone turns it on.
+    No host known -- an app built without the CLI -- counts as not loopback.
+    """
+    import ipaddress
+    import os
+
+    setting = (os.environ.get("CROWSNEST_SQL_WRITE") or "").strip().lower()
+    if setting in _TRUE:
+        return True
+    if setting in _FALSE:
+        return False
+    if setting:
+        raise ValueError(
+            f"CROWSNEST_SQL_WRITE={setting!r} is not understood: use 1 to let the "
+            "SQL editor write, 0 to keep it read-only, or leave it unset."
+        )
+    if not host:
+        return False
+    host = host.strip().strip("[]")
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def get_config() -> CrowsnestConfig:
     global _config
     # No lake yet: look again, so the lake the first run creates shows up
