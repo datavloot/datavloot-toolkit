@@ -28,12 +28,12 @@ export const api = {
   getAnomalies: () => apiFetch('/quality/anomalies'),
 
   // SQL Query
-  executeQuery: (sql, limit = 1000) =>
+  executeQuery: (sql, limit = 1000, confirm = false) =>
     apiFetch('/query/execute', {
       method: 'POST',
-      body: JSON.stringify({ sql, limit }),
+      body: JSON.stringify({ sql, limit, confirm }),
     }),
-  getTables: () => apiFetch('/query/tables'),
+  getQueryMode: () => apiFetch('/query/mode'),  getTables: () => apiFetch('/query/tables'),
   getColumns: (table) => apiFetch(`/query/columns/${table}`),
 
   // Catalog

@@ -327,7 +327,7 @@ Opens [http://localhost:8080](http://localhost:8080) with six panels:
 | **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Auto-refreshes every 15 seconds. |
 | **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
-| **SQL editor** | Read-only SQL editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
+| **SQL editor** | SQL editor connected directly to your lake. On a laptop it can also change it: delete rows, drop a table, and so on (see [Changing data in the SQL editor](#changing-data-in-the-sql-editor)); on a shared host it is read-only. Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
 | **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
 
@@ -366,8 +366,51 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_APPS_URL` | `http://127.0.0.1:2719` |
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
+| `CROWSNEST_SQL_WRITE` | Unset — the SQL editor can write when the Crows Nest listens on localhost only, and is read-only otherwise. `1` or `0` decides either way |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
+
+### Changing data in the SQL editor
+
+On a laptop the SQL editor works as if you were on the lake with DuckDB yourself:
+`DELETE`, `UPDATE`, `INSERT`, `CREATE`, `DROP`, `ALTER` and `MERGE` run, one
+statement at a time. Whoever can reach a Crows Nest on localhost can open the lake
+with DuckDB anyway. Listening on any other address (`--host 0.0.0.0`, the
+Falcon), the editor is read-only unless `CROWSNEST_SQL_WRITE=1` is set. A badge
+next to the editor's title says which it is, and `datavloot launch` prints it.
+
+- **The database, not the machine.** Write access stays inside the lake: `COPY`,
+  reading files outside it, `ATTACH`, `INSTALL` and `SET` are refused as in the
+  read-only editor.
+- **A confirmation for whole tables.** `DROP`, `TRUNCATE`, and a `DELETE` or
+  `UPDATE` without `WHERE` run only after you confirm.
+- **One writer at a time.** The lake takes one writer, and when two commit at
+  once the second fails, which may be a pipeline run. So a change is refused while
+  a Dagster run is in progress, and a collision with any other writer comes back as
+  "the lake is being written to, try again" with nothing changed.
+- **Undo with a snapshot.** Every change leaves a snapshot of the lake, recorded
+  with the Crows Nest as author and the statement as message
+  (`FROM <lake>.snapshots()`). The editor shows the snapshot from before the
+  change, say 41, and the lake as it was then can be read back:
+
+  ```sql
+  -- rows deleted by mistake
+  INSERT INTO noaa_source.stg_noaa__guam_2025
+  SELECT * FROM noaa_source.stg_noaa__guam_2025 AT (VERSION => 41) WHERE mmsi = 123456789;
+
+  -- a table dropped by mistake
+  CREATE TABLE noaa_source.stg_noaa__guam_2025 AS
+  SELECT * FROM noaa_source.stg_noaa__guam_2025 AT (VERSION => 41);
+  ```
+
+  Lake maintenance keeps snapshots for about a week. A project still on a single
+  `.duckdb` file keeps none, so there a change cannot be undone.
+- **dbt and dlt.** dbt rebuilds the business layer on every run, so a change there
+  lasts until the next one. A change in the source layer stays, but dlt keeps its
+  own record of what it loaded: an incremental source does not load deleted rows,
+  or a dropped table, again by itself. To load a source from scratch, reset its
+  dlt state (`dlt pipeline <name> drop`, see the
+  [dlt docs](https://dlthub.com/docs/reference/command-line-interface)).
 
 ### Putting the Crows Nest on a shared host
 
@@ -382,10 +425,11 @@ A browser is prompted for credentials on first visit — enter any username and 
 token as the password. Scripts can send `Authorization: Bearer <token>` instead.
 `/api/health` stays open so an uptime check does not need the token.
 
-The SQL editor is read-only and enforces that by parsing each statement rather
-than by inspecting keywords, and the DuckDB connection is sandboxed so a query
-cannot reach files outside the lake's data directory, attach another database,
-or load an extension.
+The SQL editor is read-only there, unless `CROWSNEST_SQL_WRITE=1` gives everyone
+who can sign in write access to the lake. It enforces what may run by parsing each
+statement rather than by inspecting keywords, and the DuckDB connection is
+sandboxed, read-only or not, so a query cannot reach files outside the lake's data
+directory, attach another database, or load an extension.
 Nothing here gives you TLS, so terminate HTTPS at a reverse proxy if the host is
 reachable from anywhere untrusted.
 
