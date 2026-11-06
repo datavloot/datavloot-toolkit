@@ -191,10 +191,12 @@ function Install-Datavloot {
         Write-Host ""
         Write-Host "==> Starting Dagster and the Crows Nest" -ForegroundColor Cyan
         Write-Host "The Crows Nest opens at http://localhost:$CrowsNestPort. Keep this window open;"
-        Write-Host "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
-        Write-Host "    cd `"$dir`"; uv run datavloot start" -ForegroundColor Yellow
+        # The project's own datavloot rather than `uv run`: a window opened before
+        # uv was installed does not have uv on its PATH yet.
+        Write-Host "closing it or pressing Ctrl+C stops Datavloot. To start it again later, in PowerShell:"
+        Write-Host "    cd `"$dir`"; .venv\Scripts\datavloot start" -ForegroundColor Yellow
         Write-Host "Or have it start at every login, with a shortcut on the desktop and in the Start menu:"
-        Write-Host "    cd `"$dir`"; uv run datavloot autostart on" -ForegroundColor Yellow
+        Write-Host "    cd `"$dir`"; .venv\Scripts\datavloot autostart on" -ForegroundColor Yellow
         if (-not $existing -and $project) {
             # No run of its own: a project usually reads files that are not in
             # its repository, and a run before they are there only fails.

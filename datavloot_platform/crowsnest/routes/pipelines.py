@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 import httpx
 
 from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.httpclient import async_client
 
 router = APIRouter()
 
@@ -60,7 +61,7 @@ query Jobs {
 
 async def _dagster_query(query: str, variables: dict | None = None) -> dict:
     config = get_config()
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with async_client(10.0) as client:
         resp = await client.post(
             config.dagster_graphql_url,
             json={"query": query, "variables": variables or {}},
