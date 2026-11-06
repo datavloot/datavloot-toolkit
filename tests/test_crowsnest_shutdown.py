@@ -45,6 +45,7 @@ def cancelled(monkeypatch):
 
     calls = []
     monkeypatch.setattr(cli, "cancel_runs", lambda url, **kw: calls.append(url) or ["r1"])
+    monkeypatch.setattr(cli, "free_finished_run_slots", lambda url: calls.append("slots freed") or [])
     monkeypatch.setattr(notebooks, "_stop_server", lambda: calls.append("notebooks stopped"))
     monkeypatch.setattr(apps, "_stop_server", lambda: calls.append("apps stopped"))
     return calls
@@ -65,9 +66,9 @@ def test_on_a_laptop_it_cancels_runs_then_asks_the_server_to_exit(cancelled):
     r = client.post("/api/shutdown")
     assert r.status_code == 200, r.text
     assert r.json()["cancelled_runs"] == ["r1"]
-    # Runs first, then Marimo, before the server is asked to exit: the exit
-    # hooks come only once uvicorn has finished, and that can stall.
-    assert cancelled == ["http://127.0.0.1:9/graphql", "notebooks stopped", "apps stopped"]
+    # Runs first, their pool slots next, then Marimo, before the server is asked
+    # to exit: the exit hooks come only once uvicorn has finished, and that can stall.
+    assert cancelled == ["http://127.0.0.1:9/graphql", "slots freed", "notebooks stopped", "apps stopped"]
     assert app.state.server.should_exit is True
 
 
@@ -241,3 +242,89 @@ def test_an_unreachable_dagster_cancels_nothing_and_does_not_raise():
     from datavloot_platform import cli
 
     assert cli.cancel_runs("http://127.0.0.1:9/graphql") == []
+
+
+# --------------------------------------------------------------------------
+# cli.free_finished_run_slots, against a stand-in for Dagster
+# --------------------------------------------------------------------------
+
+@pytest.fixture
+def pool(monkeypatch):
+    """A `lake` pool: `claimed` and `pending` are run ids, `statuses` maps run id to status."""
+    httpx = pytest.importorskip("httpx")
+    import json
+
+    state = {"claimed": [], "pending": [], "statuses": {}, "freed": []}
+
+    def handler(request):
+        body = json.loads(request.content)
+        query, variables = body["query"], body["variables"]
+        if "freeConcurrencySlotsForRun" in query:
+            state["freed"].append(variables["runId"])
+            return httpx.Response(200, json={"data": {"freeConcurrencySlotsForRun": True}})
+        if "runsOrError" in query:
+            results = [
+                {"runId": r, "status": state["statuses"][r]} for r in variables["runIds"] if r in state["statuses"]
+            ]
+            return httpx.Response(200, json={"data": {"runsOrError": {"__typename": "Runs", "results": results}}})
+        limits = [
+            {
+                "claimedSlots": [{"runId": r} for r in state["claimed"]],
+                "pendingSteps": [{"runId": r} for r in state["pending"]],
+            }
+        ]
+        return httpx.Response(200, json={"data": {"instance": {"concurrencyLimits": limits}}})
+
+    transport = httpx.MockTransport(handler)
+
+    def post(url, **kwargs):
+        kwargs.pop("timeout", None)
+        with httpx.Client(transport=transport) as client:
+            return client.post(url, **kwargs)
+
+    monkeypatch.setattr(httpx, "post", post)
+    return state
+
+
+def test_the_slot_of_a_finished_run_is_freed(pool):
+    """A cut-off run, marked cancelled, still claimed `lake`: every later run stayed Queued."""
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["cut"]
+    pool["statuses"] = {"cut": "CANCELED"}
+    assert cli.free_finished_run_slots("http://dagster/graphql") == ["cut"]
+    assert pool["freed"] == ["cut"]
+
+
+@pytest.mark.parametrize("status", ["QUEUED", "STARTING", "STARTED", "CANCELING"])
+def test_the_slot_of_a_run_that_is_not_finished_is_kept(pool, status):
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["going"]
+    pool["statuses"] = {"going": status}
+    assert cli.free_finished_run_slots("http://dagster/graphql") == []
+    assert pool["freed"] == []
+
+
+def test_finished_and_running_runs_are_told_apart_and_a_run_is_freed_once(pool):
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["cut", "going"]
+    pool["pending"] = ["cut"]  # claims and waits on the same pool: still one run
+    pool["statuses"] = {"cut": "FAILURE", "going": "STARTED"}
+    assert cli.free_finished_run_slots("http://dagster/graphql") == ["cut"]
+    assert pool["freed"] == ["cut"]
+
+
+def test_an_empty_pool_asks_nothing_more(pool):
+    from datavloot_platform import cli
+
+    assert cli.free_finished_run_slots("http://dagster/graphql") == []
+    assert pool["freed"] == []
+
+
+def test_an_unreachable_dagster_frees_nothing_and_does_not_raise():
+    pytest.importorskip("httpx")
+    from datavloot_platform import cli
+
+    assert cli.free_finished_run_slots("http://127.0.0.1:9/graphql") == []

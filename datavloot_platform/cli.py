@@ -563,6 +563,77 @@ def cancel_runs(
     return cancelled
 
 
+_CLAIMS_QUERY = """
+query Claims {
+  instance {
+    concurrencyLimits {
+      claimedSlots { runId }
+      pendingSteps { runId }
+    }
+  }
+}
+"""
+
+_RUN_STATUSES_QUERY = """
+query RunStatuses($runIds: [String!]) {
+  runsOrError(filter: {runIds: $runIds}, limit: 100) {
+    __typename
+    ... on Runs { results { runId status } }
+  }
+}
+"""
+
+_FREE_SLOTS_MUTATION = """
+mutation FreeSlots($runId: String!) {
+  freeConcurrencySlotsForRun(runId: $runId)
+}
+"""
+
+_FINAL_RUN_STATUSES = ("SUCCESS", "FAILURE", "CANCELED")
+
+
+def free_finished_run_slots(graphql_url: str) -> list[str]:
+    """
+    Free the concurrency-pool slots that runs which have ended still claim.
+    Return the ids of the runs whose slots it freed.
+
+    A run frees its slots in its own process when its steps end. When that
+    process dies first -- a forced stop, a logout, a laptop that switched off --
+    nothing does, and marking the run cancelled does not either. The slot then
+    stays claimed, and every later run waits for the pool (`lake`, one slot)
+    as Queued for good. Called after cancel_runs, at start and at Shut down.
+    A run that is queued, starting or started keeps its slots. Never raises:
+    cleaning up must not stop a start or a shutdown.
+    """
+    freed: list[str] = []
+    try:
+        import httpx
+
+        def ask(query: str, variables: dict | None = None) -> dict:
+            resp = httpx.post(graphql_url, json={"query": query, "variables": variables or {}}, timeout=10)
+            return resp.json()["data"]
+
+        limits = ask(_CLAIMS_QUERY)["instance"]["concurrencyLimits"] or []
+        run_ids = sorted(
+            {
+                claim["runId"]
+                for limit in limits
+                for claim in (limit.get("claimedSlots") or []) + (limit.get("pendingSteps") or [])
+                if claim.get("runId")
+            }
+        )
+        if not run_ids:
+            return freed
+        found = ask(_RUN_STATUSES_QUERY, {"runIds": run_ids})["runsOrError"].get("results") or []
+        for run in found:
+            if run["status"] in _FINAL_RUN_STATUSES:
+                ask(_FREE_SLOTS_MUTATION, {"runId": run["runId"]})
+                freed.append(run["runId"])
+    except Exception as e:  # noqa: BLE001 -- see the docstring
+        print(f"Could not check for pool slots to free: {e}", flush=True)
+    return freed
+
+
 def _materialize_all(graphql_url: str) -> str:
     """materialize_all, as the sentence `start --run` and `update` print."""
     started, message = materialize_all(graphql_url)
@@ -689,6 +760,13 @@ def _start(args, graphql_url, scripts, env, log) -> None:
             print(
                 f"Marked {len(left)} run(s) as cancelled that an earlier Datavloot left "
                 f"running when it stopped: {', '.join(r[:8] for r in left)}.",
+                flush=True,
+            )
+        stuck = free_finished_run_slots(graphql_url)
+        if stuck:
+            print(
+                f"Freed the pool slots of {len(stuck)} finished run(s) that an earlier Datavloot "
+                f"cut off: {', '.join(r[:8] for r in stuck)}.",
                 flush=True,
             )
         if getattr(args, "run", False):
