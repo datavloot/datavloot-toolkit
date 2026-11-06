@@ -19,6 +19,10 @@ TEMPLATES_DIR = pathlib.Path(__file__).parent / "templates"
 # release of that repository.
 DBT_PACKAGE_VERSION = "0.1.1"
 
+# How long the Crows Nest waits for open connections when it shuts down, before
+# it goes on regardless (cmd_crowsnest).
+SHUTDOWN_GRACE_SECONDS = 5
+
 _IGNORE = shutil.ignore_patterns(
     "__pycache__", "*.pyc", ".venv", "target", "dbt_packages", "logs"
 )
@@ -280,9 +284,32 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
     # A server of our own rather than uvicorn.run, so the Crows Nest's Shut down
     # button can ask it to exit (server.py, /api/shutdown); it then returns here
     # like after Ctrl+C, and cmd_start stops Dagster.
-    server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port))
+    # timeout_graceful_shutdown: without it uvicorn waits for every open
+    # connection to close, and a browser tab holding one kept a Shut down from
+    # ever finishing -- so Dagster and Marimo were never stopped.
+    server = uvicorn.Server(
+        uvicorn.Config(app, host=args.host, port=args.port, timeout_graceful_shutdown=SHUTDOWN_GRACE_SECONDS)
+    )
     app.state.server = server
+    app.state.after_shutdown = _exit_watchdog
     server.run()
+
+
+def _exit_watchdog() -> None:
+    """
+    After Shut down, end this process even if a clean exit stalls.
+
+    Shut down has already cancelled the runs and stopped Marimo and Dagster
+    itself (server.py), so nothing is left to clean up by the time this fires.
+    Without it, a stalled exit -- seen once, with a browser tab open on the
+    Crows Nest, and not reproduced since -- left a process behind that held on
+    to nothing useful but kept `datavloot open` from starting a new one.
+    """
+    import threading
+
+    timer = threading.Timer(SHUTDOWN_GRACE_SECONDS + 10, os._exit, args=(0,))
+    timer.daemon = True  # never what keeps the process alive itself
+    timer.start()
 
 
 # GraphQL probe: is the webserver up, and did every code location load?
@@ -640,6 +667,7 @@ def _start(args, graphql_url, scripts, env, log) -> None:
     from datavloot_platform.crowsnest import startup
 
     startup.set_dagster("starting")
+    startup.set_dagster_process(dagster_proc)
 
     def watch() -> None:
         print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
@@ -680,6 +708,7 @@ def _start(args, graphql_url, scripts, env, log) -> None:
         except OSError:
             pass
         terminate_tree(dagster_proc)
+        startup.set_dagster_process(None)
 
 
 def cmd_autostart(args: argparse.Namespace) -> None:

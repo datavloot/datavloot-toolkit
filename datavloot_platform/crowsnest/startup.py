@@ -30,3 +30,18 @@ def dagster() -> tuple[str | None, str | None]:
     """(status, error) as last set."""
     with _lock:
         return _state["dagster"], _state["error"]
+
+
+# The `dagster dev` process `datavloot start` runs, so Shut down can stop it
+# itself instead of relying on the CLI getting control back (server.py).
+_process: dict = {"dagster": None}
+
+
+def set_dagster_process(proc) -> None:
+    with _lock:
+        _process["dagster"] = proc
+
+
+def dagster_process():
+    with _lock:
+        return _process["dagster"]
