@@ -28,12 +28,79 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 ---
 
+## Installing
+
+To try Datavloot on your own laptop, one command installs it and opens the Crows Nest on the NOAA demo. It needs no Python, git or admin rights.
+
+**Windows** (PowerShell or Command Prompt):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+```
+
+**macOS and Linux:**
+
+```bash
+curl -LsSf https://datavloot.nl/install.sh | bash
+```
+
+The script:
+
+1. Installs [uv](https://docs.astral.sh/uv/) for your user, if it is not there yet.
+2. Creates the demo project in `optimist-demo` in your home folder.
+3. Gives the project its own Python 3.12 and packages, and installs the dbt packages.
+4. Starts Dagster and the Crows Nest, and opens [http://localhost:8080](http://localhost:8080).
+5. Starts the first run, which downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
+
+Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder, on Windows:
+
+```powershell
+.venv\Scripts\datavloot start
+```
+
+On macOS and Linux:
+
+```bash
+.venv/bin/datavloot start
+```
+
+`uv run datavloot start` does the same, but only in a terminal opened after uv was installed. Running the install command again also starts the project.
+
+**Your own project instead of the demo.** Set `DATAVLOOT_PROJECT` to its repository first. The script then installs that project's latest tag with `datavloot new --from` (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asking for a token when the repository is private:
+
+```powershell
+$env:DATAVLOOT_PROJECT = 'https://gitlab.com/group/project'
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+```
+
+```bash
+curl -LsSf https://datavloot.nl/install.sh | DATAVLOOT_PROJECT=https://gitlab.com/group/project bash
+```
+
+`DATAVLOOT_REF` picks a tag and `DATAVLOOT_PATH` the project's folder in the repository, when it cannot be found by itself. The project lands in a folder named after the repository in your home folder.
+
+Running the install command again does the same: it finds the project and starts it, and never overwrites it. To install somewhere else, set `DATAVLOOT_DIR` first: `$env:DATAVLOOT_DIR = 'C:\dev\demo'` in PowerShell, or `curl ... | DATAVLOOT_DIR=~/dev/demo bash`. `DATAVLOOT_VERSION` picks a toolkit version (default: the latest).
+
+The script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project. `-ExecutionPolicy ByPass` in the Windows command applies to that one command only; it changes no setting.
+
+**Upgrading.** A project pins the toolkit to its minor version (`datavloot[optimist]~=0.3.0`). To get the latest patch release, run this in the project folder:
+
+```bash
+uv sync --upgrade-package datavloot
+```
+
+Moving to a newer minor version is a change to `pyproject.toml` and `packages.yml` (see [#55](https://github.com/datavloot/datavloot-toolkit/issues/55)).
+
+To build a project of your own rather than try the demo, follow the steps below.
+
+---
+
 ## Getting started
 
 ### Prerequisites
 
 - Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
-- Git
+- Git, to keep your own project in a repository. Installing and running a project does not need it.
 
 No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
 
@@ -95,12 +162,36 @@ datavloot start
 
 This starts Dagster and the Crows Nest together and opens the dashboard at [http://localhost:8080](http://localhost:8080). Dagster is available separately at [http://localhost:3000](http://localhost:3000). Press Ctrl+C to stop both.
 
+Dagster keeps its state (run history, which schedules and sensors are on, what a sensor already picked up) in `.dagster/` in the project, so a restart forgets none of it. `datavloot start` copies the project's `dagster.yaml` there on every start; edit the one in the project. If you set `DAGSTER_HOME` yourself, that directory is used instead, and `dagster.yaml` has to be copied into it by you.
+
 If you prefer two terminals, you can start them independently:
 
 ```bash
 dagster dev          # terminal 1 — Dagster at http://localhost:3000
 datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
 ```
+
+### Starting at login
+
+For someone who only uses the Crows Nest, run this once from the project directory:
+
+```bash
+datavloot autostart on
+```
+
+From the next login, Datavloot starts by itself, for this user only, without admin rights and without a terminal window. It also makes a shortcut named after the project (`name` in `branding/branding.yml`, else the folder's name) with the project's icon (`branding/icon.png`, else `branding/logo.png`, else the datavloot mark; an SVG logo cannot be turned into an icon). The shortcut opens the Crows Nest, and starts Datavloot in the background first when it is not running.
+
+| | Windows | macOS |
+|---|---|---|
+| At login | a shortcut in the Startup folder (`shell:startup`) | a LaunchAgent in `~/Library/LaunchAgents` |
+| Shortcut | Start menu and desktop | an app in `~/Applications` |
+
+- **Log.** Everything Datavloot prints goes to `logs/datavloot-start.log` in the project. When the shortcut cannot start the Crows Nest (a port in use, a broken install), it opens that log, with the reason in it.
+- **Stopping it.** Started at login or from the shortcut, Datavloot has no window to close: **Shut down**, at the bottom of the Crows Nest's sidebar, stops Dagster, the Crows Nest and the Marimo servers it started, after cancelling a run that is still going. The button is there only when the Crows Nest listens on this machine alone, as on a laptop. A run cut off some other way (a forced stop, a logout, a laptop switching off) would stay "Started" in Dagster; `datavloot start` marks such runs as cancelled once Dagster is up again.
+- **Switching it off.** `datavloot autostart off` removes the login entry and the shortcuts. A Datavloot that is running keeps running until you shut it down or log out. `datavloot autostart status` shows what is installed and whether the Crows Nest answers.
+- **Scheduled runs happen only while the machine is on and you are logged in.** Datavloot runs as your user, not as a service. A run whose time passed while the laptop was off or asleep is not made up afterwards; start it by hand in Dagster.
+- One project at a time: the Crows Nest and Dagster use ports 8080 and 3000, so autostart for a second project fails at login with "port in use" in its log.
+- The macOS half has not yet been tried on a real Mac.
 
 ---
 
@@ -219,6 +310,56 @@ In older projects `profiles.yml` has one target, `dev`, that writes to the produ
 
 ---
 
+## Installing a project on other machines
+
+When one person maintains a project and others only run it and use the Crows Nest, those machines can install it from a tag of its GitHub or GitLab repository, without git:
+
+```
+datavloot new C:\dev\harbor --from https://gitlab.com/<group>/harbor
+```
+
+This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`. The target folder must be new or empty; an existing project is never overwritten.
+
+An installation is a copy of one tag, not a working copy: it is meant to be run, not changed.
+
+### Preparing a project for this
+
+- **A repository** on github.com, gitlab.com or a self-hosted GitLab. The project may sit in a subfolder (`ketenconnect/` next to other files): the folder with both `dbt_project.yml` and `pyproject.toml` is found by itself. Only that folder is installed. If the repository has none or several, name it with `--path <folder>`.
+- **A tag per version**, such as `v1.0.0`. The latest tag is the highest by semantic version (a leading `v` is fine); tags that are not versions are ignored, and so are pre-releases such as `v2.0.0-rc.1` unless there is no release at all. Install one on purpose with `--ref`.
+- **A `uv.lock`** next to `pyproject.toml`, so every machine gets the versions you tested. `uv sync --locked` stops when it does not match `pyproject.toml`: run `uv lock` before tagging.
+- **A `.env.example`** with every setting the project reads, such as where the input files are and credentials for sources, each with a comment above it. The comment is shown when the value is asked for, and the value after `=` is the default. Values of names with `TOKEN`, `PASSWORD`, `SECRET` or `KEY` are asked for without showing them. Keep `.env` itself out of the repository.
+
+  ```
+  # Folder with the KetenConnect exports (.xlsx)
+  EXPORT_DIR=data
+
+  # Password for the source database
+  SOURCE_PASSWORD=
+  ```
+- **Local state in `.gitignore`**: `.env`, `.venv/`, `lake/`, `target/`, `dbt_packages/`, `logs/`, and data files in `data/`. What is in the repository is what gets installed.
+
+A **private repository** needs a read-only token, asked for when the host refuses without one:
+
+- GitLab: a project access token, or a personal access token, with the `read_api` scope. A deploy token does not work: it cannot use the API for tags and archives.
+- GitHub: a fine-grained personal access token with access to the repository and the permission Contents: read.
+
+The token is stored for later updates in the system's credential store (Windows Credential Manager, the macOS Keychain, the Secret Service on Linux), under the repository's host and path. Where there is none, it goes into `tokens.json` in the user's config folder (`%APPDATA%\datavloot` on Windows), readable only by that user, and the command says so. It is never written into the project. To install without a prompt, set `DATAVLOOT_TOKEN`. When a token expires, the next command asks for a new one.
+
+### Rolling out a new version
+
+Tag the new version in the repository, then on each machine, in the project's folder:
+
+```
+uv run datavloot update              # to the latest tag
+uv run datavloot update --ref v1.1.0 # to a given tag, also an older one
+```
+
+`update` downloads and unpacks the tag first; if that fails (no internet, an expired token, an unknown tag) the installation is left as it was. Then it replaces exactly the files the previous tag installed, listed with their hashes in `.datavloot/install.json`: files the new tag no longer has are removed, the others overwritten. Everything else stays: `.env`, `data/`, `lake/`, `.venv`, `logs/`, `target/`, `dbt_packages/` and notebooks someone made. A file of the installation that was changed on the machine is overwritten too, with a warning. It then asks only for settings that `.env.example` gained, and runs `uv sync`, `dbt deps` and `dbt parse` again.
+
+Finally it rebuilds the tables with the new models: when this project's Dagster is running, it reloads the code and starts a run of every asset (leave that out with `--no-run`); when it is not, it says how to start it. Restart Dagster and the Crows Nest afterwards so they run the new version. On Windows, a running Dagster can keep `uv sync` from replacing files in `.venv`; if it fails on that, close Dagster and the Crows Nest and run `uv sync` and the steps after it again.
+
+---
+
 ## Example project
 
 The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) is a complete consuming project built on this toolkit. It uses
@@ -324,10 +465,10 @@ Opens [http://localhost:8080](http://localhost:8080) with six panels:
 
 | Panel | What it shows |
 |---|---|
-| **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Auto-refreshes every 15 seconds. |
+| **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Hover over a failed run's label for the part of its error that says what went wrong. **Materialize all** starts a run of every asset. Auto-refreshes every 15 seconds. |
 | **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
-| **SQL editor** | Read-only SQL editor connected directly to your DuckDB warehouse. Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
+| **SQL editor** | SQL editor connected directly to your lake. On a laptop it can also change it: delete rows, drop a table, and so on (see [Changing data in the SQL editor](#changing-data-in-the-sql-editor)); on a shared host it is read-only. Autocomplete suggests schemas, tables and columns, also after an alias (`FROM vessels v WHERE v.`). Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
 | **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
 
@@ -338,20 +479,22 @@ A project can give the Crows Nest its own look with a `branding/` folder; withou
 ```
 branding/
   branding.yml   # name and colours, every key optional
-  logo.svg       # or logo.png; replaces the Optimist mark in the sidebar
+  logo.svg       # or logo.png; replaces the datavloot mark in the sidebar
 ```
 
 ```yaml
 name: KetenConnect
 colors:
-  accent: "#0070c0"      # active tab, buttons, links
+  accent: "#0070c0"      # buttons, links
   text: "#002060"        # text; the muted shades are derived from it
   background: "#f2f2f2"  # page background; hover and borders are derived from it
+  sidebar: "#002060"     # the sidebar; without it, the accent darkened
+  highlight: "#00b050"   # the active tab's marker, focus rings, notes
 ```
 
-You name three colours; the Crows Nest derives every shade it uses from them. Restart is not needed: the next page load picks up a change.
+You name a few colours; the Crows Nest derives every shade it uses from them. With a logo, the sidebar shows the logo without the name next to it, since a logo usually carries the name already; the name still titles the browser tab. Restart is not needed: the next page load picks up a change.
 
-The **health banner** at the top of every panel shows live status indicators for Dagster, DuckDB, and Marimo — green when reachable, red when not. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
+The **health banner** at the top of every panel shows how things stand now. Pipelines counts jobs by their latest run, so a job that failed and then succeeded counts as ok; hover over "failing" for the errors. Quality counts each test by its latest result. The service dots are green when Dagster, DuckDB and Marimo are reachable and red when not, except Marimo, which is amber until it starts with the first notebook. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
 
 The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started from the project directory, and infers the Elementary schema from your target schema name. It reads the lake while pipelines write to it. No additional configuration is needed for standard projects. You can override any setting with environment variables:
 
@@ -366,8 +509,51 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_APPS_URL` | `http://127.0.0.1:2719` |
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
+| `CROWSNEST_SQL_WRITE` | Unset — the SQL editor can write when the Crows Nest listens on localhost only, and is read-only otherwise. `1` or `0` decides either way |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
+
+### Changing data in the SQL editor
+
+On a laptop the SQL editor works as if you were on the lake with DuckDB yourself:
+`DELETE`, `UPDATE`, `INSERT`, `CREATE`, `DROP`, `ALTER` and `MERGE` run, one
+statement at a time. Whoever can reach a Crows Nest on localhost can open the lake
+with DuckDB anyway. Listening on any other address (`--host 0.0.0.0`, the
+Falcon), the editor is read-only unless `CROWSNEST_SQL_WRITE=1` is set. A badge
+next to the editor's title says which it is, and `datavloot launch` prints it.
+
+- **The database, not the machine.** Write access stays inside the lake: `COPY`,
+  reading files outside it, `ATTACH`, `INSTALL` and `SET` are refused as in the
+  read-only editor.
+- **A confirmation for whole tables.** `DROP`, `TRUNCATE`, and a `DELETE` or
+  `UPDATE` without `WHERE` run only after you confirm.
+- **One writer at a time.** The lake takes one writer, and when two commit at
+  once the second fails, which may be a pipeline run. So a change is refused while
+  a Dagster run is in progress, and a collision with any other writer comes back as
+  "the lake is being written to, try again" with nothing changed.
+- **Undo with a snapshot.** Every change leaves a snapshot of the lake, recorded
+  with the Crows Nest as author and the statement as message
+  (`FROM <lake>.snapshots()`). The editor shows the snapshot from before the
+  change, say 41, and the lake as it was then can be read back:
+
+  ```sql
+  -- rows deleted by mistake
+  INSERT INTO noaa_source.stg_noaa__guam_2025
+  SELECT * FROM noaa_source.stg_noaa__guam_2025 AT (VERSION => 41) WHERE mmsi = 123456789;
+
+  -- a table dropped by mistake
+  CREATE TABLE noaa_source.stg_noaa__guam_2025 AS
+  SELECT * FROM noaa_source.stg_noaa__guam_2025 AT (VERSION => 41);
+  ```
+
+  Lake maintenance keeps snapshots for about a week. A project still on a single
+  `.duckdb` file keeps none, so there a change cannot be undone.
+- **dbt and dlt.** dbt rebuilds the business layer on every run, so a change there
+  lasts until the next one. A change in the source layer stays, but dlt keeps its
+  own record of what it loaded: an incremental source does not load deleted rows,
+  or a dropped table, again by itself. To load a source from scratch, reset its
+  dlt state (`dlt pipeline <name> drop`, see the
+  [dlt docs](https://dlthub.com/docs/reference/command-line-interface)).
 
 ### Putting the Crows Nest on a shared host
 
@@ -382,10 +568,11 @@ A browser is prompted for credentials on first visit — enter any username and 
 token as the password. Scripts can send `Authorization: Bearer <token>` instead.
 `/api/health` stays open so an uptime check does not need the token.
 
-The SQL editor is read-only and enforces that by parsing each statement rather
-than by inspecting keywords, and the DuckDB connection is sandboxed so a query
-cannot reach files outside the lake's data directory, attach another database,
-or load an extension.
+The SQL editor is read-only there, unless `CROWSNEST_SQL_WRITE=1` gives everyone
+who can sign in write access to the lake. It enforces what may run by parsing each
+statement rather than by inspecting keywords, and the DuckDB connection is
+sandboxed, read-only or not, so a query cannot reach files outside the lake's data
+directory, attach another database, or load an extension.
 Nothing here gives you TLS, so terminate HTTPS at a reverse proxy if the host is
 reachable from anywhere untrusted.
 
@@ -400,6 +587,8 @@ By default, assets are materialised manually in the Dagster UI. To run pipelines
 | [Schedules](https://docs.dagster.io/guides/automate/schedules) | You want assets to run on a fixed cron interval (e.g. nightly at 02:00) |
 | [Sensors](https://docs.dagster.io/guides/automate/sensors) | You want to react to an event — a new file, an API update, a threshold breach |
 | [Declarative automation](https://docs.dagster.io/guides/automate/declarative-automation) | You want Dagster to decide when to materialise based on asset freshness and upstream changes |
+
+Schedules and sensors run only while Dagster runs. On a laptop, `datavloot autostart on` starts it at every login (see [Starting at login](#starting-at-login)); runs still happen only while the machine is on and you are logged in.
 
 Schedules and sensors are defined in `definitions.py` alongside the existing assets. See the [Dagster automation docs](https://docs.dagster.io/guides/automate) for full examples, and `dbt_packages/optimist/data-instructions.md` for guidance on choosing the right approach for your sources.
 
@@ -436,8 +625,8 @@ The macros are the `optimist` dbt package, which has its own repository: [dbt-da
 ```yaml
 # packages.yml
 packages:
-  - git: "https://github.com/datavloot/dbt-datavloot-optimist.git"
-    revision: 0.1.1       # a release tag of dbt-datavloot-optimist
+  - tarball: "https://codeload.github.com/datavloot/dbt-datavloot-optimist/tar.gz/refs/tags/0.1.1"   # a release tag of dbt-datavloot-optimist
+    name: optimist
 ```
 
 Then install:

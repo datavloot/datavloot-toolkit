@@ -225,6 +225,18 @@ def test_list_columns_is_not_injectable(client):
     assert r.json()["columns"] == [], "injected predicate matched rows"
 
 
+def test_the_schema_lists_tables_and_columns_for_autocomplete(client):
+    r = client.get("/api/query/schema")
+    assert r.status_code == 200, r.text
+    schemas = r.json()["schemas"]
+    assert schemas["probe_business"]["dim_vessel"] == [
+        {"name": "vessel_key", "type": "BIGINT"},
+        {"name": "name", "type": "VARCHAR"},
+    ]
+    # A lake's own bookkeeping (ducklake_snapshot, ...) is not offered.
+    assert not any(t.startswith("ducklake_") for tables in schemas.values() for t in tables)
+
+
 def test_list_tables_still_works(client):
     r = client.get("/api/query/tables")
     assert r.status_code == 200

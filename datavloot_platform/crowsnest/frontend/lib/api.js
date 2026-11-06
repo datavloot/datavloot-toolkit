@@ -19,6 +19,7 @@ export const api = {
   getPipelineRuns: (limit = 20) => apiFetch(`/pipelines/runs?limit=${limit}`),
   getPipelineSummary: () => apiFetch('/pipelines/summary'),
   getJobs: () => apiFetch('/pipelines/jobs'),
+  materializeAll: () => apiFetch('/pipelines/materialize-all', { method: 'POST' }),
 
   // Data Quality
   getTestResults: (limit = 100) => apiFetch(`/quality/test-results?limit=${limit}`),
@@ -28,11 +29,13 @@ export const api = {
   getAnomalies: () => apiFetch('/quality/anomalies'),
 
   // SQL Query
-  executeQuery: (sql, limit = 1000) =>
+  executeQuery: (sql, limit = 1000, confirm = false) =>
     apiFetch('/query/execute', {
       method: 'POST',
-      body: JSON.stringify({ sql, limit }),
+      body: JSON.stringify({ sql, limit, confirm }),
     }),
+  getQueryMode: () => apiFetch('/query/mode'),
+  getSchema: () => apiFetch('/query/schema'),
   getTables: () => apiFetch('/query/tables'),
   getColumns: (table) => apiFetch(`/query/columns/${table}`),
 
@@ -66,4 +69,5 @@ export const api = {
   // Health & Services
   getHealth: () => apiFetch('/health'),
   getServices: () => apiFetch('/services'),
+  shutdown: () => apiFetch('/shutdown', { method: 'POST' }),
 };

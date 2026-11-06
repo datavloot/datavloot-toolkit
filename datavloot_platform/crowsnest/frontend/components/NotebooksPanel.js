@@ -87,15 +87,18 @@ export default function NotebooksPanel() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Marimo notebooks</h2>
+    <div className="space-y-5">
+      <div className="page-head">
+        <div>
+          <h2 className="page-title">Notebooks</h2>
+          <p className="page-lede">Marimo notebooks for exploring the data in Python.</p>
+        </div>
         {showNotebook && (
           <a
             href={frameUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
+            className="btn"
           >
             Open in new tab ↗
           </a>
@@ -211,7 +214,7 @@ function NotRunning({ marimoUrl, running, portTaken, notebooks, notebooksAvailab
                 <span className="text-sm font-mono text-ink-1">{nb.name}</span>
                 <button
                   onClick={() => onLaunch(nb.name)}
-                  className="text-xs px-3 py-1.5 bg-datavloot-600 text-white rounded-lg hover:bg-datavloot-700 transition-colors"
+                  className="btn btn-primary"
                 >
                   Launch
                 </button>

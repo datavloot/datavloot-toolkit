@@ -1,5 +1,9 @@
 """
 Catalog route — builds a data catalog from Elementary's warehouse tables.
+
+Every table in the lakehouse that dbt knows of: its models, its seeds (the CSVs
+in seeds/) and its sources (what the ingestion loads). A table from another dbt
+package, such as Elementary's own, is metadata; the frontend folds those away.
 """
 
 import json
@@ -7,10 +11,18 @@ import json
 from fastapi import APIRouter, HTTPException
 import duckdb
 
+from datavloot_platform import storage
 from datavloot_platform.crowsnest.config import get_config
 from datavloot_platform.crowsnest.db import get_conn
 
 router = APIRouter()
+
+# Where each kind of table is listed, and the column with its name in the lake.
+_KINDS = (
+    ("model", "dbt_models", "alias"),
+    ("seed", "dbt_seeds", "alias"),
+    ("source", "dbt_sources", "identifier"),
+)
 
 
 def _schema() -> str:
@@ -22,52 +34,72 @@ def _records(df) -> list:
     return json.loads(df.to_json(orient="records", date_format="iso", default_handler=str))
 
 
+def _root_package() -> str | None:
+    """The project's own dbt package; its tables are the business tables."""
+    project = storage.find_project_dir()
+    if project is None:
+        return None
+    try:
+        return storage.project_name(project)
+    except (OSError, ValueError):
+        return None
+
+
+def _is_metadata(package: str | None, root: str | None) -> bool:
+    if root:
+        return package != root
+    return package == "elementary"
+
+
 @router.get("/models")
-async def get_models(search: str | None = None):
+def get_models(search: str | None = None):
     conn = None
     try:
         conn = get_conn(read_only=True)
-        query = f"""
-            SELECT
-                unique_id,
-                alias,
-                schema_name,
-                database_name,
-                description,
-                owner,
-                tags,
-                package_name,
-                path
-            FROM {_schema()}.dbt_models
-        """
-        if search:
-            query += f" WHERE alias ILIKE '%{search}%' OR description ILIKE '%{search}%'"
-        query += " ORDER BY schema_name, alias"
+        root = _root_package()
+        models = []
+        found_any = False
+        for kind, table, name_column in _KINDS:
+            try:
+                df = conn.execute(
+                    f"""
+                    SELECT unique_id, {name_column} AS table_name, schema_name, database_name,
+                           description, owner, tags, package_name, path
+                    FROM {_schema()}.{table}
+                    """
+                ).fetchdf()
+            except duckdb.CatalogException:
+                continue  # an older Elementary without seeds or sources
+            found_any = True
+            for r in _records(df):
+                models.append({
+                    "unique_id": r.get("unique_id"),
+                    "name": r.get("table_name"),
+                    "kind": kind,
+                    "schema": r.get("schema_name"),
+                    "database": r.get("database_name"),
+                    "description": r.get("description"),
+                    "owner": r.get("owner"),
+                    "tags": r.get("tags"),
+                    "package": r.get("package_name"),
+                    "path": r.get("path"),
+                    "metadata": _is_metadata(r.get("package_name"), root),
+                })
+        if not found_any:
+            return _fallback_models(conn, search)
 
-        df = conn.execute(query).fetchdf()
-        rows = _records(df)
-        models = [
-            {
-                "unique_id": r.get("unique_id"),
-                "name": r.get("alias"),
-                "schema": r.get("schema_name"),
-                "database": r.get("database_name"),
-                "description": r.get("description"),
-                "owner": r.get("owner"),
-                "tags": r.get("tags"),
-                "package": r.get("package_name"),
-                "path": r.get("path"),
-            }
-            for r in rows
-        ]
-        return {"models": models, "total": len(models)}
+        if search:
+            needle = search.lower()
+            models = [
+                m for m in models
+                if needle in (m["name"] or "").lower() or needle in (m["description"] or "").lower()
+            ]
+        models.sort(key=lambda m: (m["metadata"], m["schema"] or "", m["name"] or ""))
+        business = sum(1 for m in models if not m["metadata"])
+        return {"models": models, "total": len(models), "business_total": business}
 
     except HTTPException:
         return {"models": [], "total": 0, "error": "Database unavailable — another process may be using the DuckDB file"}
-    except duckdb.CatalogException:
-        if conn is not None:
-            return await _fallback_models(conn, search)
-        return {"models": [], "total": 0}
     except Exception:
         return {"models": [], "total": 0, "error": "Elementary catalog tables not found"}
     finally:
@@ -75,20 +107,30 @@ async def get_models(search: str | None = None):
             conn.close()
 
 
+def _find_table(conn, name: str) -> dict | None:
+    """A model, seed or source by its name in the lake, as Elementary lists it."""
+    for kind, table, name_column in _KINDS:
+        try:
+            df = conn.execute(
+                f"SELECT *, {name_column} AS table_name FROM {_schema()}.{table} "
+                f"WHERE {name_column} = ? LIMIT 1",
+                [name],
+            ).fetchdf()
+        except duckdb.CatalogException:
+            continue
+        if not df.empty:
+            return {**_records(df)[0], "kind": kind}
+    return None
+
+
 @router.get("/models/{model_name}")
-async def get_model_detail(model_name: str):
+def get_model_detail(model_name: str):
     conn = None
     try:
         conn = get_conn(read_only=True)
-        df = conn.execute(
-            f"SELECT * FROM {_schema()}.dbt_models WHERE alias = ? LIMIT 1",
-            [model_name],
-        ).fetchdf()
-
-        if df.empty:
-            raise HTTPException(404, f"Model '{model_name}' not found")
-
-        model_data = _records(df)[0]
+        model_data = _find_table(conn, model_name)
+        if model_data is None:
+            raise HTTPException(404, f"Table '{model_name}' not found")
 
         # Build column list from information_schema (always complete + real warehouse types).
         is_columns: dict = {}
@@ -100,7 +142,7 @@ async def get_model_detail(model_name: str):
                 WHERE table_schema = ? AND table_name = ?
                 ORDER BY ordinal_position
                 """,
-                [model_data.get("schema_name"), model_data.get("alias")],
+                [model_data.get("schema_name"), model_data.get("table_name")],
             ).fetchdf()
             for _, r in is_df.iterrows():
                 is_columns[r["column_name"]] = {
@@ -175,7 +217,8 @@ async def get_model_detail(model_name: str):
 
         return {
             "model": {
-                "name": model_data.get("alias"),
+                "name": model_data.get("table_name"),
+                "kind": model_data.get("kind"),
                 "unique_id": model_data.get("unique_id"),
                 "schema": model_data.get("schema_name"),
                 "database": model_data.get("database_name"),
@@ -197,7 +240,7 @@ async def get_model_detail(model_name: str):
 
 
 @router.get("/sources")
-async def get_sources():
+def get_sources():
     conn = get_conn(read_only=True)
     try:
         df = conn.execute(
@@ -215,7 +258,7 @@ async def get_sources():
 
 
 @router.get("/search")
-async def search_catalog(q: str):
+def search_catalog(q: str):
     conn = get_conn(read_only=True)
     results = []
 
@@ -251,7 +294,7 @@ async def search_catalog(q: str):
     return {"query": q, "results": results}
 
 
-async def _fallback_models(conn, search: str | None = None):
+def _fallback_models(conn, search: str | None = None):
     """List tables from information_schema when Elementary is not available."""
     try:
         query = """

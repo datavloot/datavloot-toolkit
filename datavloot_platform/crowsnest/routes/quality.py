@@ -25,7 +25,7 @@ def _records(df) -> list:
 
 
 @router.get("/test-results")
-async def get_test_results(limit: int = 100):
+def get_test_results(limit: int = 100):
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -59,26 +59,47 @@ async def get_test_results(limit: int = 100):
 
 
 @router.get("/summary")
-async def quality_summary():
+def quality_summary():
+    """
+    How the data stands now: every test's latest result, counted once.
+
+    Not every result of the last seven days added up, which counted a test
+    once per run and kept a test red after it passed again. A test with no
+    result in seven days drops out, so a test removed from the project does
+    not stay in the count.
+    """
     conn = None
     try:
         conn = get_conn(read_only=True)
         df = conn.execute(
             f"""
-            SELECT status, COUNT(*) as count
-            FROM {_schema()}.elementary_test_results
-            WHERE detected_at >= CURRENT_DATE - INTERVAL '7 days'
+            WITH latest AS (
+                SELECT
+                    status,
+                    detected_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY test_unique_id ORDER BY detected_at DESC
+                    ) AS n
+                FROM {_schema()}.elementary_test_results
+            )
+            SELECT status, COUNT(*) AS count, MAX(detected_at) AS last_result
+            FROM latest
+            WHERE n = 1 AND detected_at >= CURRENT_DATE - INTERVAL '7 days'
             GROUP BY status
             """
-        ).fetchdf()
+        ).fetchall()  # not fetchdf: a summary needs no pandas
 
         by_status: dict = {}
-        for _, row in df.iterrows():
-            by_status[row["status"].lower()] = int(row["count"])
+        last_result = None
+        for status, count, latest in df:
+            by_status[status.lower()] = int(count)
+            if last_result is None or latest > last_result:
+                last_result = latest
 
         total = sum(by_status.values())
         return {
-            "period": "last_7_days",
+            "period": "latest_per_test",
+            "last_result": str(last_result) if last_result is not None else None,
             "total_tests": total,
             "by_status": by_status,
             "health_score": _calc_health_score(by_status),
@@ -93,7 +114,7 @@ async def quality_summary():
 
 
 @router.get("/by-model")
-async def quality_by_model():
+def quality_by_model():
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -127,7 +148,7 @@ async def quality_by_model():
 
 
 @router.get("/anomalies")
-async def get_anomalies(limit: int = 50):
+def get_anomalies(limit: int = 50):
     conn = None
     try:
         conn = get_conn(read_only=True)
@@ -159,7 +180,7 @@ async def get_anomalies(limit: int = 50):
 
 
 @router.get("/by-test")
-async def quality_by_test(model: str):
+def quality_by_test(model: str):
     conn = None
     try:
         conn = get_conn(read_only=True)

@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { api } from '../lib/api';
 import { useApi, formatDuration, formatTimestamp } from '../lib/hooks';
 
@@ -11,27 +12,70 @@ export default function PipelinesPanel() {
   const services = useApi(() => api.getServices(), []);
   const dagsterUrl = services.data?.dagster_url || 'http://localhost:3000';
 
+  // "Materialize all": one run of every asset, as the same button in Dagster.
+  const [starting, setStarting] = useState(false);
+  const [notice, setNotice] = useState(null); // {kind: 'ok' | 'error', text}
+  const running = (data?.runs || []).some((r) => r.status === 'running' || r.status === 'queued');
+
+  const runEverything = async () => {
+    if (!window.confirm('Start a run of every asset? It loads every source again and rebuilds every table.')) {
+      return;
+    }
+    setStarting(true);
+    setNotice(null);
+    try {
+      const res = await api.materializeAll();
+      setNotice({ kind: 'ok', text: res.message });
+      reload();
+    } catch (err) {
+      setNotice({ kind: 'error', text: err.message });
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink-0 tracking-tight">Pipeline runs</h2>
+    <div className="space-y-5">
+      <div className="page-head">
+        <div>
+          <h2 className="page-title">Pipeline runs</h2>
+          <p className="page-lede">The last 30 runs in Dagster, refreshed every 15 seconds.</p>
+        </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={runEverything}
+            disabled={starting || running}
+            className="btn btn-primary disabled:opacity-50"
+            title={running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all does in Dagster'}
+          >
+            {starting ? 'Starting...' : 'Materialize all'}
+          </button>
           <a
             href={dagsterUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-datavloot-700 hover:text-datavloot-800 px-3 py-1.5 rounded-lg hover:bg-datavloot-50 transition-colors border border-datavloot-200"
+            className="btn"
           >
             Open Dagster ↗
           </a>
           <button
             onClick={reload}
-            className="text-xs text-ink-3 hover:text-ink-1 px-3 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
+            className="btn btn-ghost"
           >
             Refresh
           </button>
         </div>
       </div>
+
+      {notice && (
+        <div
+          className={`card px-4 py-3 text-sm ${
+            notice.kind === 'ok' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         {loading && !data ? (
@@ -53,23 +97,23 @@ export default function PipelinesPanel() {
               {data?.runs?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-ink-3 text-sm">
-                    No pipeline runs yet.{' '}
+                    No pipeline runs yet. Put your source files in place, then click <strong>Materialize all</strong> above, or{' '}
                     <a
                       href={dagsterUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-datavloot-600 hover:underline"
                     >
-                      Open Dagster
+                      open Dagster
                     </a>
-                    {' '}to start your first run.
+                    {' '}to choose what to run.
                   </td>
                 </tr>
               )}
               {data?.runs?.map((run) => (
                 <tr key={run.id} className="table-row">
                   <td className="table-cell">
-                    <StatusBadge status={run.status} />
+                    <StatusBadge status={run.status} error={run.error} />
                   </td>
                   <td className="table-cell font-medium">{run.job}</td>
                   <td className="table-cell">
@@ -96,10 +140,14 @@ export default function PipelinesPanel() {
   );
 }
 
-function StatusBadge({ status }) {
+// A failed run's label carries the part of its error that says what went
+// wrong (routes/pipelines.py error_summary), as a tooltip.
+function StatusBadge({ status, error }) {
   return (
-    <span className={`status-badge status-${status}`}>
-      {status === 'running' && <span className="w-1.5 h-1.5 rounded-full bg-current pulse-dot" />}
+    <span
+      className={`status-badge status-${status} ${error ? 'cursor-help' : ''}`}
+      title={error || undefined}
+    >
       {status}
     </span>
   );

@@ -42,9 +42,10 @@ Rules:
 - **Every Dagster asset or op that writes to the lake sets `pool=LAKE_POOL`** (`assets.py`):
   dbt assets, dlt assets, lake maintenance and any asset that writes through `storage.connect`.
   `dagster.yaml` limits the pool to one at a time, because the lake accepts one commit at a time;
-  without the pool, two writers committing together fail with `database is locked`. `dagster dev` and
-  `datavloot start` read that file only when `DAGSTER_HOME` is unset. If you set `DAGSTER_HOME`,
-  copy `dagster.yaml` into that directory.
+  without the pool, two writers committing together fail with `database is locked`. Dagster reads
+  that file from its home: `datavloot start` uses `.dagster/` in the project and copies
+  `dagster.yaml` there on every start, so edit the one in the project. If you set `DAGSTER_HOME`
+  yourself, copy `dagster.yaml` into that directory.
 - Readers (notebooks, the Crows Nest) open the lake read-only and can run at any time.
 
 A dev build can still collide with a Dagster commit at the same moment. dbt retries the statement
@@ -63,5 +64,5 @@ the lock is taken, the job skips deleting and the next run catches up.
 
 To switch the schedule off, set `DATAVLOOT_LAKE_MAINTENANCE=off` in a `.env` file in the project
 directory (or in the environment) and restart Dagster. The job then runs only when you start it in
-Dagster; `on`, the default, switches it back. With `DAGSTER_HOME` set, Dagster remembers a schedule
-you switched on or off in its UI, and that wins over the variable.
+Dagster; `on`, the default, switches it back. Dagster remembers a schedule you switched on or off
+in its UI (in `.dagster/`, kept between starts), and that wins over the variable.

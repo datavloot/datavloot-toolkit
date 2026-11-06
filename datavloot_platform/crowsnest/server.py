@@ -5,16 +5,20 @@ Serves the REST API at /api/* and the pre-built frontend static files at /*.
 Both run on the same port so no CORS configuration is needed.
 """
 
+import asyncio
 import pathlib
 from importlib.metadata import PackageNotFoundError, version
 
 import httpx
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
-from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
+from datavloot_platform.crowsnest import startup
 from datavloot_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.httpclient import async_client
+from datavloot_platform.crowsnest.processes import terminate_tree
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -134,12 +138,24 @@ class _CacheControlledStatic(StaticFiles):
         return response
 
 
-def create_app() -> FastAPI:
+def create_app(host: str | None = None) -> FastAPI:
+    """
+    The Crows Nest app. `host` is the address it will listen on: it decides
+    whether the SQL editor may write when CROWSNEST_SQL_WRITE is unset (see
+    config.sql_write_enabled). Without it, the editor stays read-only.
+    """
     app = FastAPI(
         title="Crows Nest",
         description="Unified dashboard for the Optimist data platform",
         version=VERSION,
     )
+    app.state.sql_write = sql_write_enabled(host)
+    # The Shut down button: only on a laptop, where the Crows Nest listens on
+    # this machine alone. On a shared host anyone signed in could stop the
+    # service for everyone. `server` is the uvicorn server the CLI runs this app
+    # in (cli.cmd_crowsnest); without one there is nothing this app can stop.
+    app.state.can_shutdown = is_loopback(host)
+    app.state.server = None
 
     # Off unless CROWSNEST_AUTH_TOKEN is set. Added before the routers so it
     # covers the API and the static dashboard alike -- serving the UI to anyone
@@ -158,35 +174,49 @@ def create_app() -> FastAPI:
     async def health_check():
         """Live connectivity check for all platform services."""
         config = get_config()
-        results: dict = {}
+        # The three at once. A short connect timeout, because on Windows a refused
+        # connection (a service that is not running) takes two seconds to fail.
+        timeout = httpx.Timeout(2.0, connect=0.75)
 
-        # Dagster: probe the GraphQL endpoint
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.post(
-                    config.dagster_graphql_url,
-                    json={"query": "{ __typename }"},
-                )
-                results["dagster"] = "ok" if resp.status_code == 200 else "offline"
-        except Exception:
-            results["dagster"] = "offline"
+        async def dagster() -> str:
+            try:
+                async with async_client(timeout) as client:
+                    resp = await client.post(
+                        config.dagster_graphql_url,
+                        json={"query": "{ __typename }"},
+                    )
+                    return "ok" if resp.status_code == 200 else "offline"
+            except Exception:
+                return "offline"
 
-        # DuckDB: open a connection the way the routes do, lake or file
-        try:
-            get_conn(read_only=True).close()
-            results["duckdb"] = "ok"
-        except Exception:
-            results["duckdb"] = "offline"
+        def duckdb() -> str:
+            # Open a connection the way the routes do, lake or file.
+            try:
+                get_conn(read_only=True).close()
+                return "ok"
+            except Exception:
+                return "offline"
 
-        # Marimo: probe its root URL
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(config.marimo_url)
-                results["marimo"] = "ok" if resp.status_code < 500 else "offline"
-        except Exception:
-            results["marimo"] = "offline"
+        async def marimo() -> str:
+            try:
+                async with async_client(timeout) as client:
+                    resp = await client.get(config.marimo_url)
+                    return "ok" if resp.status_code < 500 else "offline"
+            except Exception:
+                return "offline"
 
-        return {"services": results}
+        dagster_status, duckdb_status, marimo_status = await asyncio.gather(
+            dagster(), asyncio.to_thread(duckdb), marimo()
+        )
+        # Not answering is "starting" while `datavloot start` waits for Dagster
+        # to load the project, and "failed", with the reason, when that failed.
+        started, error = startup.dagster()
+        result = {"services": {"dagster": dagster_status, "duckdb": duckdb_status, "marimo": marimo_status}}
+        if dagster_status != "ok" and started in ("starting", "failed"):
+            result["services"]["dagster"] = started
+            if error:
+                result["dagster_error"] = error
+        return result
 
     @app.get("/api/services")
     async def get_services():
@@ -200,7 +230,63 @@ def create_app() -> FastAPI:
             "apps_url": config.apps_public_url or config.apps_url,
             "duckdb_path": config.duckdb_path,
             "version": VERSION,
+            "can_shutdown": _can_shutdown(),
         }
+
+    def _can_shutdown() -> bool:
+        return bool(app.state.can_shutdown and app.state.server is not None)
+
+    @app.post("/api/shutdown")
+    async def shutdown(background: BackgroundTasks):
+        """
+        Stop Datavloot: the Crows Nest, and with it the Dagster `datavloot start`
+        runs and the Marimo servers.
+
+        The uvicorn server is asked to exit once this response has gone out, so
+        the browser still hears that it worked. uvicorn then returns to the CLI,
+        which stops Dagster's process tree on its way out (cli.cmd_start), and
+        the normal exit runs the hooks that stop Marimo -- the same as closing
+        the terminal `datavloot start` runs in.
+        """
+        if not app.state.can_shutdown:
+            raise HTTPException(
+                403,
+                "Shutting down from the Crows Nest works only when it listens on this "
+                "machine alone; stop the service where it runs.",
+            )
+        server = app.state.server
+        if server is None:
+            raise HTTPException(
+                409, "This Crows Nest was not started with `datavloot start` or `launch`; stop it where it runs."
+            )
+        # Runs still going are cancelled first: their processes go down with
+        # Dagster, and Dagster would otherwise keep them "Started" for good.
+        from datavloot_platform.cli import cancel_runs
+
+        cancelled = await asyncio.to_thread(cancel_runs, get_config().dagster_graphql_url)
+        # Marimo now, not only at exit: the exit hooks run once uvicorn has
+        # finished shutting down, and a shutdown that stalls (a browser tab
+        # holding a connection open) left the notebook server running, holding
+        # its port for the next session.
+        await asyncio.to_thread(_stop_marimo)
+        # Dagster too, for the same reason: `datavloot start` stops it once the
+        # Crows Nest has returned, and a stalled shutdown never returned.
+        dagster = startup.dagster_process()
+        if dagster is not None:
+            await asyncio.to_thread(terminate_tree, dagster)
+        background.add_task(_exit)
+        return {"message": "Datavloot is stopping.", "cancelled_runs": cancelled}
+
+    def _stop_marimo() -> None:
+        notebooks._stop_server()
+        apps._stop_server()
+
+    def _exit() -> None:
+        app.state.server.should_exit = True
+        # The CLI's backstop (cli._exit_watchdog); absent in tests and other servers.
+        after = getattr(app.state, "after_shutdown", None)
+        if after is not None:
+            after()
 
     warning = check_static_freshness()
     if warning:
