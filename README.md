@@ -52,11 +52,19 @@ The script:
 4. Starts Dagster and the Crows Nest, and opens [http://localhost:8080](http://localhost:8080).
 5. Starts the first run, which downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
 
-Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder:
+Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder, on Windows:
+
+```powershell
+.venv\Scripts\datavloot start
+```
+
+On macOS and Linux:
 
 ```bash
-uv run datavloot start
+.venv/bin/datavloot start
 ```
+
+`uv run datavloot start` does the same, but only in a terminal opened after uv was installed. Running the install command again also starts the project.
 
 **Your own project instead of the demo.** Set `DATAVLOOT_PROJECT` to its repository first. The script then installs that project's latest tag with `datavloot new --from` (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asking for a token when the repository is private:
 

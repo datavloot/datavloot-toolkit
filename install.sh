@@ -147,10 +147,12 @@ main() {
     step "Starting Dagster and the Crows Nest"
     echo "The Crows Nest opens at http://localhost:$CROWSNEST_PORT. Keep this terminal open;"
     echo "closing it or pressing Ctrl+C stops Datavloot. To start it again later:"
-    printf '\033[33m    cd "%s" && uv run datavloot start\033[0m\n' "$dir"
+    # The project's own datavloot rather than `uv run`: a terminal opened before
+    # uv was installed does not have uv on its PATH yet.
+    printf '\033[33m    cd "%s" && .venv/bin/datavloot start\033[0m\n' "$dir"
     if [ "$(uname -s)" = "Darwin" ]; then
         echo "Or have it start at every login, with an app in ~/Applications:"
-        printf '\033[33m    cd "%s" && uv run datavloot autostart on\033[0m\n' "$dir"
+        printf '\033[33m    cd "%s" && .venv/bin/datavloot autostart on\033[0m\n' "$dir"
     fi
     if ! $existing && [ -n "$project" ]; then
         # No run of its own: a project usually reads files that are not in its
