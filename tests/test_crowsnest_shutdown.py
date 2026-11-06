@@ -27,18 +27,26 @@ def project(tmp_path, monkeypatch):
     monkeypatch.delenv("CROWSNEST_AUTH_TOKEN", raising=False)
     # Never a real Dagster: a running one on :3000 would get its runs cancelled.
     monkeypatch.setenv("CROWSNEST_DAGSTER_URL", "http://127.0.0.1:9/graphql")
+    # No Dagster process left over from another test's `datavloot start`.
+    from datavloot_platform.crowsnest import startup
+
+    startup.set_dagster_process(None)
     cn_config.reset_config()
     yield
+    startup.set_dagster_process(None)
     cn_config.reset_config()
 
 
 @pytest.fixture
 def cancelled(monkeypatch):
-    """Records cli.cancel_runs calls instead of making them."""
+    """Records cli.cancel_runs calls instead of making them; Marimo stops are recorded too."""
     from datavloot_platform import cli
+    from datavloot_platform.crowsnest.routes import apps, notebooks
 
     calls = []
     monkeypatch.setattr(cli, "cancel_runs", lambda url, **kw: calls.append(url) or ["r1"])
+    monkeypatch.setattr(notebooks, "_stop_server", lambda: calls.append("notebooks stopped"))
+    monkeypatch.setattr(apps, "_stop_server", lambda: calls.append("apps stopped"))
     return calls
 
 
@@ -57,8 +65,104 @@ def test_on_a_laptop_it_cancels_runs_then_asks_the_server_to_exit(cancelled):
     r = client.post("/api/shutdown")
     assert r.status_code == 200, r.text
     assert r.json()["cancelled_runs"] == ["r1"]
-    assert cancelled == ["http://127.0.0.1:9/graphql"]
+    # Runs first, then Marimo, before the server is asked to exit: the exit
+    # hooks come only once uvicorn has finished, and that can stall.
+    assert cancelled == ["http://127.0.0.1:9/graphql", "notebooks stopped", "apps stopped"]
     assert app.state.server.should_exit is True
+
+
+def test_shut_down_stops_dagster_itself_and_arms_the_backstop(cancelled, monkeypatch):
+    """`datavloot start`'s Dagster, without waiting for the CLI to get control back."""
+    from datavloot_platform.crowsnest import server as server_module
+    from datavloot_platform.crowsnest import startup
+
+    dagster = object()
+    stopped, armed = [], []
+    monkeypatch.setattr(server_module, "terminate_tree", stopped.append)
+    startup.set_dagster_process(dagster)
+    try:
+        app = _app("127.0.0.1")
+        app.state.after_shutdown = lambda: armed.append(True)
+        assert TestClient(app).post("/api/shutdown").status_code == 200
+    finally:
+        startup.set_dagster_process(None)
+    assert stopped == [dagster]
+    assert armed == [True]
+    assert app.state.server.should_exit is True
+
+
+def test_a_real_crows_nest_exits_while_a_tab_keeps_a_connection_open(tmp_path):
+    """
+    End to end: `datavloot launch` in a throwaway project, a client holding a
+    keep-alive connection like a browser tab, then Shut down. The process must
+    be gone within the grace period plus a margin, not wait for the tab.
+    """
+    pytest.importorskip("uvicorn")
+    duckdb = pytest.importorskip("duckdb")
+    httpx = pytest.importorskip("httpx")
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    db = tmp_path / "p.duckdb"
+    duckdb.connect(str(db)).close()
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    env = {
+        **os.environ,
+        "CROWSNEST_DUCKDB_PATH": str(db),
+        "CROWSNEST_DAGSTER_URL": "http://127.0.0.1:9/graphql",
+        "CROWSNEST_MARIMO_URL": "http://127.0.0.1:9",
+    }
+    env.pop("CROWSNEST_AUTH_TOKEN", None)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "datavloot_platform.cli", "launch", "--port", str(port), "--no-open"],
+        cwd=tmp_path, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    url = f"http://127.0.0.1:{port}"
+    try:
+        tab = httpx.Client()  # its pooled connection stays open, as a tab's does
+        for _ in range(60):
+            try:
+                tab.get(f"{url}/api/services", timeout=2)
+                break
+            except httpx.HTTPError:
+                time.sleep(0.5)
+        else:
+            pytest.fail("the Crows Nest did not start")
+
+        assert httpx.post(f"{url}/api/shutdown", timeout=30).status_code == 200
+        proc.wait(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            pytest.fail("the Crows Nest was still running 15 seconds after Shut down")
+
+
+def test_the_server_does_not_wait_for_ever_on_open_connections(monkeypatch):
+    """A browser tab holding a connection kept a Shut down from finishing."""
+    pytest.importorskip("uvicorn")
+    import argparse
+
+    import uvicorn
+
+    from datavloot_platform import cli
+
+    seen = {}
+
+    class Server:
+        def __init__(self, config):
+            seen["timeout"] = config.timeout_graceful_shutdown
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(uvicorn, "Server", Server)
+    cli.cmd_crowsnest(argparse.Namespace(host="127.0.0.1", port=8099, open=False))
+    assert seen["timeout"] == cli.SHUTDOWN_GRACE_SECONDS > 0
 
 
 @pytest.mark.parametrize("host", ["0.0.0.0", None])

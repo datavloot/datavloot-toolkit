@@ -17,6 +17,7 @@ from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_toke
 from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
 from datavloot_platform.crowsnest import startup
 from datavloot_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.processes import terminate_tree
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -262,8 +263,29 @@ def create_app(host: str | None = None) -> FastAPI:
         from datavloot_platform.cli import cancel_runs
 
         cancelled = await asyncio.to_thread(cancel_runs, get_config().dagster_graphql_url)
-        background.add_task(setattr, server, "should_exit", True)
+        # Marimo now, not only at exit: the exit hooks run once uvicorn has
+        # finished shutting down, and a shutdown that stalls (a browser tab
+        # holding a connection open) left the notebook server running, holding
+        # its port for the next session.
+        await asyncio.to_thread(_stop_marimo)
+        # Dagster too, for the same reason: `datavloot start` stops it once the
+        # Crows Nest has returned, and a stalled shutdown never returned.
+        dagster = startup.dagster_process()
+        if dagster is not None:
+            await asyncio.to_thread(terminate_tree, dagster)
+        background.add_task(_exit)
         return {"message": "Datavloot is stopping.", "cancelled_runs": cancelled}
+
+    def _stop_marimo() -> None:
+        notebooks._stop_server()
+        apps._stop_server()
+
+    def _exit() -> None:
+        app.state.server.should_exit = True
+        # The CLI's backstop (cli._exit_watchdog); absent in tests and other servers.
+        after = getattr(app.state, "after_shutdown", None)
+        if after is not None:
+            after()
 
     warning = check_static_freshness()
     if warning:
