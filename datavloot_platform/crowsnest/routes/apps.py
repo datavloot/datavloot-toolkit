@@ -22,6 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.httpclient import async_client
 from datavloot_platform.crowsnest.processes import port_in_use, port_taken_message, start_marimo, stop_process
 
 router = APIRouter()
@@ -91,7 +92,7 @@ async def _ensure_server(url: str) -> None:
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + _START_TIMEOUT_SECONDS
-    async with httpx.AsyncClient(timeout=2.0) as client:
+    async with async_client(2.0) as client:
         while loop.time() < deadline:
             if _apps_process.poll() is not None:
                 raise HTTPException(

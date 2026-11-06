@@ -25,11 +25,11 @@ Write access is to the database, not to the machine.
 import time
 
 import duckdb
-import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from datavloot_platform.crowsnest.config import get_config
+from datavloot_platform.crowsnest.httpclient import async_client
 from datavloot_platform.crowsnest.db import get_conn, is_lock_error
 
 router = APIRouter()
@@ -310,7 +310,7 @@ async def _active_run() -> str | None:
     from datavloot_platform.crowsnest.routes.pipelines import _job_label
 
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
+        async with async_client(2.0) as client:
             resp = await client.post(
                 get_config().dagster_graphql_url,
                 json={

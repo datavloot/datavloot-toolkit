@@ -17,6 +17,7 @@ from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_toke
 from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
 from datavloot_platform.crowsnest import startup
 from datavloot_platform.crowsnest.db import get_conn
+from datavloot_platform.crowsnest.httpclient import async_client
 from datavloot_platform.crowsnest.processes import terminate_tree
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
@@ -179,7 +180,7 @@ def create_app(host: str | None = None) -> FastAPI:
 
         async def dagster() -> str:
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                async with async_client(timeout) as client:
                     resp = await client.post(
                         config.dagster_graphql_url,
                         json={"query": "{ __typename }"},
@@ -198,7 +199,7 @@ def create_app(host: str | None = None) -> FastAPI:
 
         async def marimo() -> str:
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
+                async with async_client(timeout) as client:
                     resp = await client.get(config.marimo_url)
                     return "ok" if resp.status_code < 500 else "offline"
             except Exception:

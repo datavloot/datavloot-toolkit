@@ -334,7 +334,7 @@ def test_an_active_run_is_found_in_dagster(monkeypatch):
 
     real_client = httpx.AsyncClient
     monkeypatch.setattr(
-        query_route.httpx, "AsyncClient",
+        httpx, "AsyncClient",
         lambda **kw: real_client(transport=httpx.MockTransport(dagster), **kw),
     )
     assert asyncio.run(query_route._active_run()) == "Materialize: vessels"
