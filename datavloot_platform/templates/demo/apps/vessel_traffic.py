@@ -122,10 +122,13 @@ def _(ARRIVALS, DEPARTURES, alt, mo, selection):
     )
     _chart = (
         alt.Chart(_monthly)
-        .mark_bar(cornerRadiusTopLeft=3, cornerRadiusTopRight=3)
+        # Plain rectangles with a gap between the pair: rounded corners and bars
+        # that touch are drawn as paths whose edges leave white specks on the
+        # canvas at some zoom levels and widths.
+        .mark_bar()
         .encode(
             x=alt.X("month(month):O", title=None),
-            xOffset="event:N",
+            xOffset=alt.XOffset("event:N", scale=alt.Scale(paddingInner=0.08)),
             y=alt.Y("events:Q", title="Port events"),
             color=alt.Color(
                 "event:N",
