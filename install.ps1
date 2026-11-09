@@ -197,6 +197,8 @@ function Install-Datavloot {
         Write-Host "    cd `"$dir`"; .venv\Scripts\datavloot start" -ForegroundColor Yellow
         Write-Host "Or have it start at every login, with a shortcut on the desktop and in the Start menu:"
         Write-Host "    cd `"$dir`"; .venv\Scripts\datavloot autostart on" -ForegroundColor Yellow
+        Write-Host "Or only the shortcut, without starting at login:"
+        Write-Host "    cd `"$dir`"; .venv\Scripts\datavloot shortcut on" -ForegroundColor Yellow
         if (-not $existing -and $project) {
             # No run of its own: a project usually reads files that are not in
             # its repository, and a run before they are there only fails.
