@@ -169,6 +169,7 @@ async def get_recent_runs(limit: int = 20, errors: bool = True):
                     "id": r["runId"],
                     "job": _job_label(r["jobName"], r.get("assetSelection")),
                     "job_name": r["jobName"],
+                    "assets": _asset_keys(r.get("assetSelection")),
                     "status": _normalize_status(r["status"]),
                     "started_at": r.get("startTime"),
                     "ended_at": r.get("endTime"),
@@ -255,12 +256,33 @@ def job_states(runs: list[dict]) -> dict[str, dict]:
 
     A job that failed and then succeeded is fine again: only its latest settled
     run counts, so an old failure does not keep a job red.
+
+    Runs started with "Materialize" have no job: each selection of assets gets
+    a label of its own, so a later "Materialize all" never settles the failed
+    run of one asset. Such a failed run is left out once every asset it
+    selected was in a later successful Materialize run.
     """
     latest: dict[str, dict] = {}
     for run in runs:
         if run["status"] in _SETTLED and run["job"] not in latest:
             latest[run["job"]] = run
-    return latest
+    return {
+        job: run for job, run in latest.items()
+        if not (run["status"] == "failure" and _materialized_since(run, runs))
+    }
+
+
+def _materialized_since(failed: dict, runs: list[dict]) -> bool:
+    """Whether later successful Materialize runs, together, selected every asset of `failed`."""
+    if not _is_asset_job(failed.get("job_name", "")) or not failed.get("assets"):
+        return False
+    since: set[str] = set()
+    for run in runs:  # newest first: the runs before `failed` came after it
+        if run is failed:
+            break
+        if run["status"] == "success" and _is_asset_job(run.get("job_name", "")):
+            since.update(run.get("assets") or [])
+    return set(failed["assets"]) <= since
 
 
 @router.get("/summary")
@@ -318,14 +340,23 @@ def _job_label(job_name: str, asset_selection: list | None) -> str:
     project: Dagster files it under a hidden job, __ASSET_JOB. What tells such
     runs apart is the assets they materialized, so that is what is shown.
     """
-    if not job_name.startswith("__ASSET_JOB"):
+    if not _is_asset_job(job_name):
         return job_name
-    keys = ["/".join(key["path"]) for key in asset_selection or []]
+    keys = _asset_keys(asset_selection)
     if not keys:
         return "Materialize"
     if len(keys) <= 2:
         return "Materialize: " + ", ".join(keys)
     return f"Materialize · {len(keys)} assets"
+
+
+def _is_asset_job(job_name: str) -> bool:
+    """Dagster's hidden job for "Materialize" runs; older Dagster numbers it (__ASSET_JOB_0)."""
+    return job_name.startswith("__ASSET_JOB")
+
+
+def _asset_keys(asset_selection: list | None) -> list[str]:
+    return ["/".join(key["path"]) for key in asset_selection or []]
 
 
 def _normalize_status(dagster_status: str) -> str:

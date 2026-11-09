@@ -69,6 +69,51 @@ def test_a_job_that_succeeded_after_failing_is_fine_again():
     assert states["build"]["id"] == "1", "a cancelled run does not settle how a job stands"
 
 
+def _materialize(run_id, status, *assets):
+    return {"id": run_id, "job": f"Materialize: {', '.join(assets)}", "job_name": "__ASSET_JOB",
+            "assets": list(assets), "status": status}
+
+
+def test_a_later_materialize_all_settles_a_failed_asset():
+    """
+    One asset failed, then "Materialize all" succeeded: nothing is failing.
+
+    The two runs have different labels, so by label alone the failed run of
+    the one asset stayed the latest of its "job", and the banner kept saying
+    "1 failing".
+    """
+    runs = [
+        _materialize("2", "success", "a", "b", "c"),
+        _materialize("1", "failure", "b"),
+    ]
+    states = pipelines.job_states(runs)
+    assert [run["id"] for run in states.values()] == ["2"]
+
+
+def test_a_failed_asset_stays_failing_until_each_of_its_assets_succeeded():
+    runs = [
+        _materialize("4", "success", "a"),
+        _materialize("3", "failure", "c"),   # newer than the failure below: it says nothing on a, b
+        _materialize("2", "failure", "a", "b"),
+        _materialize("1", "success", "a", "b"),  # older: it cannot settle a later failure
+    ]
+    failing = {run["id"] for run in pipelines.job_states(runs).values() if run["status"] == "failure"}
+    assert failing == {"2", "3"}
+
+    runs.insert(0, _materialize("5", "success", "b"))
+    failing = {run["id"] for run in pipelines.job_states(runs).values() if run["status"] == "failure"}
+    assert failing == {"3"}, "a and b each succeeded since, in separate runs"
+
+
+def test_a_materialize_run_does_not_settle_a_failed_job():
+    """A job of the project may do more than materialize its assets; only its own next run settles it."""
+    runs = [
+        _materialize("2", "success", "a"),
+        {"id": "1", "job": "load", "job_name": "load", "assets": ["a"], "status": "failure"},
+    ]
+    assert pipelines.job_states(runs)["load"]["id"] == "1"
+
+
 def test_the_summary_counts_jobs_and_lists_only_those_still_failing(client, monkeypatch):
     async def dagster(query, variables=None):
         if "logsForRun" in query:
