@@ -265,6 +265,29 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
     assert outside == [], f"assets that write outside the lake pool: {outside}"
 
 
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_a_run_loads_the_code_once(scaffold: pathlib.Path, template: str):
+    """
+    Every run executes its steps in its own process.
+
+    With Dagster's default multiprocess executor each step started a process of
+    its own that loaded the project's code again: on Windows about 48 seconds
+    per step, against 3 to 25 seconds of real work. The lake pool lets one
+    writer in at a time, so the extra processes bought no parallelism.
+    """
+    tree = ast.parse((_platform_dir(template, scaffold) / "definitions.py").read_text(encoding="utf-8"))
+    definitions = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Definitions"
+    ]
+
+    assert len(definitions) == 1, "expected one Definitions(...) in definitions.py"
+    executor = _keyword(definitions[0], "executor")
+    assert isinstance(executor, ast.Name) and executor.id == "in_process_executor", (
+        "Definitions has no executor=in_process_executor; every step would load the code again"
+    )
+
+
 @pytest.mark.parametrize(
     "value, on",
     [(None, True), ("", True), ("on", True), ("off", False), (" OFF ", False)],
