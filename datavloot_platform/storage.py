@@ -21,6 +21,12 @@ and sqlite extensions:
   - One commit at a time. A second process committing at the same moment fails
     with "database is locked" instead of waiting; neither DuckLake's retries nor
     a SQLite busy timeout change that. Writers have to take turns.
+  - The catalog is created by the project's own DuckDB. DuckLake writes its
+    catalog format version into the catalog, and refuses a catalog newer than
+    it can read; there is no way back. A `datavloot` run through uvx has a
+    DuckDB of its own, which with `--prerelease allow` is a development build,
+    so `datavloot new` and `demo` do not create the lake: `datavloot start`, a
+    notebook or the first pipeline run does, from the project's environment.
 
 duckdb and dlt are imported lazily, so the CLI and the fast test tier work
 without the optimist extra.
@@ -173,22 +179,37 @@ def connect(
     leaves the built-in engine with an empty database. Running it again is
     harmless. For notebooks only: the default connection is shared by the whole
     process, and an app under `marimo run` serves every viewer from one.
+
+    A read-only connection to a project without a lake creates the lake first,
+    so a notebook opened before the first run finds an empty one.
+
+    Raises CatalogTooNew when the catalog was written by a newer DuckLake.
     """
     import duckdb
 
     project_dir = _resolve(project_dir)
     alias = project_name(project_dir)
+    if read_only and not catalog_path(project_dir).is_file():
+        create(project_dir)
     conn = duckdb.default_connection() if default else duckdb.connect()
     for name in extensions.REQUIRED:
         extensions.ensure_loaded(conn, name)
     if not read_only:
         lake_dir(project_dir).mkdir(parents=True, exist_ok=True)
-    conn.execute(
-        attach_statement(
-            catalog_path(project_dir), data_path(project_dir), alias,
-            read_only=read_only, if_not_exists=default,
+    try:
+        conn.execute(
+            attach_statement(
+                catalog_path(project_dir), data_path(project_dir), alias,
+                read_only=read_only, if_not_exists=default,
+            )
         )
-    )
+    except Exception as e:
+        too_new = catalog_too_new(catalog_path(project_dir), e)
+        if too_new is None:
+            raise
+        if not default:
+            conn.close()
+        raise too_new from e
     conn.execute(f"USE {alias}")
     return conn
 
@@ -196,6 +217,75 @@ def connect(
 def create(project_dir: pathlib.Path) -> None:
     """Create the project's lake if it does not exist yet, so readers find one before the first run."""
     connect(project_dir).close()
+
+
+class CatalogTooNew(RuntimeError):
+    """The lake's catalog was written by a newer DuckLake than this DuckDB has."""
+
+
+_MISMATCH = re.compile(
+    r"catalog version mismatch: catalog version is (\S+?),? but the extension requires version (\S+?)\.?(?:\s|$)",
+    re.I,
+)
+
+
+def _release(version: str) -> tuple[int, ...]:
+    """'1.1-dev1' -> (1, 1): the release a (pre-release) catalog version belongs to."""
+    return tuple(int(part) for part in re.findall(r"\d+", version.split("-")[0]))
+
+
+def catalog_too_new(catalog: pathlib.Path, error: Exception) -> CatalogTooNew | None:
+    """
+    A CatalogTooNew explaining `error`, when it is DuckLake refusing a catalog
+    of a later release than it reads; None for any other error.
+
+    DuckLake's own message suggests AUTOMATIC_MIGRATION, which only migrates
+    forward. A newer catalog cannot be read by this DuckDB at all, so the
+    message says what can be done instead, and whether the catalog holds any
+    tables: an empty one can simply be deleted.
+    """
+    match = _MISMATCH.search(str(error))
+    if not match:
+        return None
+    found, supported = match.groups()
+    if _release(found) <= _release(supported):
+        return None
+    tables = _table_count(catalog)
+    if tables == 0:
+        remedy = (
+            "It holds no tables, so nothing is lost by deleting it: remove "
+            f"{catalog.name} (and any {catalog.name}-wal and {catalog.name}-shm "
+            "next to it) and the lake is created again, by the project's own "
+            "DuckDB, on the next start or run."
+        )
+    else:
+        what = "tables" if tables is None else f"{tables} table(s)"
+        remedy = (
+            f"It holds {what}. Run the project with a DuckDB whose DuckLake reads "
+            f"catalog version {found} (the one that wrote it, see `created_by` in "
+            "its ducklake_metadata table), or rebuild the lake: move the lake "
+            "folder aside and rerun the pipelines."
+        )
+    return CatalogTooNew(
+        f"The lake's catalog {catalog} has DuckLake catalog version {found}, but this "
+        f"project's DuckDB reads version {supported}. It was written by a newer DuckDB, "
+        "usually a development build, for example one that `uvx --prerelease allow` "
+        "installed. A catalog cannot be migrated back to an older version.\n" + remedy
+    )
+
+
+def _table_count(catalog: pathlib.Path) -> int | None:
+    """How many tables a DuckLake catalog has ever had; None when it cannot be read."""
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(f"{pathlib.Path(catalog).resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            return con.execute("SELECT count(*) FROM ducklake_table").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
 
 
 def dlt_destination(project_dir: pathlib.Path | None = None):

@@ -36,20 +36,23 @@ def _copy_template(source: pathlib.Path, dest: pathlib.Path) -> None:
 
 def _preinstall_extensions(dest: pathlib.Path) -> None:
     """
-    Install the DuckDB extensions now, while the user is here to read a failure,
-    then create the project's empty lake so readers find one before the first run.
+    Install the DuckDB extensions now, while the user is here to read a failure.
 
     Best effort: a failed download prints the manual route and the project is
-    still created; the lake is then created by whatever attaches it first.
-    Without the optimist extra there is no duckdb to install into, and nothing
-    that would load an extension either.
+    still created. Without the optimist extra there is no duckdb to install
+    into, and nothing that would load an extension either.
+
+    The lake is not created here. This DuckDB is the CLI's, which need not be
+    the project's -- under uvx it is a separate environment -- and a catalog
+    written by a newer DuckLake cannot be read by an older one (storage.py).
+    `datavloot start` creates it with the project's own DuckDB (_check_lake).
     """
     try:
         import duckdb
     except ImportError:
         return
 
-    from datavloot_platform import extensions, storage
+    from datavloot_platform import extensions
 
     print(f"Installing DuckDB extensions ({', '.join(extensions.REQUIRED)})…", flush=True)
     conn = duckdb.connect()
@@ -59,8 +62,30 @@ def _preinstall_extensions(dest: pathlib.Path) -> None:
         conn.close()
     for message in failures:
         print(f"Warning: {message}\n", file=sys.stderr)
-    if not failures:
-        storage.create(dest)
+
+
+def _check_lake(project_dir: pathlib.Path) -> None:
+    """
+    Create the project's lake if it has none, or check that this DuckDB can read it.
+
+    Run by `start`, in the project's environment, so the catalog is created by
+    the DuckDB that will use it, and readers find a lake before the first run.
+    A catalog from a newer DuckLake stops the start with what to do about it,
+    rather than failing the first run with DuckLake's own message. Anything
+    else -- no network for the extensions, a locked catalog -- is a warning:
+    the Crows Nest and the runs report it again where it matters.
+    """
+    from datavloot_platform import storage
+
+    if storage.find_project_dir(project_dir) != project_dir.resolve():
+        return
+    exists = storage.catalog_path(project_dir).is_file()
+    try:
+        storage.connect(project_dir, read_only=exists).close()
+    except storage.CatalogTooNew as e:
+        sys.exit(f"Error: {e}")
+    except Exception as e:
+        print(f"Warning: could not open the lake in {storage.lake_dir(project_dir)}: {e}\n", file=sys.stderr)
 
 
 def _warn_about_location(path: pathlib.Path, project_name: str) -> None:
@@ -709,6 +734,8 @@ def cmd_start(args: argparse.Namespace) -> None:
             f"already running, open http://localhost:{port}; otherwise stop the program "
             "that holds the port and start again."
         )
+    # Also before Dagster: a lake this DuckDB cannot read stops the start here.
+    _check_lake(project_dir)
 
     # This environment's scripts first on the PATH, for Dagster and the dbt it
     # runs: started without activating the venv (a shortcut, autostart), the

@@ -599,6 +599,8 @@ def start(project, monkeypatch):
     monkeypatch.setattr(cli, "_wait_for_dagster", lambda *args: None)
     monkeypatch.setattr(cli, "cmd_crowsnest", lambda args: marker_seen.append(autostart.start_running(project)))
     monkeypatch.setattr(cli, "terminate_tree", lambda proc: None)
+    # Creating or checking the lake is tested in test_cli_lake.py.
+    monkeypatch.setattr(cli, "_check_lake", lambda project_dir: None)
     return popens, marker_seen
 
 
