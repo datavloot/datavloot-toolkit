@@ -153,6 +153,8 @@ main() {
     if [ "$(uname -s)" = "Darwin" ]; then
         echo "Or have it start at every login, with an app in ~/Applications:"
         printf '\033[33m    cd "%s" && .venv/bin/datavloot autostart on\033[0m\n' "$dir"
+        echo "Or only the app, without starting at login:"
+        printf '\033[33m    cd "%s" && .venv/bin/datavloot shortcut on\033[0m\n' "$dir"
     fi
     if ! $existing && [ -n "$project" ]; then
         # No run of its own: a project usually reads files that are not in its

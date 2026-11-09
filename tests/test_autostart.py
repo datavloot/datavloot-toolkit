@@ -326,7 +326,7 @@ def test_two_projects_with_one_folder_name_get_two_agents(macos, tmp_path):
 # --------------------------------------------------------------------------
 
 def test_status_says_off_then_on_then_what_is_missing(windows, project):
-    assert autostart.status(project)[0] == "Autostart is off for this project."
+    assert autostart.status(project)[0] == "Autostart is off for this project, and it has no shortcut."
     brand(project, "KetenConnect")
     autostart.turn_on(project)
     lines = autostart.status(project)
@@ -362,16 +362,125 @@ def test_on_refuses_on_linux(home, project, monkeypatch):
 
 def test_the_cli_knows_the_new_commands(monkeypatch, tmp_path):
     called = []
-    monkeypatch.setattr(autostart, "main", lambda action, d: called.append(("autostart", action)))
+    monkeypatch.setattr(
+        autostart, "main",
+        lambda action, d, login=True: called.append(("autostart" if login else "shortcut", action)),
+    )
     monkeypatch.setattr(autostart, "open_crowsnest", lambda d: called.append(("open",)) or 0)
     monkeypatch.chdir(tmp_path)
-    for argv in (["autostart", "on"], ["autostart", "status"], ["open"]):
+    for argv in (["autostart", "on"], ["autostart", "status"], ["shortcut", "on"], ["shortcut", "off"], ["open"]):
         monkeypatch.setattr(sys, "argv", ["datavloot", *argv])
         try:
             cli.main()
         except SystemExit as e:
             assert e.code == 0
-    assert called == [("autostart", "on"), ("autostart", "status"), ("open",)]
+    assert called == [
+        ("autostart", "on"), ("autostart", "status"), ("shortcut", "on"), ("shortcut", "off"), ("open",),
+    ]
+
+
+# --------------------------------------------------------------------------
+# a shortcut without autostart
+# --------------------------------------------------------------------------
+
+def test_shortcut_on_windows_makes_the_shortcuts_without_the_login_entry(windows, venv, project):
+    brand(project, "KetenConnect")
+    made = autostart.turn_on(project, login=False)
+
+    assert not startup(windows).exists() or not list(startup(windows).iterdir())
+    desktop = json.loads((windows / "Desktop" / "KetenConnect.lnk").read_text(encoding="utf-8"))
+    menu = json.loads((startup(windows).parent / "KetenConnect.lnk").read_text(encoding="utf-8"))
+    assert desktop["arguments"] == menu["arguments"] == "-m datavloot_platform.cli open"
+    assert [line.split(":")[0] for line in made] == ["Start menu", "Desktop"]
+
+
+def test_shortcut_on_after_autostart_on_keeps_only_the_shortcuts(windows, project):
+    brand(project, "KetenConnect")
+    autostart.turn_on(project)
+    assert (startup(windows) / "KetenConnect.lnk").is_file()
+
+    autostart.turn_on(project, login=False)
+
+    assert not (startup(windows) / "KetenConnect.lnk").exists()
+    assert (windows / "Desktop" / "KetenConnect.lnk").is_file()
+    assert autostart.status(project)[0] == "KetenConnect has a shortcut; autostart at login is off:"
+
+
+def test_shortcut_off_leaves_nothing_behind(windows, project):
+    before_home, before_project = files_under(windows), files_under(project)
+    autostart.turn_on(project, login=False)
+    autostart.turn_off(project)
+    assert {p for p in files_under(windows) - before_home if pathlib.Path(p).is_file()} == set()
+    assert files_under(project) == before_project
+
+
+def test_shortcut_on_macos_makes_the_app_without_a_launch_agent(macos, project):
+    brand(project, "KetenConnect")
+    autostart.turn_on(project)
+    autostart.turn_on(project, login=False)
+
+    assert not list((macos / "Library" / "LaunchAgents").iterdir())
+    assert (macos / "Applications" / "KetenConnect.app" / "Contents" / "Info.plist").is_file()
+    autostart.turn_off(project)
+    assert not list((macos / "Applications").iterdir())
+
+
+def test_a_record_from_before_shortcut_reads_as_autostart(windows, project):
+    """Records written before `login` was recorded were all autostart."""
+    brand(project, "KetenConnect")
+    autostart.turn_on(project)
+    record = autostart.read_record(project)
+    del record["login"]
+    autostart._write_record(project, record)
+    assert autostart.status(project)[0] == "Autostart is on for KetenConnect:"
+
+
+def test_off_waits_for_a_shortcut_windows_still_holds(windows, project, monkeypatch):
+    """Explorer reads a new .lnk for a moment; deleting it then fails with a sharing violation."""
+    autostart.turn_on(project, login=False)
+    real_unlink, refusals = pathlib.Path.unlink, []
+
+    def unlink(self, missing_ok=False):
+        if self.suffix == ".lnk" and len(refusals) < 2:
+            refusals.append(self)
+            raise PermissionError(32, "used by another process")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(pathlib.Path, "unlink", unlink)
+    monkeypatch.setattr(autostart.time, "sleep", lambda s: None)
+    autostart.turn_off(project)
+    assert len(refusals) == 2
+    assert not (windows / "Desktop" / "keten connect.lnk").exists()
+    assert autostart.read_record(project) is None
+
+
+def test_off_keeps_what_it_could_not_remove_for_next_time(windows, project, monkeypatch):
+    autostart.turn_on(project, login=False)
+    desktop = windows / "Desktop" / "keten connect.lnk"
+    real_unlink = pathlib.Path.unlink
+
+    def unlink(self, missing_ok=False):
+        if self == desktop:
+            raise PermissionError(32, "used by another process")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(pathlib.Path, "unlink", unlink)
+    monkeypatch.setattr(autostart.time, "sleep", lambda s: None)
+    with pytest.raises(SystemExit, match="Run the same command again"):
+        autostart.turn_off(project)
+    assert autostart.read_record(project)["files"] == [str(desktop)]
+
+    monkeypatch.setattr(pathlib.Path, "unlink", real_unlink)
+    assert autostart.turn_off(project) == [str(desktop)]
+    assert autostart.read_record(project) is None
+
+
+def test_shortcut_main_says_what_it_did(windows, project, capsys):
+    autostart.main("on", project, login=False)
+    out = capsys.readouterr().out
+    assert "does not start at login" in out and "datavloot shortcut off" in out
+    autostart.main("off", project, login=False)
+    assert "The shortcut is gone. Removed:" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------

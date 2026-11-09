@@ -10,9 +10,13 @@ Start a project's Datavloot at login, with a shortcut to its Crows Nest (#116).
     open`: in the Start menu and on the desktop on Windows, as a small app in
     ~/Applications on macOS.
 
-`off` removes all of it, and `status` says what is there. What `on` made is
-recorded in .datavloot/autostart.json in the project, so `off` removes exactly
-that, even after the project was renamed in branding.yml.
+`datavloot shortcut on` puts down only the shortcut, for someone who wants to
+open Datavloot with a click but not have it start at every login; run after
+`autostart on`, it takes the login entry away and keeps the shortcut.
+
+`off` (of either) removes all of it, and `status` says what is there. What `on`
+made is recorded in .datavloot/autostart.json in the project, so `off` removes
+exactly that, even after the project was renamed in branding.yml.
 
 At login nobody watches a terminal, so `start` writes everything to
 logs/datavloot-start.log. A shortcut cannot show an error itself: `datavloot
@@ -113,7 +117,7 @@ def icon_source(project_dir: pathlib.Path) -> tuple[pathlib.Path, str | None]:
         return _FALLBACK_ICON, (
             "branding/logo.svg cannot be turned into an icon here, so the shortcut gets "
             "the datavloot mark. Put a square branding/icon.png next to it and run "
-            "`datavloot autostart on` again for the project's own."
+            "this command again for the project's own."
         )
     return _FALLBACK_ICON, None
 
@@ -525,7 +529,7 @@ def write_windows_shortcuts(shortcuts: list[dict]) -> None:
     _powershell(_SHORTCUTS_PS1, {"DATAVLOOT_SHORTCUTS": json.dumps(shortcuts)})
 
 
-def _windows_plan(project_dir: pathlib.Path, name: str, icon: "pathlib.Path | None") -> list[dict]:
+def _windows_plan(project_dir: pathlib.Path, name: str, icon: "pathlib.Path | None", login: bool = True) -> list[dict]:
     folders = windows_folders()
     file_name = _file_name(name) + ".lnk"
     pythonw = python(gui=True)
@@ -540,8 +544,8 @@ def _windows_plan(project_dir: pathlib.Path, name: str, icon: "pathlib.Path | No
             "icon": str(icon) if icon else "",
         }
 
-    return [
-        link(folders["startup"] / file_name, start_args(), f"Start {name} (Datavloot) at login"),
+    at_login = [link(folders["startup"] / file_name, start_args(), f"Start {name} (Datavloot) at login")]
+    return (at_login if login else []) + [
         link(folders["programs"] / file_name, open_args(), f"Open {name} in the Crows Nest"),
         link(folders["desktop"] / file_name, open_args(), f"Open {name} in the Crows Nest"),
     ]
@@ -571,7 +575,7 @@ def app_launcher(project_dir: pathlib.Path) -> str:
     """The script inside the .app: `datavloot open` in the project."""
     return (
         "#!/bin/sh\n"
-        "# Made by `datavloot autostart on`; `datavloot autostart off` removes it.\n"
+        "# Made by `datavloot autostart on` or `datavloot shortcut on`; `off` removes it.\n"
         f'cd "{project_dir}" || exit 1\n'
         f'exec "{python(gui=False)}" -m datavloot_platform.cli open\n'
     )
@@ -623,27 +627,32 @@ def _check_project(project_dir: pathlib.Path) -> None:
         )
 
 
-def turn_on(project_dir: pathlib.Path) -> list[str]:
-    """Put down the login entry and the shortcuts; return what was made, for the user."""
+def turn_on(project_dir: pathlib.Path, login: bool = True) -> list[str]:
+    """
+    Put down the shortcuts, and with `login` the login entry; return what was
+    made, for the user.
+    """
     _check_project(project_dir)
     platform = _platform()
     if platform not in ("windows", "macos"):
-        raise SystemExit("Error: autostart is available on Windows and macOS.")
+        what = "autostart" if login else "a shortcut"
+        raise SystemExit(f"Error: {what} is available on Windows and macOS.")
 
-    # Start from nothing, so a renamed project does not keep its old shortcuts.
+    # Start from nothing, so a renamed project does not keep its old shortcuts,
+    # and `shortcut on` after `autostart on` takes the login entry away.
     turn_off(project_dir)
 
     name = project_name(project_dir)
     source, note = icon_source(project_dir)
     if note:
         print(f"Note: {note}\n")
-    record: dict = {"platform": platform, "name": name, "files": [], "dirs": []}
+    record: dict = {"platform": platform, "name": name, "login": login, "files": [], "dirs": []}
 
     if platform == "windows":
         icon = write_windows_icon(source, project_dir / STATE_DIR / "icon.ico")
         if icon:
             record["files"].append(str(icon))
-        plan = _windows_plan(project_dir, name, icon)
+        plan = _windows_plan(project_dir, name, icon, login)
         # Recorded first: a failure halfway still leaves `off` a list to clean up.
         record["files"] += [s["path"] for s in plan]
         _write_record(project_dir, record)
@@ -652,18 +661,21 @@ def turn_on(project_dir: pathlib.Path) -> list[str]:
         except (RuntimeError, OSError, subprocess.SubprocessError) as e:
             turn_off(project_dir)
             raise SystemExit(f"Error: could not create the shortcuts: {e}") from None
-        made = [f"At login:   {plan[0]['path']}", f"Start menu: {plan[1]['path']}", f"Desktop:    {plan[2]['path']}"]
+        made = [f"At login:   {plan[0]['path']}"] if login else []
+        made += [f"Start menu: {plan[-2]['path']}", f"Desktop:    {plan[-1]['path']}"]
     else:
         home = pathlib.Path.home()
         label = f"nl.datavloot.autostart.{_slug(project_dir)}"
         agent = home / "Library" / "LaunchAgents" / f"{label}.plist"
         app = home / "Applications" / f"{_file_name(name)}.app"
-        record["files"].append(str(agent))
+        if login:
+            record["files"].append(str(agent))
         record["dirs"].append(str(app))
         _write_record(project_dir, record)
 
-        agent.parent.mkdir(parents=True, exist_ok=True)
-        agent.write_bytes(plistlib.dumps(launch_agent(project_dir, label)))
+        if login:
+            agent.parent.mkdir(parents=True, exist_ok=True)
+            agent.write_bytes(plistlib.dumps(launch_agent(project_dir, label)))
         contents = app / "Contents"
         (contents / "MacOS").mkdir(parents=True, exist_ok=True)
         launcher = contents / "MacOS" / "open-crowsnest"
@@ -671,32 +683,54 @@ def turn_on(project_dir: pathlib.Path) -> list[str]:
         launcher.chmod(0o755)
         icon = write_mac_icon(source, contents / "Resources" / "icon.icns")
         (contents / "Info.plist").write_bytes(plistlib.dumps(app_info(name, label, icon is not None)))
-        made = [f"At login:     {agent}", f"Applications: {app}"]
+        made = [f"At login:     {agent}"] if login else []
+        made.append(f"Applications: {app}")
     return made
 
 
-def _remove(path: pathlib.Path, is_dir: bool) -> bool:
-    try:
-        if is_dir:
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-        return True
-    except FileNotFoundError:
-        return False
+def _remove(path: pathlib.Path, is_dir: bool, attempts: int = 10) -> bool:
+    """
+    Remove path; False when it was not there. A shortcut just made is read by
+    Explorer and the search indexer for a moment, during which Windows refuses
+    to delete it: try again for a few seconds before giving up.
+    """
+    for attempt in range(attempts):
+        try:
+            if is_dir:
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            return True
+        except FileNotFoundError:
+            return False
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.3)
+    return False
 
 
 def turn_off(project_dir: pathlib.Path) -> list[str]:
     """Remove what `on` made, by its record; return what was removed."""
     record = read_record(project_dir)
-    removed = []
+    removed, stuck = [], []
     if record:
-        for path in record.get("files", []):
-            if _remove(pathlib.Path(path), is_dir=False):
-                removed.append(path)
-        for path in record.get("dirs", []):
-            if _remove(pathlib.Path(path), is_dir=True):
-                removed.append(path)
+        paths = [(p, False) for p in record.get("files", [])] + [(p, True) for p in record.get("dirs", [])]
+        for path, is_dir in paths:
+            try:
+                if _remove(pathlib.Path(path), is_dir):
+                    removed.append(path)
+            except OSError:
+                stuck.append(path)
+        if stuck:
+            # The record stays, with what is left, so `off` again can finish.
+            record["files"] = [p for p in record.get("files", []) if p in stuck]
+            record["dirs"] = [p for p in record.get("dirs", []) if p in stuck]
+            _write_record(project_dir, record)
+            raise SystemExit(
+                "Error: could not remove " + ", ".join(stuck) + " (another program has it open). "
+                "Run the same command again in a moment, or delete it by hand."
+            )
         _record_path(project_dir).unlink(missing_ok=True)
     # Only when empty: the directory is shared, and `datavloot update` keeps its
     # record of an installation there (install.json, see remote.py).
@@ -710,11 +744,18 @@ def status(project_dir: pathlib.Path) -> list[str]:
     record = read_record(project_dir)
     lines = []
     if not record:
-        lines.append("Autostart is off for this project.")
+        lines.append("Autostart is off for this project, and it has no shortcut.")
     else:
-        lines.append(f"Autostart is on for {record.get('name', project_dir.name)}:")
+        name = record.get("name", project_dir.name)
+        # A record from before `shortcut` existed has no "login": it was autostart.
+        login = record.get("login", True)
+        command = "autostart" if login else "shortcut"
+        lines.append(
+            f"Autostart is on for {name}:" if login
+            else f"{name} has a shortcut; autostart at login is off:"
+        )
         for path in record.get("files", []) + record.get("dirs", []):
-            there = "" if pathlib.Path(path).exists() else "   (missing; run `datavloot autostart on` again)"
+            there = "" if pathlib.Path(path).exists() else f"   (missing; run `datavloot {command} on` again)"
             lines.append(f"  {path}{there}")
     lines.append(f"Log: {project_dir / LOG_FILE}")
     state = crowsnest_state()
@@ -726,27 +767,32 @@ def status(project_dir: pathlib.Path) -> list[str]:
     return lines
 
 
-def main(action: str, project_dir: pathlib.Path) -> None:
-    """`datavloot autostart on|off|status`."""
+def main(action: str, project_dir: pathlib.Path, login: bool = True) -> None:
+    """`datavloot autostart on|off|status`, or with login=False `datavloot shortcut on|off|status`."""
+    command = "autostart" if login else "shortcut"
     if action == "on":
-        made = turn_on(project_dir)
-        print("Autostart is on. Made:")
+        made = turn_on(project_dir, login)
+        print(("Autostart is on." if login else "The shortcut is there; Datavloot does not start at login.") + " Made:")
         for line in made:
             print(f"  {line}")
+        if login:
+            print(
+                f"\nFrom the next login Datavloot starts by itself, without a window; its log is "
+                f"{project_dir / LOG_FILE}."
+            )
         print(
-            f"\nFrom the next login Datavloot starts by itself, without a window; its log is "
-            f"{project_dir / LOG_FILE}.\nThe shortcut opens the Crows Nest, and starts Datavloot "
-            "first when it is not running. To start it now: datavloot open\n"
-            "Switch it off with: datavloot autostart off"
+            f"\nThe shortcut opens the Crows Nest, and starts Datavloot first when it is not "
+            f"running; its log is then {project_dir / LOG_FILE}. To start it now: datavloot open\n"
+            f"Remove it with: datavloot {command} off"
         )
     elif action == "off":
         removed = turn_off(project_dir)
         if removed:
-            print("Autostart is off. Removed:")
+            print("Autostart is off. Removed:" if login else "The shortcut is gone. Removed:")
             for path in removed:
                 print(f"  {path}")
-            print("A Datavloot that is running now keeps running until you log out.")
+            print("A Datavloot that is running now keeps running until you shut it down or log out.")
         else:
-            print("Autostart was not on for this project; nothing to remove.")
+            print("There was no autostart or shortcut for this project; nothing to remove.")
     else:
         print("\n".join(status(project_dir)))

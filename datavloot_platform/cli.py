@@ -840,6 +840,10 @@ def cmd_autostart(args: argparse.Namespace) -> None:
     autostart.main(args.action, pathlib.Path.cwd())
 
 
+def cmd_shortcut(args: argparse.Namespace) -> None:
+    autostart.main(args.action, pathlib.Path.cwd(), login=False)
+
+
 def cmd_open(args: argparse.Namespace) -> None:
     sys.exit(autostart.open_crowsnest(pathlib.Path.cwd()))
 
@@ -938,6 +942,16 @@ def main() -> None:
         help="on: start at login and make the shortcut; off: remove both; status: show what is there",
     )
     autostart_parser.set_defaults(func=cmd_autostart)
+
+    shortcut_parser = subparsers.add_parser(
+        "shortcut",
+        help="A shortcut to this project's Crows Nest, without starting Datavloot at login",
+    )
+    shortcut_parser.add_argument(
+        "action", choices=["on", "off", "status"],
+        help="on: make the shortcut (and switch autostart off); off: remove it; status: show what is there",
+    )
+    shortcut_parser.set_defaults(func=cmd_shortcut)
 
     open_parser = subparsers.add_parser(
         "open",
