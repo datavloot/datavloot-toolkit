@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
+import { applyBranding } from '../lib/branding';
 import PipelinesPanel from '../components/PipelinesPanel';
 import QualityPanel from '../components/QualityPanel';
 import QueryPanel from '../components/QueryPanel';
@@ -81,9 +82,7 @@ export default function CrowsNestPage() {
   // The project's colours (branding/ in the project) replace the defaults in globals.css.
   useEffect(() => {
     if (!branding) return;
-    for (const [name, value] of Object.entries(branding.variables || {})) {
-      document.documentElement.style.setProperty(name, value);
-    }
+    applyBranding(document.documentElement.style, branding.variables || {});
     // Remembered for the next page load, which applies them before the first
     // paint (app/layout.js) instead of flashing the default colours.
     try {

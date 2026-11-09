@@ -5,6 +5,11 @@ it always has; a colour it cannot read is left at the default rather than
 breaking the page.
 """
 
+import json
+import pathlib
+import shutil
+import subprocess
+
 import pytest
 
 pytest.importorskip("duckdb", reason="duckdb is not installed")
@@ -117,3 +122,46 @@ def test_an_svg_logo_cannot_run_scripts(project):
     assert response.headers["content-type"] == "image/svg+xml"
     assert "sandbox" in response.headers["content-security-policy"]
     assert response.headers["x-content-type-options"] == "nosniff"
+
+
+# Node runs the frontend's lib/branding.js against a stand-in for <html>'s style.
+_APPLY_BRANDING = """
+import { applyBranding } from %s;
+const props = new Map(Object.entries(%s));
+const style = {
+  get length() { return props.size; },
+  ...Object.fromEntries([...props.keys()].map((k, i) => [i, k])),
+  setProperty: (k, v) => props.set(k, v),
+  removeProperty: (k) => props.delete(k),
+};
+// Array.from reads the names by index, as from a CSSStyleDeclaration.
+Object.defineProperty(style, Symbol.iterator, { value: () => [...props.keys()][Symbol.iterator]() });
+applyBranding(style, %s);
+console.log(JSON.stringify(Object.fromEntries(props)));
+"""
+
+
+def _apply_branding(inline: dict, variables: dict) -> dict:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    module = (pathlib.Path(__file__).parents[1] / "datavloot_platform" / "crowsnest"
+              / "frontend" / "lib" / "branding.js").as_uri()
+    script = _APPLY_BRANDING % (json.dumps(module), json.dumps(inline), json.dumps(variables))
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script],
+        capture_output=True, text=True, check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def test_another_projects_colours_do_not_stay():
+    # app/layout.js applied the colours remembered from the project opened
+    # before; this project has no branding/, so the defaults come back.
+    previous = {"--cn-accent-600": "0 112 192", "--cn-sidebar": "0 32 96"}
+    assert _apply_branding({**previous, "color": "red"}, {}) == {"color": "red"}
+
+
+def test_the_new_colours_replace_the_old():
+    previous = {"--cn-accent-600": "0 112 192", "--cn-highlight": "0 176 80"}
+    assert _apply_branding(previous, {"--cn-accent-600": "1 2 3"}) == {"--cn-accent-600": "1 2 3"}
