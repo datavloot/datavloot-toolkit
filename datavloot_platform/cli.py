@@ -575,10 +575,11 @@ query Claims {
 """
 
 _RUN_STATUSES_QUERY = """
-query RunStatuses($runIds: [String!]) {
-  runsOrError(filter: {runIds: $runIds}, limit: 100) {
+query RunStatuses($runIds: [String!], $limit: Int) {
+  runsOrError(filter: {runIds: $runIds}, limit: $limit) {
     __typename
     ... on Runs { results { runId status } }
+    ... on PythonError { message }
   }
 }
 """
@@ -602,7 +603,8 @@ def free_finished_run_slots(graphql_url: str) -> list[str]:
     nothing does, and marking the run cancelled does not either. The slot then
     stays claimed, and every later run waits for the pool (`lake`, one slot)
     as Queued for good. Called after cancel_runs, at start and at Shut down.
-    A run that is queued, starting or started keeps its slots. Never raises:
+    A run that is queued, starting or started keeps its slots; one deleted in
+    Dagster since does not, and only a slot Dagster says it freed counts. Never raises:
     cleaning up must not stop a start or a shutdown.
     """
     freed: list[str] = []
@@ -610,8 +612,10 @@ def free_finished_run_slots(graphql_url: str) -> list[str]:
         import httpx
 
         def ask(query: str, variables: dict | None = None) -> dict:
-            resp = httpx.post(graphql_url, json={"query": query, "variables": variables or {}}, timeout=10)
-            return resp.json()["data"]
+            body = httpx.post(graphql_url, json={"query": query, "variables": variables or {}}, timeout=10).json()
+            if body.get("errors") or body.get("data") is None:
+                raise RuntimeError(body.get("errors") or "no data in Dagster's answer")
+            return body["data"]
 
         limits = ask(_CLAIMS_QUERY)["instance"]["concurrencyLimits"] or []
         run_ids = sorted(
@@ -624,11 +628,23 @@ def free_finished_run_slots(graphql_url: str) -> list[str]:
         )
         if not run_ids:
             return freed
-        found = ask(_RUN_STATUSES_QUERY, {"runIds": run_ids})["runsOrError"].get("results") or []
-        for run in found:
-            if run["status"] in _FINAL_RUN_STATUSES:
-                ask(_FREE_SLOTS_MUTATION, {"runId": run["runId"]})
-                freed.append(run["runId"])
+        runs = ask(_RUN_STATUSES_QUERY, {"runIds": run_ids, "limit": len(run_ids)})["runsOrError"]
+        if runs.get("__typename") != "Runs":
+            raise RuntimeError(runs.get("message") or runs)
+        status = {run["runId"]: run["status"] for run in runs.get("results") or []}
+        for run_id in run_ids:
+            # A run deleted in Dagster keeps its claims too: nothing will ever free them.
+            if status.get(run_id, "DELETED") not in (*_FINAL_RUN_STATUSES, "DELETED"):
+                continue
+            try:
+                done = ask(_FREE_SLOTS_MUTATION, {"runId": run_id}).get("freeConcurrencySlotsForRun")
+            except Exception as e:  # noqa: BLE001 -- the other runs still get their turn
+                print(f"Could not free the pool slots of run {run_id}: {e}", flush=True)
+                continue
+            if done:
+                freed.append(run_id)
+            else:
+                print(f"Dagster did not free the pool slots of run {run_id}.", flush=True)
     except Exception as e:  # noqa: BLE001 -- see the docstring
         print(f"Could not check for pool slots to free: {e}", flush=True)
     return freed
@@ -743,6 +759,10 @@ def _start(args, graphql_url, scripts, env, log) -> None:
     def watch() -> None:
         print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
         error = _wait_for_dagster(dagster_proc, graphql_url)
+        if startup.stopping():
+            # Shut down stopped Dagster while it was loading: not a failed start.
+            print("Dagster stopped before it was ready: Datavloot is shutting down.", flush=True)
+            return
         if error:
             # The Crows Nest stays up to show it; Dagster's leftovers go.
             terminate_tree(dagster_proc)

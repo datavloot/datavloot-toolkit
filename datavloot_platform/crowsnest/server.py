@@ -263,11 +263,16 @@ def create_app(host: str | None = None) -> FastAPI:
         # Dagster, and Dagster would otherwise keep them "Started" for good.
         from datavloot_platform.cli import cancel_runs, free_finished_run_slots
 
+        startup.set_stopping()
         url = get_config().dagster_graphql_url
-        cancelled = await asyncio.to_thread(cancel_runs, url)
-        # A cancelled run's process dies with Dagster before it frees its pool
-        # slots; left claimed, they would keep every later run Queued.
-        await asyncio.to_thread(free_finished_run_slots, url)
+        cancelled: list[str] = []
+        # A Dagster still loading has no runs going and does not answer yet:
+        # asking would only fill the log with "could not check".
+        if startup.dagster()[0] != "starting":
+            cancelled = await asyncio.to_thread(cancel_runs, url)
+            # A cancelled run's process dies with Dagster before it frees its pool
+            # slots; left claimed, they would keep every later run Queued.
+            await asyncio.to_thread(free_finished_run_slots, url)
         # Marimo now, not only at exit: the exit hooks run once uvicorn has
         # finished shutting down, and a shutdown that stalls (a browser tab
         # holding a connection open) left the notebook server running, holding
