@@ -167,6 +167,80 @@ def test_a_reader_does_not_need_write_access_to_open_the_lake(project):
         con.close()
 
 
+def test_a_reader_before_the_first_run_finds_an_empty_lake(project):
+    """`new` no longer creates the lake, so a notebook opened first creates it."""
+    pytest.importorskip("duckdb")
+    con = storage.connect(project, read_only=True)
+    con.close()
+    assert storage.catalog_path(project).is_file()
+
+
+# --- a catalog from a newer DuckLake -------------------------------------------
+
+_DUCKLAKE_SAYS = (
+    "Invalid Input Error: DuckLake catalog version mismatch: catalog version is "
+    "1.1-dev1, but the extension requires version 1.0. To automatically migrate, "
+    "set AUTOMATIC_MIGRATION to TRUE when attaching."
+)
+
+
+def _age(project, version="1.1-dev1"):
+    """Mark the project's catalog as written by another DuckLake, as a dev build of DuckDB did."""
+    import sqlite3
+
+    con = sqlite3.connect(storage.catalog_path(project))
+    try:
+        con.execute("UPDATE ducklake_metadata SET value = ? WHERE key = 'version'", [version])
+        con.commit()
+    finally:
+        con.close()
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "something else went wrong",
+        # Older than the extension: DuckLake's AUTOMATIC_MIGRATION advice is right.
+        _DUCKLAKE_SAYS.replace("1.1-dev1", "0.3"),
+        _DUCKLAKE_SAYS.replace("1.1-dev1", "1.0-dev1"),
+    ],
+)
+def test_only_a_newer_catalog_gets_its_own_message(tmp_path, message):
+    assert storage.catalog_too_new(tmp_path / "catalog.sqlite", Exception(message)) is None
+
+
+def test_an_empty_catalog_from_a_newer_ducklake_may_be_deleted(project):
+    """
+    `uvx --prerelease allow datavloot new` once created the catalog with a
+    development DuckDB; the project's DuckDB then refused it on the first load.
+    """
+    pytest.importorskip("duckdb")
+    storage.create(project)
+    _age(project)
+    with pytest.raises(storage.CatalogTooNew) as raised:
+        storage.connect(project, read_only=True)
+    message = str(raised.value)
+    assert "catalog version 1.1-dev1" in message and "reads version 1.0" in message
+    assert "cannot be migrated back" in message
+    assert "holds no tables" in message and "catalog.sqlite-wal" in message
+
+
+def test_a_catalog_with_tables_from_a_newer_ducklake_is_not_called_disposable(project):
+    pytest.importorskip("duckdb")
+    _write(project, 3)
+    _age(project)
+    with pytest.raises(storage.CatalogTooNew) as raised:
+        storage.connect(project)
+    assert "holds 1 table(s)" in str(raised.value)
+    assert "holds no tables" not in str(raised.value)
+
+
+def test_the_message_matches_what_ducklake_says():
+    """The pattern is DuckLake's wording, as DuckDB 1.5 with DuckLake 1.0 gives it."""
+    found = storage.catalog_too_new(pathlib.Path("missing.sqlite"), Exception(_DUCKLAKE_SAYS))
+    assert found is not None and "It holds tables." in str(found)
+
+
 @pytest.mark.slow
 def test_dlt_loads_into_the_lake_and_still_does_after_a_move(project, tmp_path):
     """
