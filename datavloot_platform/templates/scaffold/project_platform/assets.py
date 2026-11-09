@@ -10,7 +10,12 @@ LAKE_POOL = "lake"
 
 # Dagster is the only production writer: it builds the prod target, while a
 # plain `dbt run` builds dev (see profiles.yml). The dbt resource inherits it.
-project_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod")
+# install_deps=False: under `datavloot start`, prepare_if_dev would otherwise run
+# `dbt deps` on every code load, which first deletes dbt_packages/. When the code
+# server and a run load at once, that fails on Windows (WinError 32) and every
+# run fails with it. `datavloot new --from`, `update` and the installers run
+# `dbt deps` themselves; after changing packages.yml, run `uv run dbt deps`.
+project_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod", install_deps=False)
 project_dbt_project.prepare_if_dev()
 
 

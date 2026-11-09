@@ -154,6 +154,8 @@ dbt deps           # install the dbt packages (optimist, Elementary) — re-run 
 dbt parse          # compile the manifest (required before first run)
 ```
 
+Dagster does not install the dbt packages itself; it only compiles the manifest when it loads the code. After a change to `packages.yml`, run `uv run dbt deps` yourself.
+
 ### 5. Start the platform
 
 ```bash
@@ -307,6 +309,16 @@ In older projects `profiles.yml` has one target, `dev`, that writes to the produ
 - `profiles.yml`: `dev` now writes to `dev_*` schemas and a new `prod` target writes to `<project>_*`, where your data already is. No data has to move.
 - `dagster.yaml`, placed in the project directory.
 - In `<project>_platform/assets.py`, add `target="prod"` to `DbtProject(...)` and `pool="lake"` to every asset that writes to the lake: the dbt assets, dlt assets and any asset that writes through `storage.connect`.
+
+### Upgrading a project to dagster-dbt 0.29.28 or later
+
+From dagster-dbt 0.29.8, `prepare_if_dev()` runs `dbt deps` each time Dagster loads the code, and `dbt deps` first deletes `dbt_packages/`. When the code server and a run load at the same time, Windows refuses (`PermissionError: [WinError 32]` on a file in `dbt_packages`) and every run fails, dlt assets included. Projects created with datavloot 0.4.0 or later avoid this. In an older project, add `install_deps=False` to `DbtProject(...)` in `<project>_platform/assets.py`:
+
+```python
+project_dbt_project = DbtProject(project_dir=PROJECT_DIR, target="prod", install_deps=False)
+```
+
+That argument needs dagster-dbt 0.29.28 or later (`uv lock --upgrade-package dagster-dbt`). From then on, run `uv run dbt deps` yourself after a change to `packages.yml`; `datavloot update` and the installers already do.
 
 ---
 

@@ -205,6 +205,31 @@ def test_dagster_builds_the_prod_target(scaffold: pathlib.Path, template: str):
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
+def test_loading_the_code_does_not_reinstall_the_dbt_packages(scaffold: pathlib.Path, template: str):
+    """
+    Dagster does not run `dbt deps` when it loads the project's code.
+
+    From dagster-dbt 0.29.8, prepare_if_dev runs `dbt deps` on every code load
+    under `dagster dev`, and `dbt deps` first deletes dbt_packages/. When the
+    code server and a run load at once, that fails on Windows with WinError 32,
+    and every materialization fails with it. The installers, `new --from` and
+    `update` run `dbt deps` themselves.
+    """
+    tree = ast.parse((_platform_dir(template, scaffold) / "assets.py").read_text(encoding="utf-8"))
+    projects = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DbtProject"
+    ]
+
+    assert projects, "no DbtProject in assets.py"
+    for project in projects:
+        install_deps = _keyword(project, "install_deps")
+        assert isinstance(install_deps, ast.Constant) and install_deps.value is False, (
+            "DbtProject has no install_deps=False; every code load would run dbt deps"
+        )
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
 def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: str):
     """
     Writers to the lake take turns, enforced by Dagster.

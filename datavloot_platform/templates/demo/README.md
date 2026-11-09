@@ -89,6 +89,8 @@ pip install -e .
 dbt deps
 ```
 
+Dagster does not do this for you; run it again after a change to `packages.yml`.
+
 ### 3. The AIS data
 
 Nothing to do: the first run of `noaa/guam_2025` downloads NOAA's Guam 2025 AIS zone file
