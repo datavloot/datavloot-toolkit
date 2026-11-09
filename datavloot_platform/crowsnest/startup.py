@@ -45,3 +45,19 @@ def set_dagster_process(proc) -> None:
 def dagster_process():
     with _lock:
         return _process["dagster"]
+
+
+# Set by Shut down, so a Dagster it stops while still loading is not reported
+# as a Dagster that failed to start (cli._start's watcher).
+_stopping = threading.Event()
+
+
+def set_stopping(value: bool = True) -> None:
+    if value:
+        _stopping.set()
+    else:
+        _stopping.clear()
+
+
+def stopping() -> bool:
+    return _stopping.is_set()

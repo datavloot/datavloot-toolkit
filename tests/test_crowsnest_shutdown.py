@@ -30,10 +30,15 @@ def project(tmp_path, monkeypatch):
     # No Dagster process left over from another test's `datavloot start`.
     from datavloot_platform.crowsnest import startup
 
-    startup.set_dagster_process(None)
+    def clean():
+        startup.set_dagster_process(None)
+        startup.set_dagster(None)
+        startup.set_stopping(False)
+
+    clean()
     cn_config.reset_config()
     yield
-    startup.set_dagster_process(None)
+    clean()
     cn_config.reset_config()
 
 
@@ -254,15 +259,19 @@ def pool(monkeypatch):
     httpx = pytest.importorskip("httpx")
     import json
 
-    state = {"claimed": [], "pending": [], "statuses": {}, "freed": []}
+    state = {"claimed": [], "pending": [], "statuses": {}, "freed": [], "free_answer": None, "runs_answer": None}
 
     def handler(request):
         body = json.loads(request.content)
         query, variables = body["query"], body["variables"]
         if "freeConcurrencySlotsForRun" in query:
+            if state["free_answer"] is not None:
+                return httpx.Response(200, json=state["free_answer"])
             state["freed"].append(variables["runId"])
             return httpx.Response(200, json={"data": {"freeConcurrencySlotsForRun": True}})
         if "runsOrError" in query:
+            if state["runs_answer"] is not None:
+                return httpx.Response(200, json=state["runs_answer"])
             results = [
                 {"runId": r, "status": state["statuses"][r]} for r in variables["runIds"] if r in state["statuses"]
             ]
@@ -328,3 +337,92 @@ def test_an_unreachable_dagster_frees_nothing_and_does_not_raise():
     from datavloot_platform import cli
 
     assert cli.free_finished_run_slots("http://127.0.0.1:9/graphql") == []
+
+
+def test_the_slot_of_a_run_deleted_in_dagster_is_freed(pool):
+    """Deleting the stuck run is the obvious thing to try; its claim stays all the same."""
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["deleted", "going"]
+    pool["statuses"] = {"going": "STARTED"}
+    assert cli.free_finished_run_slots("http://dagster/graphql") == ["deleted"]
+    assert pool["freed"] == ["deleted"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"data": {"freeConcurrencySlotsForRun": False}},
+        {"data": None, "errors": [{"message": "not allowed"}]},
+    ],
+)
+def test_a_slot_dagster_did_not_free_is_not_reported_as_freed(pool, answer, capsys):
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["cut"]
+    pool["statuses"] = {"cut": "CANCELED"}
+    pool["free_answer"] = answer
+    assert cli.free_finished_run_slots("http://dagster/graphql") == []
+    assert "cut" in capsys.readouterr().out
+
+
+def test_when_dagster_cannot_list_the_runs_nothing_is_taken_for_deleted(pool):
+    """A failed status query must not make every claiming run look deleted."""
+    from datavloot_platform import cli
+
+    pool["claimed"] = ["going"]
+    pool["statuses"] = {"going": "STARTED"}
+    pool["runs_answer"] = {"data": {"runsOrError": {"__typename": "PythonError", "message": "boom"}}}
+    assert cli.free_finished_run_slots("http://dagster/graphql") == []
+    assert pool["freed"] == []
+
+
+def test_shut_down_while_dagster_loads_does_not_ask_it_anything(cancelled):
+    from datavloot_platform.crowsnest import startup
+
+    startup.set_dagster("starting")
+    app = _app("127.0.0.1")
+    r = TestClient(app).post("/api/shutdown")
+    assert r.status_code == 200, r.text
+    assert r.json()["cancelled_runs"] == []
+    assert cancelled == ["notebooks stopped", "apps stopped"]
+    assert startup.stopping() is True
+
+
+def test_a_dagster_stopped_by_shut_down_is_not_reported_as_a_failed_start(monkeypatch, capsys):
+    """The watcher in `datavloot start` sees Dagster exit; after Shut down that is no error."""
+    import argparse
+
+    from datavloot_platform import cli
+    from datavloot_platform.crowsnest import startup
+
+    class Proc:
+        pid = 1
+
+        def poll(self):
+            return 1
+
+    watcher = {}
+
+    class Thread:
+        def __init__(self, target, **kw):
+            watcher["run"] = target
+
+        def start(self):
+            pass
+
+    import threading
+
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda *a, **kw: Proc())
+    monkeypatch.setattr(threading, "Thread", Thread)
+    monkeypatch.setattr(cli, "cmd_crowsnest", lambda args: None)
+    monkeypatch.setattr(cli, "terminate_tree", lambda proc: None)
+    monkeypatch.setattr(cli, "_wait_for_dagster", lambda proc, url: "Dagster exited with code 1 before becoming ready.")
+    cli._start(argparse.Namespace(run=False), "http://127.0.0.1:9/graphql", None, {}, None)
+
+    startup.set_stopping()
+    watcher["run"]()
+    out = capsys.readouterr().out
+    assert "Error:" not in out
+    assert "shutting down" in out
+    assert startup.dagster()[0] == "starting"
