@@ -128,10 +128,31 @@ used while it lived here.
    you published:
    ```bash
    gh release create datavloot-vX.Y.Z --verify-tag --title "datavloot X.Y.Z" \
-     --notes-file notes.md dist/datavloot-X.Y.Z-py3-none-any.whl dist/datavloot-X.Y.Z.tar.gz
+     --notes-file notes.md dist/datavloot-X.Y.Z-py3-none-any.whl dist/datavloot-X.Y.Z.tar.gz \
+     install.ps1 install.sh
    ```
-10. Check whether the install snippets and release notes on the website (the `datavloot-website`
-    repository) need updating to match. Then remove the build worktree
+   `install.ps1` and `install.sh` go on every release, taken from the tagged commit. The
+   website serves them from there: `https://datavloot.nl/install.ps1` and `/install.sh` redirect
+   to `https://github.com/datavloot/datavloot-toolkit/releases/latest/download/<file>`, and
+   GitHub's `latest` skips pre-releases. So the script people run is always the one released
+   together with the newest stable version on PyPI, which is what the script installs by
+   default (`datavloot[optimist]@latest`). A script from `main` could use options that the
+   latest release does not have yet (0.4.0rc3's `datavloot start --run`, run against 0.3.0).
+   Mark a release candidate with `--prerelease`, so `latest` keeps pointing at the last stable
+   release.
+
+   The website does not serve a release candidate's script. To test one, name its tag and
+   version:
+   ```powershell
+   $env:DATAVLOOT_VERSION = '0.4.0rc3'; powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/datavloot/datavloot-toolkit/datavloot-v0.4.0rc3/install.ps1 | iex"
+   ```
+   Without `DATAVLOOT_VERSION` the script installs the latest stable version, which does not
+   match an rc's script. Check that no `DATAVLOOT_*` variables from an earlier install are still
+   set in the window (`Get-ChildItem Env:DATAVLOOT*`), and copy the whole line, including the
+   leading `$`.
+10. Check that `curl.exe -sIL https://datavloot.nl/install.ps1` ends on the new release's file (the
+    redirects live in `site/_redirects` in the `datavloot-website` repository), and whether the
+    release notes on the website need updating. Then remove the build worktree
     (`git worktree remove ../datavloot-build`).
 
 ### Current state
