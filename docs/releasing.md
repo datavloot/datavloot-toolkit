@@ -150,7 +150,7 @@ used while it lived here.
    match an rc's script. Check that no `DATAVLOOT_*` variables from an earlier install are still
    set in the window (`Get-ChildItem Env:DATAVLOOT*`), and copy the whole line, including the
    leading `$`.
-10. Check that `curl -sIL https://datavloot.nl/install.ps1` ends on the new release's file (the
+10. Check that `curl.exe -sIL https://datavloot.nl/install.ps1` ends on the new release's file (the
     redirects live in `site/_redirects` in the `datavloot-website` repository), and whether the
     release notes on the website need updating. Then remove the build worktree
     (`git worktree remove ../datavloot-build`).
