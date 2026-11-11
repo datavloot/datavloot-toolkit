@@ -179,3 +179,23 @@
 .pulse-dot {
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
+
+/* An indeterminate progress bar: stripes moving left to right (StartupBanner). */
+@keyframes progress-stripe {
+  from { background-position: 0 0; }
+  to { background-position: 28px 0; }
+}
+.progress-stripe {
+  background-color: rgb(var(--cn-accent-200));
+  background-image: linear-gradient(
+    -45deg,
+    rgb(var(--cn-accent-600)) 25%, transparent 25%,
+    transparent 50%, rgb(var(--cn-accent-600)) 50%,
+    rgb(var(--cn-accent-600)) 75%, transparent 75%
+  );
+  background-size: 28px 28px;
+  animation: progress-stripe 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-stripe { animation: none; }
+}

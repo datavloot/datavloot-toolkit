@@ -10,6 +10,7 @@ import CatalogPanel from '../components/CatalogPanel';
 import NotebooksPanel from '../components/NotebooksPanel';
 import AppsPanel from '../components/AppsPanel';
 import HealthBanner from '../components/HealthBanner';
+import StartupBanner from '../components/StartupBanner';
 import OverviewPanel from '../components/OverviewPanel';
 
 const NAV = [
@@ -194,6 +195,8 @@ export default function CrowsNestPage() {
 
       {/* Main content */}
       <main className="ml-60 flex-1 flex flex-col overflow-hidden">
+        {/* While Dagster loads the project after `datavloot start`, on every tab */}
+        <StartupBanner />
         {/* The overview says all of this itself */}
         {activeTab !== 'overview' && <HealthBanner />}
 

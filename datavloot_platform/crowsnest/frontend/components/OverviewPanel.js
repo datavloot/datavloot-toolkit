@@ -132,7 +132,6 @@ export default function OverviewPanel({ onNavigate, branding }) {
       {/* Hints: colour only in the stripe, the icon and the link */}
       <Hints
         s={s}
-        dagsterError={health.data?.dagster_error}
         failing={pipelines.data?.failing_jobs || []}
         q={q}
         steps={steps}
@@ -365,7 +364,7 @@ function QualityKpi({ quality, onClick }) {
   );
 }
 
-function Hints({ s, dagsterError, failing, q, steps, stepsDone, dagsterUrl, onNavigate }) {
+function Hints({ s, failing, q, steps, stepsDone, dagsterUrl, onNavigate }) {
   const hints = [];
   // Only jobs whose latest run failed: one that succeeded since is fine again.
   for (const run of failing) {
@@ -380,12 +379,7 @@ function Hints({ s, dagsterError, failing, q, steps, stepsDone, dagsterUrl, onNa
   if ((q?.by_status?.fail || 0) > 0) {
     hints.push({ tone: 'bad', text: `${q.by_status.fail} test${q.by_status.fail > 1 ? 's' : ''} failing.`, link: 'See the tests', tab: 'quality' });
   }
-  if (s.dagster === 'failed') {
-    hints.push({ tone: 'bad', text: `Dagster did not start: ${dagsterError || 'see the log'}`, title: dagsterError, link: 'Open Dagster', href: dagsterUrl });
-  }
-  if (s.dagster === 'starting') {
-    hints.push({ tone: 'note', text: 'Dagster is starting and loading the project; the pipelines appear in a moment.', link: 'Pipelines', tab: 'pipelines' });
-  }
+  // Dagster starting or failed to start: the banner above every tab says so (StartupBanner).
   if (s.dagster === 'offline') {
     hints.push({ tone: 'warn', text: 'Dagster is not running, so no pipeline runs right now. Start it with datavloot start.', link: 'Open Dagster', href: dagsterUrl });
   }

@@ -208,14 +208,19 @@ def create_app(host: str | None = None) -> FastAPI:
         dagster_status, duckdb_status, marimo_status = await asyncio.gather(
             dagster(), asyncio.to_thread(duckdb), marimo()
         )
-        # Not answering is "starting" while `datavloot start` waits for Dagster
-        # to load the project, and "failed", with the reason, when that failed.
+        # "starting" while `datavloot start` waits for Dagster to load the
+        # project, also once its webserver answers: until the code location
+        # has loaded there are no pipelines yet. "failed", with the reason,
+        # when that failed, and Dagster no longer answers.
         started, error = startup.dagster()
         result = {"services": {"dagster": dagster_status, "duckdb": duckdb_status, "marimo": marimo_status}}
-        if dagster_status != "ok" and started in ("starting", "failed"):
+        if started == "starting" or (dagster_status != "ok" and started == "failed"):
             result["services"]["dagster"] = started
             if error:
                 result["dagster_error"] = error
+        progress = startup.progress()
+        if progress:
+            result["dagster_start"] = progress
         return result
 
     @app.get("/api/services")

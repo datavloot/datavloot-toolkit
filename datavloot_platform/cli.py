@@ -373,6 +373,8 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
     """
     import httpx
 
+    from datavloot_platform.crowsnest import startup
+
     last_detail = "no response from the webserver"
 
     for _ in range(timeout):
@@ -388,6 +390,9 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
         if resp.status_code != 200:
             last_detail = f"webserver returned HTTP {resp.status_code}"
             continue
+
+        # The webserver answers: what is left is loading the project.
+        startup.set_stage("project")
 
         try:
             workspace = resp.json()["data"]["workspaceOrError"]
@@ -780,7 +785,8 @@ def _start(args, graphql_url, scripts, env, log) -> None:
     # says "starting" meanwhile, and the error if loading fails (startup.py).
     from datavloot_platform.crowsnest import startup
 
-    startup.set_dagster("starting")
+    project_dir = pathlib.Path.cwd()
+    startup.set_dagster("starting", expected=startup.last_start_seconds(project_dir))
     startup.set_dagster_process(dagster_proc)
 
     def watch() -> None:
@@ -797,6 +803,8 @@ def _start(args, graphql_url, scripts, env, log) -> None:
             print(f"Error: {error}", flush=True)
             return
         startup.set_dagster("ready")
+        # For the next start's progress bar (startup.last_start_seconds).
+        startup.record_start_seconds(project_dir, time.time() - dagster_started)
         print("Dagster is ready.", flush=True)
         left = cancel_runs(
             graphql_url,
