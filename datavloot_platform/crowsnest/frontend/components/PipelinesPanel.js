@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { useApi, formatDuration, formatTimestamp } from '../lib/hooks';
 
@@ -16,6 +16,20 @@ export default function PipelinesPanel() {
   const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState(null); // {kind: 'ok' | 'error', text}
   const running = (data?.runs || []).some((r) => r.status === 'running' || r.status === 'queued');
+  // Not while Dagster is still loading the project, or failed to: there is
+  // nothing to materialize yet (StartupBanner says why).
+  const [healthEvery, setHealthEvery] = useState(3000);
+  const health = useApi(() => api.getHealth(), [], healthEvery);
+  const dagster = health.data?.services?.dagster;
+  useEffect(() => {
+    if (dagster) setHealthEvery(dagster === 'starting' ? 3000 : 30000);
+    if (dagster === 'ok') reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dagster]);
+  const notReady =
+    dagster === 'starting' ? 'Dagster is still loading the project; this is possible once it is ready' :
+    dagster === 'failed' ? 'Dagster did not start, so there is nothing to run' :
+    null;
 
   const runEverything = async () => {
     if (!window.confirm('Start a run of every asset? It loads every source again and rebuilds every table.')) {
@@ -44,9 +58,9 @@ export default function PipelinesPanel() {
         <div className="flex items-center gap-2">
           <button
             onClick={runEverything}
-            disabled={starting || running}
+            disabled={starting || running || !!notReady}
             className="btn btn-primary disabled:opacity-50"
-            title={running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all does in Dagster'}
+            title={notReady || (running ? 'A run is in progress' : 'Start a run of every asset, as Materialize all does in Dagster')}
           >
             {starting ? 'Starting...' : 'Materialize all'}
           </button>
@@ -80,6 +94,10 @@ export default function PipelinesPanel() {
       <div className="card overflow-hidden">
         {loading && !data ? (
           <LoadingState />
+        ) : error && dagster === 'starting' ? (
+          <div className="px-4 py-12 text-center text-sm text-ink-2">
+            The runs appear here once Dagster has loaded the project.
+          </div>
         ) : error ? (
           <ErrorState message={error} dagsterUrl={dagsterUrl} />
         ) : (

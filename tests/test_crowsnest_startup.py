@@ -60,3 +60,68 @@ def test_ready_means_the_probe_decides_again(client):
     """Once ready, a Dagster that stops answering is offline, not still starting."""
     startup.set_dagster("ready")
     assert client.get("/api/health").json()["services"]["dagster"] == "offline"
+
+
+def test_starting_reports_the_stage_and_the_time_so_far(client):
+    """The banner shows the step and a clock; the first start has nothing to compare with."""
+    startup.set_dagster("starting")
+    start = client.get("/api/health").json()["dagster_start"]
+    assert start["stage"] == "server"
+    assert start["elapsed"] >= 0
+    assert start["expected"] is None
+
+    startup.set_stage("project")
+    assert client.get("/api/health").json()["dagster_start"]["stage"] == "project"
+    # The watcher never moves it back.
+    startup.set_stage("server")
+    assert client.get("/api/health").json()["dagster_start"]["stage"] == "project"
+
+
+def test_the_last_start_sets_what_the_next_expects(client):
+    startup.set_dagster("starting", expected=95.0)
+    assert client.get("/api/health").json()["dagster_start"]["expected"] == 95.0
+
+
+def test_no_start_progress_once_ready_or_failed(client):
+    startup.set_dagster("starting")
+    startup.set_dagster("ready")
+    assert "dagster_start" not in client.get("/api/health").json()
+    startup.set_dagster("failed", "boom")
+    assert "dagster_start" not in client.get("/api/health").json()
+
+
+def test_a_webserver_that_answers_is_still_starting_until_the_project_loaded(client, monkeypatch):
+    """Dagster's webserver answers well before its code location has loaded."""
+    import httpx
+
+    class Answers:
+        status_code = 200
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return Answers()
+
+        async def get(self, *args, **kwargs):
+            raise httpx.ConnectError("no Marimo")
+
+    from datavloot_platform.crowsnest import server
+
+    monkeypatch.setattr(server, "async_client", lambda timeout: Client())
+    startup.set_dagster("starting")
+    assert client.get("/api/health").json()["services"]["dagster"] == "starting"
+    startup.set_dagster("ready")
+    assert client.get("/api/health").json()["services"]["dagster"] == "ok"
+
+
+def test_start_times_are_kept_per_project(tmp_path):
+    assert startup.last_start_seconds(tmp_path) is None
+    startup.record_start_seconds(tmp_path, 83.24)
+    assert startup.last_start_seconds(tmp_path) == 83.2
+    (tmp_path / ".datavloot" / "dagster-start.json").write_text("not json")
+    assert startup.last_start_seconds(tmp_path) is None
