@@ -93,8 +93,8 @@ used while it lived here.
    project with it. A version on PyPI can never be uploaded again, so this is the last cheap
    moment to find a problem:
    ```bash
-   uv venv --seed --python 3.12 /tmp/release-check
-   /tmp/release-check/bin/python -m pip install "datavloot[optimist] @ file://$PWD/dist/datavloot-X.Y.Z-py3-none-any.whl"
+   uv venv --python 3.12 /tmp/release-check
+   uv pip install --python /tmp/release-check/bin/python "datavloot[optimist] @ $PWD/dist/datavloot-X.Y.Z-py3-none-any.whl"
    cd /tmp && /tmp/release-check/bin/datavloot new shop && cd shop
    DBT_PROFILES_DIR=. /tmp/release-check/bin/dbt deps
    DBT_PROFILES_DIR=. /tmp/release-check/bin/dbt build
@@ -102,6 +102,12 @@ used while it lived here.
    (On Windows the executables are in `Scripts\` instead of `bin/`.) Call the environment's
    own `datavloot` and `dbt` by path: if its install failed, a `datavloot` elsewhere on `PATH`
    would run instead, and the check would pass without testing the release.
+
+   Use uv, not pip: pip took more than 20 minutes for 0.4.0rc3 on Windows, where Defender
+   scans each of the thousands of files, and uv is what the installers use. On Windows, put
+   the environment and the project in a short path such as `C:\Users\<you>\rc-check`, not in
+   a temp folder: `dbt deps` (the Elementary package) runs into the 260-character path limit
+   in a long one. Remove the folder afterwards.
 7. Publish, from the build directory:
    ```bash
    uv publish

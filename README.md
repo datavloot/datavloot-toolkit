@@ -109,7 +109,7 @@ A script stops with a message when there is no internet connection, when port 80
 
 ### Upgrading
 
-A project pins the toolkit to its minor version (`datavloot[optimist]~=0.3.0`). To get the latest patch release, run this in the project folder:
+A project pins the toolkit to its minor version (`datavloot[optimist]~=0.4.0`). To get the latest patch release, run this in the project folder:
 
 ```bash
 uv sync --upgrade-package datavloot
@@ -192,6 +192,8 @@ This starts Dagster and the Crows Nest together and opens the dashboard at [http
 
 Dagster keeps its state (run history, which schedules and sensors are on, what a sensor already picked up) in `.dagster/` in the project, so a restart forgets none of it. `datavloot start` copies the project's `dagster.yaml` there on every start; edit the one in the project. If you set `DAGSTER_HOME` yourself, that directory is used instead, and `dagster.yaml` has to be copied into it by you.
 
+Dagster may take up to ten minutes to load the project (`code_servers: local_startup_timeout: 600` in `dagster.yaml`; Dagster's own default is three minutes, too short for a first start on some Windows laptops). When a project's `dagster.yaml` does not set it, `datavloot start` adds it to the copy. Meanwhile the Crows Nest shows how long loading has taken, against how long the last start took, and `datavloot start` waits a minute longer than Dagster, so that a start that is too slow ends with Dagster's own error.
+
 If you prefer two terminals, you can start them independently:
 
 ```bash
@@ -265,7 +267,9 @@ Run `datavloot new <path>` to scaffold a new project. The project name is inferr
 ├── packages.yml                      # the optimist dbt package (dbt-datavloot-optimist) and Elementary
 ├── dbt_project.yml                   # project config
 ├── profiles.yml                      # dbt connection: attaches the lake; dev (default) and prod targets
-├── dagster.yaml                      # Dagster instance settings: one lake writer at a time
+├── dagster.yaml                      # Dagster instance settings: one lake writer at a time, ten minutes to load
+├── branding/
+│   └── branding.yml                  # the name the Crows Nest shows (Optimist), and optional colours
 ├── lake/                             # the data: catalog.sqlite + Parquet files (git-ignored)
 ├── notebooks/
 │   └── explore.py                    # Marimo notebook for querying results
@@ -500,20 +504,21 @@ The **Crows Nest** is a built-in unified dashboard that replaces the need to man
 datavloot launch
 ```
 
-Opens [http://localhost:8080](http://localhost:8080) with six panels:
+Opens [http://localhost:8080](http://localhost:8080) with seven panels:
 
 | Panel | What it shows |
 |---|---|
+| **Overview** | Before the first run, a welcome with a "Ready to sail" checklist of five setup steps (Dagster running, a first successful run, tables in the lakehouse, tests, a dashboard with data), and a button that opens Pipelines. After it: the latest run, data quality and the number of tables, what needs attention, recent runs and what there is to open. The checklist stays as a card until every step is done, then folds to one line that can be hidden; the page fetches the steps again when a run ends. |
 | **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Hover over a failed run's label for the part of its error that says what went wrong. **Materialize all** starts a run of every asset. Auto-refreshes every 15 seconds. |
 | **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
 | **SQL editor** | SQL editor connected directly to your lake. On a laptop it can also change it: delete rows, drop a table, and so on (see [Changing data in the SQL editor](#changing-data-in-the-sql-editor)); on a shared host it is read-only. Autocomplete suggests schemas, tables and columns, also after an alias (`FROM vessels v WHERE v.`). Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
-| **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. |
+| **Notebooks** | Lists all Marimo notebooks in your project's `notebooks/` folder. Click **Launch** to start a notebook and embed it directly in the panel. A **Close notebook** button in the panel header stops the Marimo process and returns you to the list. If Marimo stops for any other reason, the panel detects it within a few seconds and returns automatically. Marimo's AI (a chat about your data, generating and refactoring cells, coding agents such as Claude Code) works in these notebooks once each user sets up an AI provider in Marimo; the panel links to Marimo's guides and points to the AI panel's icon, since Marimo cannot be told to open that panel itself. |
 
 ### Your own name, logo and colours
 
-A project can give the Crows Nest its own look with a `branding/` folder; without one it looks as above.
+A project can give the Crows Nest its own look with a `branding/` folder; without one it looks as above. A new project gets a `branding/branding.yml` with `name: Optimist`, the name at the top left of the sidebar; change it to `Falcon` on a VM, or to your organisation's name. Without a name the sidebar also says Optimist.
 
 ```
 branding/
@@ -532,6 +537,8 @@ colors:
 ```
 
 You name a few colours; the Crows Nest derives every shade it uses from them. With a logo, the sidebar shows the logo without the name next to it, since a logo usually carries the name already; the name still titles the browser tab. Restart is not needed: the next page load picks up a change.
+
+While `datavloot start` waits for Dagster to load the project, a banner above every panel shows how long it has taken and, from the second start on, how long the last start took. While a pipeline runs, a banner shows which one and for how long.
 
 The **health banner** at the top of every panel shows how things stand now. Pipelines counts jobs by their latest run, so a job that failed and then succeeded counts as ok; hover over "failing" for the errors. Quality counts each test by its latest result. The service dots are green when Dagster, DuckDB and Marimo are reachable and red when not, except Marimo, which is amber until it starts with the first notebook. Panels that depend on a service that is temporarily unavailable (for example, Dagster not running) return a descriptive message rather than an error.
 
@@ -711,11 +718,11 @@ Versions below are the ones locked in `uv.lock`, which the Falcon image installs
 | Package | Locked version |
 |---|---|
 | Python | ≥3.10, <3.14 |
-| dagster | 1.13.7 |
-| dagster-dbt | 0.29.7 |
+| dagster | 1.13.29 |
+| dagster-dbt | 0.29.29 |
 | dbt-core | 1.11.11 |
 | dbt-duckdb | 1.10.1 |
 | dlt | 1.30.0 |
 | duckdb | 1.5.3 |
 | elementary-data | 0.25.1 |
-| marimo | 0.24.2 |
+| marimo | 0.25.2 |
