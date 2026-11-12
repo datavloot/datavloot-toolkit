@@ -691,13 +691,13 @@ def test_waiting_for_dagster_counts_seconds_not_attempts(monkeypatch):
     monkeypatch.setattr(cli.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(cli.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
 
-    import httpx
-
     def hangs(*args, **kwargs):
         clock[0] += 2
-        raise httpx.ConnectError("not yet")
+        raise OSError("not listening yet")
 
-    monkeypatch.setattr(httpx, "post", hangs)
+    # A stand-in for httpx, which the lint job does not install.
+    monkeypatch.setitem(sys.modules, "httpx", type(sys)("httpx"))
+    monkeypatch.setattr(sys.modules["httpx"], "post", hangs, raising=False)
     proc = type("Proc", (), {"poll": lambda self: None, "returncode": None})()
     error = cli._wait_for_dagster(proc, "http://127.0.0.1:9/graphql", timeout=60)
     assert "within 60 seconds" in error
