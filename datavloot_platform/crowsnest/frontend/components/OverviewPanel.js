@@ -376,8 +376,9 @@ function Checklist({ steps, done, onNavigate, onClose }) {
 const LAST_RUN = {
   success: { text: 'Last run succeeded', tile: 'bg-emerald-700 hover:bg-emerald-800' },
   failure: { text: 'Last run failed', tile: 'bg-red-700 hover:bg-red-800' },
-  running: { text: 'Running', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
-  queued: { text: 'Queued', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
+  // Ochre while a run is under way; the darker shade keeps white text readable.
+  running: { text: 'Running', tile: 'bg-highlight-700 hover:brightness-90' },
+  queued: { text: 'Queued', tile: 'bg-highlight-700 hover:brightness-90' },
   cancelled: { text: 'Last run cancelled', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
 };
 
