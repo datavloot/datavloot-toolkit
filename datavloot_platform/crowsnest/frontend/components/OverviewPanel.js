@@ -46,12 +46,26 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const appList = apps.data?.apps || [];
   const notebookList = notebooks.data?.notebooks || [];
 
+  // While `datavloot start` is loading the project there is nothing to do but
+  // wait (the banner above shows how long); when it failed, the banner says why.
+  const dagsterStep = {
+    starting: {
+      help: 'Dagster is loading the project, which takes a minute or two. It ticks itself off here when it is ready.',
+      waiting: true,
+    },
+    failed: {
+      help: 'Dagster did not start; the message above says why.',
+    },
+  }[s.dagster] || {
+    help: 'The orchestrator that runs your pipelines. Start it with datavloot start.',
+    action: { label: 'Open Dagster', href: dagsterUrl },
+  };
+
   const steps = [
     {
       title: 'Dagster is running',
-      help: 'The orchestrator that runs your pipelines. Start it with datavloot start.',
       done: s.dagster === 'ok',
-      action: { label: 'Open Dagster', href: dagsterUrl },
+      ...dagsterStep,
     },
     {
       title: 'A first pipeline run succeeded',
@@ -273,10 +287,13 @@ function Checklist({ steps, done, onNavigate }) {
             <li key={step.title} className="flex items-center gap-4 py-3.5">
               <span
                 className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center ${
-                  step.done ? 'bg-datavloot-600 text-white' : 'ring-[1.5px] ring-inset ring-surface-3'
+                  step.done ? 'bg-datavloot-600 text-white'
+                    : step.waiting ? 'ring-[1.5px] ring-inset ring-datavloot-200 text-datavloot-600'
+                    : 'ring-[1.5px] ring-inset ring-surface-3'
                 }`}
               >
                 {step.done && <CheckIcon />}
+                {!step.done && step.waiting && <span className="w-2 h-2 rounded-full bg-current pulse-dot" aria-hidden="true" />}
               </span>
               <div className="flex-1 min-w-0">
                 <div className={`text-sm font-semibold ${step.done ? 'text-ink-3 line-through decoration-surface-3' : 'text-ink-0'}`}>
@@ -284,7 +301,7 @@ function Checklist({ steps, done, onNavigate }) {
                 </div>
                 {!step.done && <div className="text-sm text-ink-2">{step.help}</div>}
               </div>
-              {!step.done && (
+              {!step.done && step.action && (
                 step.action.href ? (
                   <a href={step.action.href} target="_blank" rel="noopener noreferrer" className={`btn ${first ? '' : 'btn-ghost'}`}>
                     {step.action.label}
