@@ -87,9 +87,15 @@ export default function OverviewPanel({ onNavigate, branding }) {
     },
     {
       title: 'A first dashboard',
-      help: 'A Marimo app in apps/ becomes a dashboard for everyone.',
-      done: appList.length > 0,
-      action: { label: 'Dashboards', tab: 'apps' },
+      // An app without tables to read shows nothing yet (the demo's dashboard
+      // before its first run), so it counts once the lakehouse has tables.
+      help: appList.length > 0
+        ? 'The dashboard is there; it shows data once a pipeline run has built the tables.'
+        : 'A Marimo app in apps/ becomes a dashboard for everyone.',
+      done: appList.length > 0 && modelCount > 0,
+      action: appList.length > 0 && modelCount === 0
+        ? { label: 'Pipelines', tab: 'pipelines' }
+        : { label: 'Dashboards', tab: 'apps' },
     },
   ];
   const stepsDone = steps.filter((step) => step.done).length;
@@ -105,15 +111,16 @@ export default function OverviewPanel({ onNavigate, branding }) {
 
   if (empty || forceWelcome) {
     return (
-      <div className="max-w-3xl w-full mx-auto space-y-5 py-4">
-        <Welcome name={branding?.name} isDemo={services.data?.is_demo} onNavigate={onNavigate} />
+      <div className="max-w-3xl w-full m-auto space-y-5 py-4">
+        <Welcome onNavigate={onNavigate} />
         <Checklist steps={steps} done={stepsDone} onNavigate={onNavigate} />
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl w-full mx-auto space-y-5">
+    // my-auto: in the middle of the screen when it fits, from the top when it scrolls.
+    <div className="max-w-5xl w-full m-auto space-y-5">
       {/* Head: the date, a greeting, the quick actions */}
       <div className="page-head">
         <div>
@@ -218,14 +225,9 @@ export default function OverviewPanel({ onNavigate, branding }) {
   );
 }
 
-function Welcome({ name, isDemo, onNavigate }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText('datavloot demo').then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
+// The demo is a project of its own (`datavloot demo`), so the welcome does not
+// offer it: nothing here could load it into this project.
+function Welcome({ onNavigate }) {
   return (
     <section className="card px-8 pt-12 pb-8 text-center">
       <div className="flex flex-col items-center">
@@ -233,7 +235,8 @@ function Welcome({ name, isDemo, onNavigate }) {
         <div className="w-24 h-1 rounded-full bg-highlight/60 mt-3" />
       </div>
       <h1 className="text-[28px] font-semibold text-ink-0 tracking-tight mt-6">
-        Welcome aboard{name ? `, ${name}` : ''}
+        {/* The captain, as on the overview: the project's name is in the sidebar */}
+        Welcome aboard, captain!
       </h1>
       <p className="text-[15px] leading-relaxed text-ink-2 max-w-xl mx-auto mt-3">
         The Crows Nest is the lookout of your data platform: pipelines, data quality,
@@ -257,19 +260,6 @@ function Welcome({ name, isDemo, onNavigate }) {
           <PlusIcon /> Add a source
         </a>
       </div>
-      {/* Not in the demo itself: there the pipeline above is the demo */}
-      {isDemo === false && (
-        <div className="border-t border-surface-3 mt-9 pt-6">
-          <p className="text-sm text-ink-2 max-w-md mx-auto">
-            Just looking around? Load the demo: a year of NOAA ship traffic around Guam,
-            with tables, tests and a dashboard.
-          </p>
-          <button onClick={copy} className="btn mt-3 font-mono" title="Copy the command">
-            <span className="text-ink-3">$</span> datavloot demo
-            <span className="text-ink-3 font-sans font-medium ml-1">{copied ? 'copied' : 'copy'}</span>
-          </button>
-        </div>
-      )}
     </section>
   );
 }
