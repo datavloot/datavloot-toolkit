@@ -361,9 +361,13 @@ _READINESS_QUERY = """
 """
 
 
-def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 60):
+def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int | None = None):
     """
     Block until Dagster is genuinely usable.  Return None on success, else an error string.
+
+    `timeout` is in seconds of clock time, not attempts: an attempt takes from
+    one second to three (a request that hangs), so counting them waited anywhere
+    from one minute to three. Default: DAGSTER_LOAD_TIMEOUT and _WAIT_MARGIN.
 
     Four outcomes are distinguished, because they warrant different responses:
       - process died          -> fail at once; waiting out the timeout tells us nothing
@@ -377,7 +381,10 @@ def _wait_for_dagster(proc: subprocess.Popen, graphql_url: str, timeout: int = 6
 
     last_detail = "no response from the webserver"
 
-    for _ in range(timeout):
+    if timeout is None:
+        timeout = DAGSTER_LOAD_TIMEOUT + _WAIT_MARGIN
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if proc.poll() is not None:
             return f"Dagster exited with code {proc.returncode} before becoming ready."
 
@@ -701,12 +708,58 @@ def _dagster_home(project_dir: pathlib.Path) -> dict[str, str]:
         return {}
     home = project_dir / ".dagster"
     home.mkdir(exist_ok=True)
-    settings, copy = project_dir / "dagster.yaml", home / "dagster.yaml"
-    if settings.is_file():
-        shutil.copyfile(settings, copy)
-    else:
-        copy.unlink(missing_ok=True)
+    settings = project_dir / "dagster.yaml"
+    text = settings.read_text(encoding="utf-8") if settings.is_file() else ""
+    (home / "dagster.yaml").write_text(_with_load_timeout(text), encoding="utf-8")
     return {"DAGSTER_HOME": str(home)}
+
+
+# How long Dagster may take to load a project's code (its code_servers:
+# local_startup_timeout) when the project's dagster.yaml does not say. Dagster's
+# own default, 180 seconds, was too short for a first start on a customer's
+# Windows laptop (2026-11), with the virus scanner reading every new file.
+DAGSTER_LOAD_TIMEOUT = 600
+_DAGSTER_DEFAULT_LOAD_TIMEOUT = 180
+# `datavloot start` waits this much longer than Dagster, so that when loading
+# takes too long it is Dagster's own error, which says why, that shows.
+_WAIT_MARGIN = 60
+
+
+def _with_load_timeout(text: str) -> str:
+    """dagster.yaml's text, with DAGSTER_LOAD_TIMEOUT added unless it sets one."""
+    import yaml
+
+    try:
+        settings = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return text  # Dagster reports the mistake itself, in the user's own file
+    if not isinstance(settings, dict):
+        return text
+    servers = settings.get("code_servers")
+    if isinstance(servers, dict) and "local_startup_timeout" in servers:
+        return text
+    if servers is None:
+        # Appended, so the project's own text and comments stay as they are.
+        addition = (
+            "# Added by `datavloot start`: the project's dagster.yaml does not set it.\n"
+            f"code_servers:\n  local_startup_timeout: {DAGSTER_LOAD_TIMEOUT}\n"
+        )
+        return (text if not text or text.endswith("\n") else text + "\n") + addition
+    if not isinstance(servers, dict):
+        return text
+    settings["code_servers"] = {**servers, "local_startup_timeout": DAGSTER_LOAD_TIMEOUT}
+    return yaml.safe_dump(settings, sort_keys=False)
+
+
+def _load_timeout(dagster_home: pathlib.Path) -> int:
+    """The local_startup_timeout Dagster will use, from DAGSTER_HOME's dagster.yaml."""
+    import yaml
+
+    try:
+        settings = yaml.safe_load((dagster_home / "dagster.yaml").read_text(encoding="utf-8"))
+        return int(settings["code_servers"]["local_startup_timeout"])
+    except Exception:
+        return _DAGSTER_DEFAULT_LOAD_TIMEOUT
 
 
 def cmd_start(args: argparse.Namespace) -> None:
@@ -789,9 +842,13 @@ def _start(args, graphql_url, scripts, env, log) -> None:
     startup.set_dagster("starting", expected=startup.last_start_seconds(project_dir))
     startup.set_dagster_process(dagster_proc)
 
+    # As long as Dagster itself may take to load the project, and a minute more.
+    home = env.get("DAGSTER_HOME")
+    wait = (_load_timeout(pathlib.Path(home)) if home else _DAGSTER_DEFAULT_LOAD_TIMEOUT) + _WAIT_MARGIN
+
     def watch() -> None:
         print(f"Waiting for Dagster to be ready at {graphql_url}…", flush=True)
-        error = _wait_for_dagster(dagster_proc, graphql_url)
+        error = _wait_for_dagster(dagster_proc, graphql_url, wait)
         if startup.stopping():
             # Shut down stopped Dagster while it was loading: not a failed start.
             print("Dagster stopped before it was ready: Datavloot is shutting down.", flush=True)

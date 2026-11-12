@@ -11,3 +11,10 @@ concurrency:
     # committing at the same moment fails with "database is locked".
     default_limit: 1
     granularity: op
+code_servers:
+  # How long Dagster may take to load this project's code before it gives up
+  # (Dagster's own default is 180 seconds). A first start on a Windows laptop,
+  # with the virus scanner reading every new file, can take longer than that.
+  # `datavloot start` waits a minute longer than this, so Dagster's own error
+  # shows if it does give up.
+  local_startup_timeout: 600

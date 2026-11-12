@@ -23,6 +23,7 @@ import sys
 import zlib
 
 import pytest
+import yaml
 
 from datavloot_platform import autostart, cli
 from datavloot_platform.crowsnest import processes
@@ -636,7 +637,10 @@ def test_dagster_gets_a_home_in_the_project_with_a_copy_of_dagster_yaml(project,
     env = cli._dagster_home(project)
     home = project / ".dagster"
     assert env == {"DAGSTER_HOME": str(home)}
-    assert (home / "dagster.yaml").read_text(encoding="utf-8") == (project / "dagster.yaml").read_text(encoding="utf-8")
+    copy = (home / "dagster.yaml").read_text(encoding="utf-8")
+    # The project's own text, and the load timeout it does not set.
+    assert copy.startswith((project / "dagster.yaml").read_text(encoding="utf-8"))
+    assert yaml.safe_load(copy)["code_servers"]["local_startup_timeout"] == cli.DAGSTER_LOAD_TIMEOUT
 
     # Every start copies it again, so an edit counts from the next start...
     (project / "dagster.yaml").write_text("concurrency:\n  pools:\n    default_limit: 2\n", encoding="utf-8")
@@ -645,10 +649,59 @@ def test_dagster_gets_a_home_in_the_project_with_a_copy_of_dagster_yaml(project,
     assert "default_limit: 2" in (home / "dagster.yaml").read_text(encoding="utf-8")
     assert (home / "history").is_dir(), "the home is kept between starts"
 
-    # ...and a project without one runs on Dagster's defaults, not a stale copy.
+    # ...and a project without one runs on Dagster's defaults, not a stale
+    # copy, but for the load timeout.
     (project / "dagster.yaml").unlink()
     cli._dagster_home(project)
-    assert not (home / "dagster.yaml").exists()
+    assert yaml.safe_load((home / "dagster.yaml").read_text(encoding="utf-8")) == {
+        "code_servers": {"local_startup_timeout": cli.DAGSTER_LOAD_TIMEOUT}
+    }
+
+
+@pytest.mark.parametrize(
+    "text, timeout",
+    [
+        # The project's own value wins, and its file is copied as it is.
+        ("code_servers:\n  local_startup_timeout: 900\n", 900),
+        # Other code server settings stay; the timeout is added beside them.
+        ("code_servers:\n  reload_timeout: 30\n", cli.DAGSTER_LOAD_TIMEOUT),
+        ("concurrency:\n  pools:\n    default_limit: 1", cli.DAGSTER_LOAD_TIMEOUT),
+    ],
+)
+def test_dagster_may_take_ten_minutes_to_load_unless_the_project_says(project, monkeypatch, text, timeout):
+    # A first start on a customer's Windows laptop took Dagster longer than its
+    # default 180 seconds (2026-11); `datavloot start` waits a minute longer.
+    monkeypatch.delenv("DAGSTER_HOME", raising=False)
+    (project / "dagster.yaml").write_text(text, encoding="utf-8")
+    cli._dagster_home(project)
+    home = project / ".dagster"
+    settings = yaml.safe_load((home / "dagster.yaml").read_text(encoding="utf-8"))
+    assert settings["code_servers"]["local_startup_timeout"] == timeout
+    assert cli._load_timeout(home) == timeout
+    if "reload_timeout" in text:
+        assert settings["code_servers"]["reload_timeout"] == 30
+    if timeout == 900:
+        assert (home / "dagster.yaml").read_text(encoding="utf-8") == text
+
+
+def test_waiting_for_dagster_counts_seconds_not_attempts(monkeypatch):
+    # An attempt whose request hangs takes three seconds: counted in attempts,
+    # 60 of them waited up to three minutes instead of one.
+    clock = [0.0]
+    monkeypatch.setattr(cli.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(cli.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+
+    def hangs(*args, **kwargs):
+        clock[0] += 2
+        raise OSError("not listening yet")
+
+    # A stand-in for httpx, which the lint job does not install.
+    monkeypatch.setitem(sys.modules, "httpx", type(sys)("httpx"))
+    monkeypatch.setattr(sys.modules["httpx"], "post", hangs, raising=False)
+    proc = type("Proc", (), {"poll": lambda self: None, "returncode": None})()
+    error = cli._wait_for_dagster(proc, "http://127.0.0.1:9/graphql", timeout=60)
+    assert "within 60 seconds" in error
+    assert 60 <= clock[0] < 63
 
 
 def test_a_dagster_home_that_is_set_is_left_alone(project, monkeypatch, tmp_path):
