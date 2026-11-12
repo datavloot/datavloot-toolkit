@@ -417,7 +417,7 @@ def test_a_dagster_stopped_by_shut_down_is_not_reported_as_a_failed_start(monkey
     monkeypatch.setattr(threading, "Thread", Thread)
     monkeypatch.setattr(cli, "cmd_crowsnest", lambda args: None)
     monkeypatch.setattr(cli, "terminate_tree", lambda proc: None)
-    monkeypatch.setattr(cli, "_wait_for_dagster", lambda proc, url: "Dagster exited with code 1 before becoming ready.")
+    monkeypatch.setattr(cli, "_wait_for_dagster", lambda proc, url, wait: "Dagster exited with code 1 before becoming ready.")
     cli._start(argparse.Namespace(run=False), "http://127.0.0.1:9/graphql", None, {}, None)
 
     startup.set_stopping()
