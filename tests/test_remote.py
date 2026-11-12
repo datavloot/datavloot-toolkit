@@ -327,7 +327,7 @@ def test_install_from_a_private_gitlab_subfolder(httpx_available, tmp_path, isol
     assert isolated.stored == {("datavloot", "gitlab.com/datavloot/ketenconnect-demo"): TOKEN}
     assert any(r.headers.get("PRIVATE-TOKEN") == TOKEN for r in host.requests)
 
-    # The steps install.ps1 takes, in the project.
+    # The steps install-demo.ps1 takes, in the project.
     assert [c[1:] for c in commands] == [
         ["sync", "--python", "3.12"],
         ["run", "--no-sync", "dbt", "deps"],

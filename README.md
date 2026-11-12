@@ -30,27 +30,66 @@ The Optimist is a fully functional data platform that runs on your local machine
 
 ## Installing
 
-To try Datavloot on your own laptop, one command installs it and opens the Crows Nest on the NOAA demo. It needs no Python, git or admin rights.
+Three scripts install Datavloot with one command each. They need no Python, git or admin rights: each installs [uv](https://docs.astral.sh/uv/) for your user if it is not there yet, gives the project its own Python 3.12 and packages, installs the dbt packages, and starts Dagster and the Crows Nest at [http://localhost:8080](http://localhost:8080).
 
-**Windows** (PowerShell or Command Prompt):
+| Script | For |
+|---|---|
+| `install-demo` | Trying Datavloot on the NOAA demo |
+| `new-project` | Starting a new, empty project of your own |
+| `install-project` | Installing a project that already exists in a repository, on another machine |
+
+The Windows commands work in PowerShell and in Command Prompt. `-ExecutionPolicy ByPass` applies to that one command only; it changes no setting.
+
+### The demo
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install-demo.ps1 | iex"
 ```
-
-**macOS and Linux:**
 
 ```bash
-curl -LsSf https://datavloot.nl/install.sh | bash
+curl -LsSf https://datavloot.nl/install-demo.sh | bash
 ```
 
-The script:
+The demo goes in `optimist-demo` in your home folder. The first run starts by itself: it downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
 
-1. Installs [uv](https://docs.astral.sh/uv/) for your user, if it is not there yet.
-2. Creates the demo project in `optimist-demo` in your home folder.
-3. Gives the project its own Python 3.12 and packages, and installs the dbt packages.
-4. Starts Dagster and the Crows Nest, and opens [http://localhost:8080](http://localhost:8080).
-5. Starts the first run, which downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
+### A new, empty project
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/new-project.ps1 | iex"
+```
+
+```bash
+curl -LsSf https://datavloot.nl/new-project.sh | bash
+```
+
+The script asks for the project's name (letters, digits, `-` and `_`) and creates the project with `datavloot new` in a folder of that name in your home folder. It starts empty: no sources or models yet. `data-instructions.md` in the project says how to add them; hand it to your AI assistant at the start of a session. [Getting started](#getting-started) describes the same steps by hand.
+
+### A project from its repository
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install-project.ps1 | iex"
+```
+
+```bash
+curl -LsSf https://datavloot.nl/install-project.sh | bash
+```
+
+The script asks for the project's GitHub or GitLab repository and installs its latest tag with `datavloot new --from` (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asking for a token when the repository is private. The project lands in a folder named after the repository in your home folder. No run starts by itself: first put the project's input files in place, then click Materialize all in the Pipelines panel.
+
+### Settings
+
+Each script reads these environment variables. Set them first, as in `$env:DATAVLOOT_DIR = 'C:\dev\demo'` in PowerShell or `curl ... | DATAVLOOT_DIR=~/dev/demo bash`:
+
+| Variable | Script | Meaning |
+|---|---|---|
+| `DATAVLOOT_DIR` | all | Where the project goes. For `new-project`, instead of asking for a name: the folder's name becomes the project's name |
+| `DATAVLOOT_VERSION` | all | A toolkit version, e.g. `0.4.0` (default: the latest release) |
+| `DATAVLOOT_FROM` | all | Install the toolkit from here instead of PyPI, e.g. a checkout |
+| `DATAVLOOT_PROJECT` | `install-project` | The repository, instead of asking for it |
+| `DATAVLOOT_REF` | `install-project` | The tag to install (default: the latest version) |
+| `DATAVLOOT_PATH` | `install-project` | The project's folder in the repository, when it cannot be found by itself |
+
+### Starting again
 
 Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder, on Windows:
 
@@ -64,26 +103,13 @@ On macOS and Linux:
 .venv/bin/datavloot start
 ```
 
-`uv run datavloot start` does the same, but only in a terminal opened after uv was installed. Running the install command again also starts the project.
+`uv run datavloot start` does the same, but only in a terminal opened after uv was installed. Running a script again also starts the project: it finds the project and never overwrites it.
 
-**Your own project instead of the demo.** Set `DATAVLOOT_PROJECT` to its repository first. The script then installs that project's latest tag with `datavloot new --from` (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asking for a token when the repository is private:
+A script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project.
 
-```powershell
-$env:DATAVLOOT_PROJECT = 'https://gitlab.com/group/project'
-powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install.ps1 | iex"
-```
+### Upgrading
 
-```bash
-curl -LsSf https://datavloot.nl/install.sh | DATAVLOOT_PROJECT=https://gitlab.com/group/project bash
-```
-
-`DATAVLOOT_REF` picks a tag and `DATAVLOOT_PATH` the project's folder in the repository, when it cannot be found by itself. The project lands in a folder named after the repository in your home folder.
-
-Running the install command again does the same: it finds the project and starts it, and never overwrites it. To install somewhere else, set `DATAVLOOT_DIR` first: `$env:DATAVLOOT_DIR = 'C:\dev\demo'` in PowerShell, or `curl ... | DATAVLOOT_DIR=~/dev/demo bash`. `DATAVLOOT_VERSION` picks a toolkit version (default: the latest).
-
-The script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project. `-ExecutionPolicy ByPass` in the Windows command applies to that one command only; it changes no setting.
-
-**Upgrading.** A project pins the toolkit to its minor version (`datavloot[optimist]~=0.3.0`). To get the latest patch release, run this in the project folder:
+A project pins the toolkit to its minor version (`datavloot[optimist]~=0.3.0`). To get the latest patch release, run this in the project folder:
 
 ```bash
 uv sync --upgrade-package datavloot
@@ -91,7 +117,7 @@ uv sync --upgrade-package datavloot
 
 Moving to a newer minor version is a change to `pyproject.toml` and `packages.yml` (see [#55](https://github.com/datavloot/datavloot-toolkit/issues/55)).
 
-To build a project of your own rather than try the demo, follow the steps below.
+To set up a project by hand instead, with pip, follow the steps below.
 
 ---
 
@@ -331,7 +357,7 @@ When one person maintains a project and others only run it and use the Crows Nes
 datavloot new C:\dev\harbor --from https://gitlab.com/<group>/harbor
 ```
 
-This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`. The target folder must be new or empty; an existing project is never overwritten.
+This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`; the `install-project` script (see [A project from its repository](#a-project-from-its-repository)) installs both and starts the project. The target folder must be new or empty; an existing project is never overwritten.
 
 An installation is a copy of one tag, not a working copy: it is meant to be run, not changed.
 
