@@ -37,6 +37,24 @@ def test_placeholders_are_substituted(scaffold: pathlib.Path):
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
+def test_a_new_project_is_called_optimist(tmp_path: pathlib.Path, template: str):
+    """
+    The Crows Nest of a new project says Optimist at the top left.
+
+    The name comes from the project's branding/branding.yml (read by
+    crowsnest/routes/branding.py), so a Falcon or a customer's project changes
+    one line and nothing else.
+    """
+    dest = tmp_path / "project"
+    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    settings = yaml.safe_load((dest / "branding" / "branding.yml").read_text(encoding="utf-8"))
+    assert settings["name"] == "Optimist"
+    assert not any((dest / "branding" / logo).exists() for logo in ("logo.svg", "logo.png")), (
+        "a logo would hide the name"
+    )
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
 def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: str):
     """
     A new project pins the toolkit to its release and the dbt package to the one it was tested with.
