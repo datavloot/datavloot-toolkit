@@ -135,7 +135,8 @@ export default function CrowsNestPage() {
               <img src="/datavloot-logo.png" alt="" className="w-10 h-10 shrink-0" />
               <div className="min-w-0">
                 <div className="font-semibold text-[15px] leading-tight tracking-tight truncate">
-                  {branding?.name || 'datavloot'}
+                  {/* Optimist, datavloot on a laptop, unless branding.yml names the project */}
+                  {branding?.name || 'Optimist'}
                 </div>
                 <div className="text-[11px] text-white/55 leading-tight mt-0.5">crows nest</div>
               </div>
