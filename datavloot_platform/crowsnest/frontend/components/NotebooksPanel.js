@@ -98,7 +98,7 @@ export default function NotebooksPanel() {
               href="https://docs.marimo.io/guides/editor_features/ai_completion/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-datavloot-600 hover:underline"
+              className="font-medium text-datavloot-600 hover:underline whitespace-nowrap"
             >
               AI chat and cells ↗
             </a>
@@ -107,7 +107,7 @@ export default function NotebooksPanel() {
               href="https://docs.marimo.io/guides/generate_with_ai/marimo_pair/"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-datavloot-600 hover:underline"
+              className="font-medium text-datavloot-600 hover:underline whitespace-nowrap"
             >
               coding agents ↗
             </a>

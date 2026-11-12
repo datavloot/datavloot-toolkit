@@ -207,8 +207,8 @@ export default function CrowsNestPage() {
         <StartupBanner />
         {/* While a pipeline runs, on every tab */}
         <RunBanner activeTab={activeTab} onNavigate={selectTab} />
-        {/* The overview says all of this itself */}
-        {activeTab !== 'overview' && <HealthBanner />}
+        {/* On every tab, the overview too: the same place to look everywhere */}
+        <HealthBanner />
 
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden px-8 py-6">
           {activeTab === 'overview' && <OverviewPanel onNavigate={selectTab} branding={branding} />}

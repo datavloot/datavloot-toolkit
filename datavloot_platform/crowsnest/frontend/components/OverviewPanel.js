@@ -12,8 +12,10 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const [healthEvery, setHealthEvery] = useState(30000);
   const health = useApi(() => api.getHealth(), [], healthEvery);
   const services = useApi(() => api.getServices(), []);
-  const pipelines = useApi(() => api.getPipelineSummary(), [], 30000);
-  const runs = useApi(() => api.getPipelineRuns(5), [], 30000);
+  // Every 5 seconds while a run is under way, so the page sees it end.
+  const [pipelinesEvery, setPipelinesEvery] = useState(30000);
+  const pipelines = useApi(() => api.getPipelineSummary(), [], pipelinesEvery);
+  const runs = useApi(() => api.getPipelineRuns(5), [], pipelinesEvery);
   const dagsterStatus = health.data?.services?.dagster;
   useEffect(() => {
     setHealthEvery(dagsterStatus === 'starting' ? 3000 : 30000);
@@ -27,6 +29,24 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const models = useApi(() => api.getCatalogModels(), []);
   const apps = useApi(() => api.getApps(), []);
   const notebooks = useApi(() => api.getNotebooks(), []);
+
+  // When a run ends it may have built tables, tests and what a dashboard reads:
+  // fetch those again, or the setup steps stay open until the page is reloaded.
+  const running = pipelines.data?.running || 0;
+  const [wasRunning, setWasRunning] = useState(false);
+  useEffect(() => {
+    setPipelinesEvery(running > 0 ? 5000 : 30000);
+    if (running > 0) {
+      setWasRunning(true);
+    } else if (wasRunning) {
+      setWasRunning(false);
+      quality.reload();
+      models.reload();
+      apps.reload();
+      runs.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   // #welcome shows the welcome on any project, to look at it.
   const [forceWelcome, setForceWelcome] = useState(false);
