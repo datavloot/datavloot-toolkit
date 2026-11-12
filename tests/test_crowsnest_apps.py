@@ -236,6 +236,15 @@ def test_an_apps_service_is_linked_to_not_started(make_client, monkeypatch):
     assert client.get("/api/services").json()["apps_url"] == "https://apps.example.nl"
 
 
+@pytest.mark.parametrize("name, is_demo", [("noaa", True), ("probe", False)])
+def test_the_welcome_knows_the_demo(make_client, tmp_path, name, is_demo):
+    # The welcome offers `datavloot demo`, except in the demo itself.
+    (tmp_path / "dbt_project.yml").write_text(f"name: '{name}'\n", encoding="utf-8")
+    services = make_client().get("/api/services").json()
+    assert services["project"] == name
+    assert services["is_demo"] is is_demo
+
+
 def test_a_laptop_links_the_local_apps_server(make_client):
     assert make_client().get("/api/services").json()["apps_url"] == "http://127.0.0.1:2719"
 
