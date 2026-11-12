@@ -56,7 +56,7 @@ optimist = [
     # Where `datavloot new --from` keeps the token for a private repository:
     # Windows Credential Manager, the macOS Keychain or the Secret Service.
     "keyring>=25,<26",
-    "marimo>=0.23.9,<0.25",
+    "marimo>=0.25.2,<0.26",
     "pandas>=2.0,<3",
     # dagster-dbt asks for sqlglot[rs], which from 30.0 pulls in sqlglotc: a C
     # extension without wheels for Python 3.10, so pip would compile it there.

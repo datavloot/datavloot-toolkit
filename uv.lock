@@ -676,7 +676,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'optimist'", specifier = ">=0.115,<1" },
     { name = "httpx", marker = "extra == 'optimist'", specifier = ">=0.27,<1" },
     { name = "keyring", marker = "extra == 'optimist'", specifier = ">=25,<26" },
-    { name = "marimo", marker = "extra == 'optimist'", specifier = ">=0.23.9,<0.25" },
+    { name = "marimo", marker = "extra == 'optimist'", specifier = ">=0.25.2,<0.26" },
     { name = "pandas", marker = "extra == 'optimist'", specifier = ">=2.0,<3" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
@@ -1802,7 +1802,7 @@ wheels = [
 
 [[package]]
 name = "marimo"
-version = "0.24.2"
+version = "0.25.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click", marker = "sys_platform != 'emscripten'" },
@@ -1827,9 +1827,9 @@ dependencies = [
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
     { name = "websockets", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/90/a7/321efa5a41218b1d1efab5110484d264377428ee858969d3678e573e3379/marimo-0.24.2.tar.gz", hash = "sha256:b0e1bf55f605f1a522cc3428a38d44242469fd24aa24199a86715aefbf746812", size = 38784284, upload-time = "2026-09-11T16:58:30.789Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/d6/f4aae3466a41d34952ac84a4b9bcd83744da592b496c98e34ccd2a0f20d9/marimo-0.25.2.tar.gz", hash = "sha256:3cfa38ac84c66625e1f7cb7dc81a41ebd592244000ffe37effb28a91765056b0", size = 38844392, upload-time = "2026-10-19T20:10:30.145Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/c9/48e338c36e7153da76fd6cc87afb86d0c8b4aedd5a8f969c106e05b9b61d/marimo-0.24.2-py3-none-any.whl", hash = "sha256:a6c46e8f49e3b30a5d59ae3af06f6ecd0b0a3b69434be8a022692229dd538ad4", size = 39251372, upload-time = "2026-09-11T16:58:27.615Z" },
+    { url = "https://files.pythonhosted.org/packages/06/5c/c26a57aefe28fceab762ad104744c1af18a4b62809629897722c866bbd2f/marimo-0.25.2-py3-none-any.whl", hash = "sha256:7acb7a433755c6d965c03e07725477ab63804f6667ba9e37e4da582f358018c7", size = 39465510, upload-time = "2026-10-19T20:10:25.147Z" },
 ]
 
 [[package]]
