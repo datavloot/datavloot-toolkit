@@ -177,6 +177,9 @@ def cmd_new(args: argparse.Namespace) -> None:
 
     _warn_about_location(dest, project_name)
     print(f"Project '{project_name}' created at '{dest}'.\n")
+    if os.environ.get("DATAVLOOT_INSTALLER"):
+        # new-project.ps1 / new-project.sh take the next steps themselves.
+        return
     print("Next steps:")
     print(f"  1. cd {dest}")
     print(f"  2. pip install -e .   # install the project's Python package")
@@ -200,7 +203,7 @@ def cmd_new_from(args: argparse.Namespace) -> None:
     except remote.RemoteError as e:
         sys.exit(f"Error: {e}")
     if os.environ.get("DATAVLOOT_INSTALLER"):
-        # install.ps1 / install.sh start it themselves.
+        # install-project.ps1 / install-project.sh start it themselves.
         return
     print(f"\nReady. Put the project's input files in place first, usually in {dest / 'data'}.")
     print(f"Then start Dagster and the Crows Nest with:")
@@ -241,7 +244,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
     _warn_about_location(dest, "noaa")
     print(f"NOAA demo project created at '{dest}'.\n")
     if os.environ.get("DATAVLOOT_INSTALLER"):
-        # install.ps1 / install.sh take the next steps themselves.
+        # install-demo.ps1 / install-demo.sh take the next steps themselves.
         return
     print("Next steps:")
     print(f"  1. cd {dest}")

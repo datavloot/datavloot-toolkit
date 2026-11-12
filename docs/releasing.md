@@ -129,11 +129,12 @@ used while it lived here.
    ```bash
    gh release create datavloot-vX.Y.Z --verify-tag --title "datavloot X.Y.Z" \
      --notes-file notes.md dist/datavloot-X.Y.Z-py3-none-any.whl dist/datavloot-X.Y.Z.tar.gz \
-     install.ps1 install.sh
+     installers/*
    ```
-   `install.ps1` and `install.sh` go on every release, taken from the tagged commit. The
-   website serves them from there: `https://datavloot.nl/install.ps1` and `/install.sh` redirect
-   to `https://github.com/datavloot/datavloot-toolkit/releases/latest/download/<file>`, and
+   The six scripts in `installers/` go on every release, taken from the tagged commit:
+   `install-demo`, `new-project` and `install-project`, each as `.ps1` and `.sh`. The website
+   serves them from there: `https://datavloot.nl/install-demo.ps1` and the others redirect to
+   `https://github.com/datavloot/datavloot-toolkit/releases/latest/download/<file>`, and
    GitHub's `latest` skips pre-releases. So the script people run is always the one released
    together with the newest stable version on PyPI, which is what the script installs by
    default (`datavloot[optimist]@latest`). A script from `main` could use options that the
@@ -144,14 +145,15 @@ used while it lived here.
    The website does not serve a release candidate's script. To test one, name its tag and
    version:
    ```powershell
-   $env:DATAVLOOT_VERSION = '0.4.0rc3'; powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/datavloot/datavloot-toolkit/datavloot-v0.4.0rc3/install.ps1 | iex"
+   $env:DATAVLOOT_VERSION = '0.4.0rc4'; powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/datavloot/datavloot-toolkit/datavloot-v0.4.0rc4/installers/install-demo.ps1 | iex"
    ```
    Without `DATAVLOOT_VERSION` the script installs the latest stable version, which does not
    match an rc's script. Check that no `DATAVLOOT_*` variables from an earlier install are still
    set in the window (`Get-ChildItem Env:DATAVLOOT*`), and copy the whole line, including the
    leading `$`.
-10. Check that `curl.exe -sIL https://datavloot.nl/install.ps1` ends on the new release's file (the
-    redirects live in `site/_redirects` in the `datavloot-website` repository), and whether the
+10. Check that `curl.exe -sIL https://datavloot.nl/install-demo.ps1` ends on the new release's file
+    (the redirects, one per script, live in `site/_redirects` in the `datavloot-website`
+    repository), and whether the
     release notes on the website need updating. Then remove the build worktree
     (`git worktree remove ../datavloot-build`).
 

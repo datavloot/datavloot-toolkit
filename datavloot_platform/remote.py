@@ -838,7 +838,7 @@ def fill_env(
 
 
 def _python_args(project: pathlib.Path) -> list[str]:
-    # install.ps1 and install.sh use 3.12, the version every dependency has wheels
+    # The scripts in installers/ use 3.12, the version every dependency has wheels
     # for; a project that names its own in .python-version gets that one.
     if (project / ".python-version").is_file():
         return []
@@ -848,7 +848,7 @@ def _python_args(project: pathlib.Path) -> list[str]:
 def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> None:
     """
     Give the project its environment and dbt packages, and compile it: the steps
-    install.ps1 and install.sh take after creating the demo.
+    the scripts in installers/ take after creating the demo.
 
     `uv sync --locked` when the project has a uv.lock: an installation should get
     the versions its maintainer tested, and a lock that does not match
