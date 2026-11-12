@@ -18,10 +18,11 @@ def _():
     PROJECT_DIR = Path(__file__).parent.parent
     con = storage.connect(PROJECT_DIR, read_only=True)
 
-    # Two series (arrivals, departures) and a sequential ramp, from a palette
-    # checked for colour blindness and contrast.
-    ARRIVALS, DEPARTURES = "#2a78d6", "#eb6834"
-    RAMP = ["#cde2fb", "#86b6ef", "#3987e5", "#1c5cab", "#104281"]
+    # datavloot's colours, as in the Crows Nest (crowsnest/frontend/app/globals.css):
+    # navy and ochre for the two series, which differ in lightness as well as hue,
+    # so they stay apart for colour-blind readers; a ramp from pale sea to navy.
+    ARRIVALS, DEPARTURES = "#1f3c4e", "#c98a1f"
+    RAMP = ["#eaf2f6", "#b4ceda", "#5f8fa5", "#23566e", "#1f3c4e"]
     return ARRIVALS, DEPARTURES, RAMP, alt, con, mo
 
 
