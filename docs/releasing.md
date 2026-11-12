@@ -165,12 +165,13 @@ used while it lived here.
 
 ### Current state
 
-As of 2026-11-04:
+As of 2026-11-12:
 
-- PyPI has **0.1.0**, **0.1.1**, **0.1.2**, **0.2.0** and **0.3.0**; `pyproject.toml` says
-  `0.3.0`. Git has the tags `datavloot-v0.1.1`, `datavloot-v0.1.2`, `datavloot-v0.2.0` and
-  `datavloot-v0.3.0`; `datavloot-v0.1.0` was never tagged. 0.2.0 is the first release with a
-  GitHub release.
+- PyPI has **0.1.0**, **0.1.1**, **0.1.2**, **0.2.0**, **0.3.0** and **0.4.0**, and the
+  release candidates **0.4.0rc1** to **rc3**; `pyproject.toml` says `0.4.0`. Git has a
+  `datavloot-vX.Y.Z` tag for each of them except 0.1.0, which was never tagged. 0.2.0 is the
+  first release with a GitHub release, 0.4.0 the first with the six installers attached; the
+  release candidates are marked as pre-releases, so `latest` is 0.4.0.
 - New projects get the dbt package at **0.1.1** from dbt-datavloot-optimist
   (`DBT_PACKAGE_VERSION`).
 - The bare tag `0.1.2` (2026-09-07) in this repo has no dbt package release behind it; it looks
