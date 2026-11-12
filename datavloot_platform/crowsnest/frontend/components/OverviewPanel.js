@@ -12,8 +12,10 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const [healthEvery, setHealthEvery] = useState(30000);
   const health = useApi(() => api.getHealth(), [], healthEvery);
   const services = useApi(() => api.getServices(), []);
-  const pipelines = useApi(() => api.getPipelineSummary(), [], 30000);
-  const runs = useApi(() => api.getPipelineRuns(5), [], 30000);
+  // Every 5 seconds while a run is under way, so the page sees it end.
+  const [pipelinesEvery, setPipelinesEvery] = useState(30000);
+  const pipelines = useApi(() => api.getPipelineSummary(), [], pipelinesEvery);
+  const runs = useApi(() => api.getPipelineRuns(5), [], pipelinesEvery);
   const dagsterStatus = health.data?.services?.dagster;
   useEffect(() => {
     setHealthEvery(dagsterStatus === 'starting' ? 3000 : 30000);
@@ -27,6 +29,24 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const models = useApi(() => api.getCatalogModels(), []);
   const apps = useApi(() => api.getApps(), []);
   const notebooks = useApi(() => api.getNotebooks(), []);
+
+  // When a run ends it may have built tables, tests and what a dashboard reads:
+  // fetch those again, or the setup steps stay open until the page is reloaded.
+  const running = pipelines.data?.running || 0;
+  const [wasRunning, setWasRunning] = useState(false);
+  useEffect(() => {
+    setPipelinesEvery(running > 0 ? 5000 : 30000);
+    if (running > 0) {
+      setWasRunning(true);
+    } else if (wasRunning) {
+      setWasRunning(false);
+      quality.reload();
+      models.reload();
+      apps.reload();
+      runs.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running]);
 
   // #welcome shows the welcome on any project, to look at it.
   const [forceWelcome, setForceWelcome] = useState(false);
@@ -46,16 +66,31 @@ export default function OverviewPanel({ onNavigate, branding }) {
   const appList = apps.data?.apps || [];
   const notebookList = notebooks.data?.notebooks || [];
 
+  // While `datavloot start` is loading the project there is nothing to do but
+  // wait (the banner above shows how long); when it failed, the banner says why.
+  const dagsterStep = {
+    starting: {
+      help: 'Dagster is loading the project, which takes a minute or two. It ticks itself off here when it is ready.',
+      waiting: true,
+    },
+    failed: {
+      help: 'Dagster did not start; the message above says why.',
+    },
+  }[s.dagster] || {
+    help: 'The orchestrator that runs your pipelines. Start it with datavloot start.',
+    action: { label: 'Open Dagster', href: dagsterUrl },
+  };
+
   const steps = [
     {
       title: 'Dagster is running',
-      help: 'The orchestrator that runs your pipelines. Start it with datavloot start.',
       done: s.dagster === 'ok',
-      action: { label: 'Open Dagster', href: dagsterUrl },
+      ...dagsterStep,
     },
     {
       title: 'A first pipeline run succeeded',
-      help: 'Put your source files in place (often the data folder), then Materialize all in Pipelines.',
+      // Not every project needs files first: the demo downloads its own data.
+      help: 'Click Materialize all in Pipelines. If the project reads files of its own, put them in place first, usually in the data folder.',
       done: (p.success || 0) > 0,
       action: { label: 'Pipelines', tab: 'pipelines' },
     },
@@ -73,9 +108,15 @@ export default function OverviewPanel({ onNavigate, branding }) {
     },
     {
       title: 'A first dashboard',
-      help: 'A Marimo app in apps/ becomes a dashboard for everyone.',
-      done: appList.length > 0,
-      action: { label: 'Dashboards', tab: 'apps' },
+      // An app without tables to read shows nothing yet (the demo's dashboard
+      // before its first run), so it counts once the lakehouse has tables.
+      help: appList.length > 0
+        ? 'The dashboard is there; it shows data once a pipeline run has built the tables.'
+        : 'A Marimo app in apps/ becomes a dashboard for everyone.',
+      done: appList.length > 0 && modelCount > 0,
+      action: appList.length > 0 && modelCount === 0
+        ? { label: 'Pipelines', tab: 'pipelines' }
+        : { label: 'Dashboards', tab: 'apps' },
     },
   ];
   const stepsDone = steps.filter((step) => step.done).length;
@@ -91,15 +132,15 @@ export default function OverviewPanel({ onNavigate, branding }) {
 
   if (empty || forceWelcome) {
     return (
-      <div className="max-w-3xl w-full mx-auto space-y-5 py-4">
-        <Welcome name={branding?.name} dagsterUrl={dagsterUrl} />
+      <div className="max-w-3xl w-full m-auto space-y-5 py-4">
+        <Welcome onNavigate={onNavigate} />
         <Checklist steps={steps} done={stepsDone} onNavigate={onNavigate} />
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl w-full mx-auto space-y-5">
+    <div className="max-w-5xl w-full mx-auto space-y-5">
       {/* Head: the date, a greeting, the quick actions */}
       <div className="page-head">
         <div>
@@ -134,11 +175,16 @@ export default function OverviewPanel({ onNavigate, branding }) {
         s={s}
         failing={pipelines.data?.failing_jobs || []}
         q={q}
-        steps={steps}
-        stepsDone={stepsDone}
         dagsterUrl={dagsterUrl}
         onNavigate={onNavigate}
       />
+
+      {/* The welcome's checklist, until every step is done; then one line.
+          Only once every answer is in: before that each step looks undone, and
+          the full list would show for a moment and then fold away. */}
+      {![health, services, pipelines, quality, models, apps].some((r) => r.loading) && (
+        <SetupCard steps={steps} done={stepsDone} project={services.data?.project} onNavigate={onNavigate} />
+      )}
 
       {/* Recent runs, and what there is to open */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 items-start">
@@ -203,14 +249,9 @@ export default function OverviewPanel({ onNavigate, branding }) {
   );
 }
 
-function Welcome({ name, dagsterUrl }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText('datavloot demo').then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
+// The demo is a project of its own (`datavloot demo`), so the welcome does not
+// offer it: nothing here could load it into this project.
+function Welcome({ onNavigate }) {
   return (
     <section className="card px-8 pt-12 pb-8 text-center">
       <div className="flex flex-col items-center">
@@ -218,7 +259,8 @@ function Welcome({ name, dagsterUrl }) {
         <div className="w-24 h-1 rounded-full bg-highlight/60 mt-3" />
       </div>
       <h1 className="text-[28px] font-semibold text-ink-0 tracking-tight mt-6">
-        Welcome aboard{name ? `, ${name}` : ''}
+        {/* The captain, as on the overview: the project's name is in the sidebar */}
+        Welcome aboard, captain!
       </h1>
       <p className="text-[15px] leading-relaxed text-ink-2 max-w-xl mx-auto mt-3">
         The Crows Nest is the lookout of your data platform: pipelines, data quality,
@@ -226,14 +268,13 @@ function Welcome({ name, dagsterUrl }) {
         or add a source of your own. Nothing here changes your data unless you ask it to.
       </p>
       <div className="flex flex-wrap justify-center gap-3 mt-7">
-        <a
-          href={dagsterUrl}
-          target="_blank"
-          rel="noopener noreferrer"
+        {/* Pipelines, where Materialize all is: the run starts here, not in Dagster */}
+        <button
+          onClick={() => onNavigate('pipelines')}
           className="btn btn-primary h-11 px-6 text-sm flex-1 basis-56 max-w-xs"
         >
           <PlayIcon /> Run a first pipeline
-        </a>
+        </button>
         <a
           href="https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md"
           target="_blank"
@@ -243,27 +284,76 @@ function Welcome({ name, dagsterUrl }) {
           <PlusIcon /> Add a source
         </a>
       </div>
-      <div className="border-t border-surface-3 mt-9 pt-6">
-        <p className="text-sm text-ink-2 max-w-md mx-auto">
-          Just looking around? Load the demo: a year of NOAA ship traffic around Guam,
-          with tables, tests and a dashboard.
-        </p>
-        <button onClick={copy} className="btn mt-3 font-mono" title="Copy the command">
-          <span className="text-ink-3">$</span> datavloot demo
-          <span className="text-ink-3 font-sans font-medium ml-1">{copied ? 'copied' : 'copy'}</span>
-        </button>
-      </div>
     </section>
   );
 }
 
-function Checklist({ steps, done, onNavigate }) {
+// On the overview: the checklist as long as a step is open. Once all are done,
+// one line that opens it again, and that can be put away for good (per project,
+// in this browser).
+function SetupCard({ steps, done, project, onNavigate }) {
+  const key = `cn-setup-dismissed:${project || ''}`;
+  const allDone = done === steps.length;
+  const [open, setOpen] = useState(false);
+  // Read while drawing, not after: an effect would show the line for a moment first.
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(key) === '1';
+    } catch {
+      // No storage (private window): the line simply shows again.
+      return false;
+    }
+  });
+  const dismiss = () => {
+    setDismissed(true);
+    try {
+      localStorage.setItem(key, '1');
+    } catch {
+      // Put away for this visit only.
+    }
+  };
+
+  if (!allDone || open) {
+    return (
+      <Checklist
+        steps={steps}
+        done={done}
+        onNavigate={onNavigate}
+        onClose={allDone ? () => setOpen(false) : undefined}
+      />
+    );
+  }
+  if (dismissed) return null;
+  return (
+    <section className="card flex items-center gap-3 px-5 py-3">
+      <span className="w-6 h-6 shrink-0 rounded-full flex items-center justify-center bg-datavloot-600 text-white">
+        <CheckIcon />
+      </span>
+      <span className="flex-1 text-sm font-medium text-ink-0">
+        All {steps.length} setup steps done. Ready to sail.
+      </span>
+      <button onClick={() => setOpen(true)} className="text-sm font-semibold text-datavloot-600 hover:underline">
+        Show the steps
+      </button>
+      <button onClick={dismiss} className="btn btn-ghost h-8 px-2 text-sm" title="Do not show this again">
+        Hide
+      </button>
+    </section>
+  );
+}
+
+function Checklist({ steps, done, onNavigate, onClose }) {
   return (
     <section className="card px-6 py-5">
       <div className="flex items-baseline justify-between mb-2">
         <h2 className="text-base font-semibold text-ink-0 tracking-tight">Ready to sail</h2>
         <span className="text-sm text-ink-3">
           {done} of {steps.length} done
+          {onClose && (
+            <button onClick={onClose} className="ml-3 font-semibold text-datavloot-600 hover:underline">
+              Close
+            </button>
+          )}
         </span>
       </div>
       <ul className="divide-y divide-surface-2">
@@ -273,10 +363,13 @@ function Checklist({ steps, done, onNavigate }) {
             <li key={step.title} className="flex items-center gap-4 py-3.5">
               <span
                 className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center ${
-                  step.done ? 'bg-datavloot-600 text-white' : 'ring-[1.5px] ring-inset ring-surface-3'
+                  step.done ? 'bg-datavloot-600 text-white'
+                    : step.waiting ? 'ring-[1.5px] ring-inset ring-datavloot-200 text-datavloot-600'
+                    : 'ring-[1.5px] ring-inset ring-surface-3'
                 }`}
               >
                 {step.done && <CheckIcon />}
+                {!step.done && step.waiting && <span className="w-2 h-2 rounded-full bg-current pulse-dot" aria-hidden="true" />}
               </span>
               <div className="flex-1 min-w-0">
                 <div className={`text-sm font-semibold ${step.done ? 'text-ink-3 line-through decoration-surface-3' : 'text-ink-0'}`}>
@@ -284,7 +377,7 @@ function Checklist({ steps, done, onNavigate }) {
                 </div>
                 {!step.done && <div className="text-sm text-ink-2">{step.help}</div>}
               </div>
-              {!step.done && (
+              {!step.done && step.action && (
                 step.action.href ? (
                   <a href={step.action.href} target="_blank" rel="noopener noreferrer" className={`btn ${first ? '' : 'btn-ghost'}`}>
                     {step.action.label}
@@ -308,8 +401,9 @@ function Checklist({ steps, done, onNavigate }) {
 const LAST_RUN = {
   success: { text: 'Last run succeeded', tile: 'bg-emerald-700 hover:bg-emerald-800' },
   failure: { text: 'Last run failed', tile: 'bg-red-700 hover:bg-red-800' },
-  running: { text: 'Running', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
-  queued: { text: 'Queued', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
+  // Ochre while a run is under way; the darker shade keeps white text readable.
+  running: { text: 'Running', tile: 'bg-highlight-700 hover:brightness-90' },
+  queued: { text: 'Queued', tile: 'bg-highlight-700 hover:brightness-90' },
   cancelled: { text: 'Last run cancelled', tile: 'bg-datavloot-800 hover:bg-datavloot-900' },
 };
 
@@ -364,7 +458,7 @@ function QualityKpi({ quality, onClick }) {
   );
 }
 
-function Hints({ s, failing, q, steps, stepsDone, dagsterUrl, onNavigate }) {
+function Hints({ s, failing, q, dagsterUrl, onNavigate }) {
   const hints = [];
   // Only jobs whose latest run failed: one that succeeded since is fine again.
   for (const run of failing) {
@@ -386,13 +480,7 @@ function Hints({ s, failing, q, steps, stepsDone, dagsterUrl, onNavigate }) {
   if ((q?.by_status?.warn || 0) > 0) {
     hints.push({ tone: 'warn', text: `${q.by_status.warn} test warning${q.by_status.warn > 1 ? 's' : ''}.`, link: 'See the tests', tab: 'quality' });
   }
-  const next = steps.find((step) => !step.done);
-  // Dagster not up already has its own hint above; then the next step after it.
-  const dagsterDown = ['offline', 'starting', 'failed'].includes(s.dagster);
-  const nextShown = dagsterDown ? steps.slice(1).find((step) => !step.done) : next;
-  if (nextShown) {
-    hints.push({ tone: 'note', text: `${stepsDone} of ${steps.length} setup steps done. Next: ${nextShown.title}.`, link: nextShown.action.label, tab: nextShown.action.tab, href: nextShown.action.href });
-  }
+  // The setup steps are in their own card below (SetupCard).
   if (!hints.length) return null;
 
   const tones = {

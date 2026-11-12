@@ -13,6 +13,8 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
+from datavloot_platform import storage
+
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
 from datavloot_platform.crowsnest import startup
@@ -236,7 +238,17 @@ def create_app(host: str | None = None) -> FastAPI:
             "duckdb_path": config.duckdb_path,
             "version": VERSION,
             "can_shutdown": _can_shutdown(),
+            # Every project on this machine runs on the same address, so the
+            # browser keeps what it remembers per project under this name.
+            "project": _project_name(),
         }
+
+    def _project_name() -> str | None:
+        project = storage.find_project_dir()
+        try:
+            return storage.project_name(project) if project is not None else None
+        except (OSError, ValueError):
+            return None
 
     def _can_shutdown() -> bool:
         return bool(app.state.can_shutdown and app.state.server is not None)

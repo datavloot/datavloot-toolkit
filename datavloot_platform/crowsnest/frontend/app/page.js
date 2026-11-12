@@ -11,6 +11,7 @@ import NotebooksPanel from '../components/NotebooksPanel';
 import AppsPanel from '../components/AppsPanel';
 import HealthBanner from '../components/HealthBanner';
 import StartupBanner from '../components/StartupBanner';
+import RunBanner from '../components/RunBanner';
 import OverviewPanel from '../components/OverviewPanel';
 
 const NAV = [
@@ -26,7 +27,8 @@ const NAV = [
     label: 'Explore',
     tabs: [
       { id: 'query', label: 'SQL editor', icon: QueryIcon },
-      { id: 'notebooks', label: 'Notebooks', icon: NotebooksIcon },
+      // AI: Marimo's assistant and coding agents work in the notebooks (see NotebooksPanel).
+      { id: 'notebooks', label: 'Notebooks', icon: NotebooksIcon, badge: 'AI' },
     ],
   },
   {
@@ -163,6 +165,11 @@ export default function CrowsNestPage() {
                   >
                     <tab.icon active={activeTab === tab.id} />
                     {tab.label}
+                    {tab.badge && (
+                      <span className="ml-auto rounded px-1.5 py-px text-[10px] font-semibold tracking-wide bg-highlight text-sidebar">
+                        {tab.badge}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -198,8 +205,10 @@ export default function CrowsNestPage() {
       <main className="ml-60 flex-1 flex flex-col overflow-hidden">
         {/* While Dagster loads the project after `datavloot start`, on every tab */}
         <StartupBanner />
-        {/* The overview says all of this itself */}
-        {activeTab !== 'overview' && <HealthBanner />}
+        {/* While a pipeline runs, on every tab */}
+        <RunBanner activeTab={activeTab} onNavigate={selectTab} />
+        {/* On every tab, the overview too: the same place to look everywhere */}
+        <HealthBanner />
 
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto overflow-x-hidden px-8 py-6">
           {activeTab === 'overview' && <OverviewPanel onNavigate={selectTab} branding={branding} />}

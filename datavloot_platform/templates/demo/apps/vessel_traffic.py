@@ -26,9 +26,31 @@ def _():
 
 
 @app.cell
-def _(con):
+def _(con, mo):
+    # Before the first pipeline run the lake is empty: say so, rather than let
+    # the query below fail with Marimo's bare "An internal error occurred".
+    _built = con.sql("""
+        SELECT count(*) FROM information_schema.tables
+        WHERE table_schema = 'noaa_business' AND table_name = 'fct_port_event'
+    """).fetchone()[0]
+    mo.stop(
+        not _built,
+        mo.md(
+            "# Vessel traffic around Guam, 2025\n"
+            "No data yet. In the Crows Nest, open **Pipelines** and click "
+            "**Materialize all**; once the run has succeeded, reload this dashboard."
+        ),
+    )
+    # mo.stop halts only the cells that use what this cell defines.
+    lake_built = True
+    return (lake_built,)
+
+
+@app.cell
+def _(con, lake_built):
     # One row per port event, with what the filters and charts need. Small
     # enough to keep in memory, so every filter change is instant.
+    assert lake_built
     events = con.sql("""
         SELECT
             f.event_time,

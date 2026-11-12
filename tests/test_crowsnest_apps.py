@@ -236,6 +236,13 @@ def test_an_apps_service_is_linked_to_not_started(make_client, monkeypatch):
     assert client.get("/api/services").json()["apps_url"] == "https://apps.example.nl"
 
 
+def test_the_browser_learns_which_project_runs(make_client, tmp_path):
+    # Every project runs on the same address; the overview remembers what was
+    # put away (the setup checklist) under this name.
+    (tmp_path / "dbt_project.yml").write_text("name: 'probe'\n", encoding="utf-8")
+    assert make_client().get("/api/services").json()["project"] == "probe"
+
+
 def test_a_laptop_links_the_local_apps_server(make_client):
     assert make_client().get("/api/services").json()["apps_url"] == "http://127.0.0.1:2719"
 
