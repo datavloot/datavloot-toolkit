@@ -69,7 +69,8 @@ export default function OverviewPanel({ onNavigate, branding }) {
     },
     {
       title: 'A first pipeline run succeeded',
-      help: 'Put your source files in place (often the data folder), then Materialize all in Pipelines.',
+      // Not every project needs files first: the demo downloads its own data.
+      help: 'Click Materialize all in Pipelines. If the project reads files of its own, put them in place first, usually in the data folder.',
       done: (p.success || 0) > 0,
       action: { label: 'Pipelines', tab: 'pipelines' },
     },
@@ -119,8 +120,7 @@ export default function OverviewPanel({ onNavigate, branding }) {
   }
 
   return (
-    // my-auto: in the middle of the screen when it fits, from the top when it scrolls.
-    <div className="max-w-5xl w-full m-auto space-y-5">
+    <div className="max-w-5xl w-full mx-auto space-y-5">
       {/* Head: the date, a greeting, the quick actions */}
       <div className="page-head">
         <div>
@@ -159,8 +159,12 @@ export default function OverviewPanel({ onNavigate, branding }) {
         onNavigate={onNavigate}
       />
 
-      {/* The welcome's checklist, until every step is done; then one line */}
-      <SetupCard steps={steps} done={stepsDone} project={services.data?.project} onNavigate={onNavigate} />
+      {/* The welcome's checklist, until every step is done; then one line.
+          Only once every answer is in: before that each step looks undone, and
+          the full list would show for a moment and then fold away. */}
+      {![health, services, pipelines, quality, models, apps].some((r) => r.loading) && (
+        <SetupCard steps={steps} done={stepsDone} project={services.data?.project} onNavigate={onNavigate} />
+      )}
 
       {/* Recent runs, and what there is to open */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 items-start">
@@ -271,14 +275,15 @@ function SetupCard({ steps, done, project, onNavigate }) {
   const key = `cn-setup-dismissed:${project || ''}`;
   const allDone = done === steps.length;
   const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  useEffect(() => {
+  // Read while drawing, not after: an effect would show the line for a moment first.
+  const [dismissed, setDismissed] = useState(() => {
     try {
-      setDismissed(localStorage.getItem(key) === '1');
+      return localStorage.getItem(key) === '1';
     } catch {
       // No storage (private window): the line simply shows again.
+      return false;
     }
-  }, [key]);
+  });
   const dismiss = () => {
     setDismissed(true);
     try {

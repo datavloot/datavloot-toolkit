@@ -115,7 +115,8 @@ export default function PipelinesPanel() {
               {data?.runs?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-ink-3 text-sm">
-                    No pipeline runs yet. Put your source files in place, then click <strong>Materialize all</strong> above, or{' '}
+                    {/* Not every project needs files first: the demo downloads its own data */}
+                    No pipeline runs yet. Click <strong>Materialize all</strong> above to build every table, or{' '}
                     <a
                       href={dagsterUrl}
                       target="_blank"
@@ -124,7 +125,8 @@ export default function PipelinesPanel() {
                     >
                       open Dagster
                     </a>
-                    {' '}to choose what to run.
+                    {' '}to choose what to run. If the project reads files of its own, put them in
+                    place first, usually in the data folder.
                   </td>
                 </tr>
               )}

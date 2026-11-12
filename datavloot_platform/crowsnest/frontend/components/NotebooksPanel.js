@@ -87,6 +87,31 @@ export default function NotebooksPanel() {
         <div>
           <h2 className="page-title">Notebooks</h2>
           <p className="page-lede">Marimo notebooks for exploring the data in Python.</p>
+          {/* The AI badge in the sidebar points here. The toolkit configures no
+              AI: each user connects their own provider or agent in Marimo. */}
+          <p className="text-sm text-ink-2 mt-2 max-w-3xl">
+            <span className="rounded px-1.5 py-px text-[10px] font-semibold tracking-wide bg-highlight text-sidebar mr-2 align-middle">AI</span>
+            Notebooks can work with AI: ask about your data in the chat, generate or refactor a cell, or
+            let a coding agent such as Claude Code work in the notebook. Set it up once in Marimo with
+            your own AI provider:{' '}
+            <a
+              href="https://docs.marimo.io/guides/editor_features/ai_completion/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-datavloot-600 hover:underline"
+            >
+              AI chat and cells ↗
+            </a>
+            {' · '}
+            <a
+              href="https://docs.marimo.io/guides/generate_with_ai/marimo_pair/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-datavloot-600 hover:underline"
+            >
+              coding agents ↗
+            </a>
+          </p>
         </div>
         {showNotebook && (
           <a
@@ -104,6 +129,14 @@ export default function NotebooksPanel() {
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 border-b border-surface-3 bg-surface-1">
             <span className="text-xs text-ink-3 font-mono">{frameUrl}</span>
+            {/* Marimo cannot be told to open its AI panel (it keeps the sidebar
+                in its own browser storage, on another address), so say where it is. */}
+            <span className="ml-auto mr-4 text-xs text-ink-2 flex items-center gap-1.5">
+              <span className="rounded px-1.5 py-px text-[10px] font-semibold tracking-wide bg-highlight text-sidebar">AI</span>
+              Chat and agents: click the
+              <RobotIcon />
+              in Marimo's left bar
+            </span>
             <button
               onClick={handleClose}
               className="text-xs text-ink-2 hover:text-ink-0 transition-colors flex items-center gap-1.5 px-2 py-1 rounded hover:bg-surface-2"
@@ -136,6 +169,18 @@ export default function NotebooksPanel() {
         />
       )}
     </div>
+  );
+}
+
+// Marimo's AI panel icon (lucide "bot"), so the hint shows what to look for.
+function RobotIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round" aria-label="robot icon" role="img">
+      <path d="M12 8V4H8" />
+      <rect width="16" height="12" x="4" y="8" rx="2" />
+      <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+    </svg>
   );
 }
 
