@@ -67,26 +67,25 @@ pyproject.toml                # Python package config; points Dagster at noaa_pl
 
 ## Getting started
 
-All commands run from the project root. You'll need **Python 3.10–3.13** (3.12 recommended) and **git**.
+All commands run from the project root. You'll need [uv](https://docs.astral.sh/uv/); it brings Python 3.12 for the project itself.
 
-This demo is part of the [datavloot toolkit](https://github.com/datavloot/datavloot-toolkit). If you haven't already, install the toolkit and copy the demo locally:
+This demo is part of the [datavloot toolkit](https://github.com/datavloot/datavloot-toolkit). If you haven't got it yet, [Installing](https://github.com/datavloot/datavloot-toolkit#installing) in the toolkit's README installs uv and creates the demo:
 
 ```bash
-pip install datavloot[optimist]
-datavloot demo
+uvx --python 3.12 --from "datavloot[optimist]@latest" datavloot demo optimist-demo
 cd optimist-demo
 ```
 
-### 1. Install the demo's Python package
+### 1. Install Python and the demo's packages
 
 ```bash
-pip install -e .
+uv sync --python 3.12
 ```
 
 ### 2. Install the dbt packages (optimist and Elementary)
 
 ```bash
-dbt deps
+uv run dbt deps
 ```
 
 Dagster does not do this for you; run it again after a change to `packages.yml`.
@@ -107,18 +106,18 @@ unzip it, and save `guam_2025.csv` in `data/`.
 Dagster needs a compiled manifest before it can start:
 
 ```bash
-dbt parse
+uv run dbt parse
 ```
 
 ### 5. Start the platform
 
 ```bash
-datavloot start
+uv run datavloot start --run
 ```
 
-This starts Dagster and the Crows Nest together and opens the Crows Nest at [http://localhost:8080](http://localhost:8080). Dagster is at [http://localhost:3000](http://localhost:3000). (`dagster dev` starts Dagster alone.)
+This starts Dagster and the Crows Nest together and opens the Crows Nest at [http://localhost:8080](http://localhost:8080). Dagster is at [http://localhost:3000](http://localhost:3000). (`uv run dagster dev` starts Dagster alone.)
 
-In Dagster's **Asset Catalog**, click **Materialize all** — Dagster knows the dependency order and runs ingestion before dbt automatically.
+`--run` starts a run of every asset, as **Materialize all** in Dagster's **Asset Catalog** does: Dagster knows the dependency order and runs ingestion before dbt automatically. Follow it in the Crows Nest's Pipelines panel. Without `--run`, click **Materialize all** yourself.
 
 To re-run only the dbt models without re-loading raw data, select the dbt assets and click **Materialize selected**.
 
@@ -133,7 +132,7 @@ Check the **Runs** tab for logs if a build fails; the Crows Nest's Pipelines pan
 `explore_noaa.py` is a [Marimo](https://marimo.io) reactive notebook that opens the project's lake read-only (so it can stay open while a pipeline runs) and provides charts and tables for all the key questions this project answers.
 
 ```bash
-marimo edit notebooks/explore_noaa.py
+uv run marimo edit notebooks/explore_noaa.py
 ```
 
 Open [http://localhost:2718](http://localhost:2718). The Crows Nest's Notebooks panel starts it with one click as well.
@@ -143,7 +142,7 @@ Open [http://localhost:2718](http://localhost:2718). The Crows Nest's Notebooks 
 `apps/vessel_traffic.py` is the same data for someone who reads rather than explores: vessel traffic per month, the hours vessels arrive, port events per vessel category and per sea state, and the most frequent visitors, with filters for port, category and months. Notebooks in `apps/` open in the Crows Nest's **Dashboards** tab, run with `marimo run`: their output, without their code. To open it on its own:
 
 ```bash
-marimo run apps/vessel_traffic.py
+uv run marimo run apps/vessel_traffic.py
 ```
 
 Build in `notebooks/`, then move what others should read to `apps/`.
@@ -162,7 +161,7 @@ Use the same version as the `duckdb` package in your environment, not the latest
 
 ```bash
 # Download the standalone CLI binary (Linux x86-64)
-V=$(python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
+V=$(uv run python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
 curl -fLo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v$V/duckdb_cli-linux-amd64.zip
 unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb

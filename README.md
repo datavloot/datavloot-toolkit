@@ -54,6 +54,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 Then open a new terminal, so that it finds `uv`. For other ways, see [uv's installation page](https://docs.astral.sh/uv/getting-started/installation/).
 
+uv also brings Python: the project gets its own Python 3.12, whatever is installed on the machine. No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
+
+> **Intel Macs:** `cryptography` has no Intel wheel from version 49 on, so it would be built from source (needs Rust and a C compiler). Add `--with "cryptography<49"` to the `uvx` line, and in the project run `uv add "cryptography<49"` instead of `uv sync`.
+
+> **Where to put a project:** on a local disk, outside OneDrive, Dropbox, Google Drive, iCloud and network drives. DuckDB relies on file locks that sync clients and network file systems do not honour. On Windows, `Documents` and `Desktop` are often synced to OneDrive; your home folder itself is not. Keep the path short on Windows too: unless [long paths are enabled](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation), a project folder longer than about 100 characters runs into the 260-character limit. `datavloot new`, `demo` and `start` warn when they detect either.
+
 The steps below put projects in a `datavloot` folder in your home folder. Make it and go there first. On Windows:
 
 ```powershell
@@ -107,6 +113,8 @@ uv run datavloot start
 
 The lines do the same as for the demo, with `datavloot new` creating an empty project instead. `datavloot start` has no `--run` here: a new project starts empty, with no sources or models yet, so there is nothing to run. `data-instructions.md` in the project says how to add them; hand it to your AI assistant at the start of a session.
 
+The project name is taken from the folder's name; all placeholders in its config and code are filled in. Keep the project in a repository of its own on GitHub or GitLab (with git, which installing and running do not need): that is also how other machines install it, see [Installing a project on other machines](#installing-a-project-on-other-machines).
+
 ### A project from its repository
 
 With the project's GitHub or GitLab repository, and a folder name for it in place of `harbor`:
@@ -149,78 +157,15 @@ uv sync --upgrade-package datavloot
 
 Moving to a newer minor version is a change to `pyproject.toml` and `packages.yml` (see [#55](https://github.com/datavloot/datavloot-toolkit/issues/55)).
 
-To set up a project by hand instead, with pip, follow the steps below.
+Without uv, plain pip in a virtual environment of your own works too: `pip install datavloot[optimist]`, then the same steps with `pip install -e .` for `uv sync` and without `uv run`. The installer then picks the newest versions within the bounds rather than the tested ones; uv is the supported route.
 
 ---
 
-## Getting started
+## Running the platform
 
-### Prerequisites
-
-- Python 3.10–3.13 (3.12 recommended; 3.14 is not yet supported by all dependencies)
-- Git, to keep your own project in a repository. Installing and running a project does not need it.
-
-No C compiler is needed: every dependency installs from a prebuilt wheel or is pure Python.
-
-> **Intel Macs:** `cryptography` has no Intel wheel from version 49 on. Run `pip install "cryptography<49"` before installing datavloot, or pip will try to build it from source (needs Rust and a C compiler).
-
-> **Where to put a project:** on a local disk, outside OneDrive, Dropbox, Google Drive, iCloud and network drives. DuckDB relies on file locks that sync clients and network file systems do not honour. On Windows, `Documents` and `Desktop` are often synced to OneDrive; a folder like `C:\dev\` is not. Keep the path short on Windows too: unless [long paths are enabled](https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation), a project folder longer than about 100 characters runs into the 260-character limit. `datavloot new`, `demo` and `start` warn when they detect either.
-
-### 1. Create your own repository
-
-Create a new repository on GitHub or GitLab (empty is fine), then clone it and navigate into it.
-
-### 2. Install the toolkit
-
-```bash
-pip install datavloot[optimist]
-```
-
-The `[optimist]` part installs the full Optimist stack (Dagster, dbt, dlt, DuckDB, Marimo, Elementary). Without it you get only the bare `datavloot` package with no tools.
-
-If `pip` is not recognised (common on Windows), use:
-
-```bash
-python -m pip install datavloot[optimist]
-```
-
-> **Note:** The first install downloads and installs a large number of packages (Dagster, dbt, dlt, Elementary, and their dependencies). Expect it to take 5–10 minutes. The prompt will return when it is done — let it run.
-
-
-### 3. Scaffold a new project
-
-```bash
-datavloot new <my-project>
-cd <my-project>
-```
-
-Please substitute 'my-project' here with the desired name of your project. The project name is inferred from the directory — all placeholders in config and code are substituted automatically.
-
-Or try the NOAA worked example first:
-
-```bash
-datavloot demo
-cd optimist-demo
-pip install -e .   # install the demo's Python package
-```
-
-### 4. Install dependencies and dbt packages
-
-```bash
-pip install -e .   # install your project's Python package
-dbt deps           # install the dbt packages (optimist, Elementary) — re-run whenever you upgrade or change packages.yml
-dbt parse          # compile the manifest (required before first run)
-```
+`uv run datavloot start` starts Dagster and the Crows Nest together and opens the dashboard at [http://localhost:8080](http://localhost:8080). Dagster is available separately at [http://localhost:3000](http://localhost:3000). Press Ctrl+C to stop both.
 
 Dagster does not install the dbt packages itself; it only compiles the manifest when it loads the code. After a change to `packages.yml`, run `uv run dbt deps` yourself.
-
-### 5. Start the platform
-
-```bash
-datavloot start
-```
-
-This starts Dagster and the Crows Nest together and opens the dashboard at [http://localhost:8080](http://localhost:8080). Dagster is available separately at [http://localhost:3000](http://localhost:3000). Press Ctrl+C to stop both.
 
 Dagster keeps its state (run history, which schedules and sensors are on, what a sensor already picked up) in `.dagster/` in the project, so a restart forgets none of it. `datavloot start` copies the project's `dagster.yaml` there on every start; edit the one in the project. If you set `DAGSTER_HOME` yourself, that directory is used instead, and `dagster.yaml` has to be copied into it by you.
 
@@ -229,8 +174,8 @@ Dagster may take up to ten minutes to load the project (`code_servers: local_sta
 If you prefer two terminals, you can start them independently:
 
 ```bash
-dagster dev          # terminal 1 — Dagster at http://localhost:3000
-datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
+uv run dagster dev          # terminal 1 — Dagster at http://localhost:3000
+uv run datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
 ```
 
 ### Starting at login
@@ -238,7 +183,7 @@ datavloot launch     # terminal 2 — Crows Nest at http://localhost:8080
 For someone who only uses the Crows Nest, run this once from the project directory:
 
 ```bash
-datavloot autostart on
+uv run datavloot autostart on
 ```
 
 From the next login, Datavloot starts by itself, for this user only, without admin rights and without a terminal window. It also makes a shortcut named after the project (`name` in `branding/branding.yml`, else the folder's name) with the project's icon (`branding/icon.png`, else `branding/logo.png`, else the datavloot mark; an SVG logo cannot be turned into an icon). The shortcut opens the Crows Nest, and starts Datavloot in the background first when it is not running.

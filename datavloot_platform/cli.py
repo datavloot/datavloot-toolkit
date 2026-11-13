@@ -180,14 +180,26 @@ def cmd_new(args: argparse.Namespace) -> None:
     if os.environ.get("DATAVLOOT_INSTALLER"):
         # new-project.ps1 / new-project.sh take the next steps themselves.
         return
-    print("Next steps:")
-    print(f"  1. cd {dest}")
-    print(f"  2. pip install -e .   # install the project's Python package")
-    print(f"  3. dbt deps           # install the dbt packages; again after changing packages.yml")
-    print(f"  4. dbt parse          # compile the manifest for Dagster")
-    print(f"  5. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
+    _print_next_steps(dest, "uv run datavloot start")
     print(f"\nSee data-instructions.md or hand it to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions, then start adding your data sources.")
+
+
+def _print_next_steps(dest: pathlib.Path, start: str) -> None:
+    """The steps after `new` and `demo`, as in the README's Installing section.
+
+    Plain commands without `#` comments, so that they can be pasted as they are:
+    zsh, the macOS default, does not take comments on its command line.
+    """
+    print("Next steps:")
+    print(f"  cd \"{dest}\"")
+    print(f"  uv sync --python 3.12")
+    print(f"  uv run dbt deps")
+    print(f"  uv run dbt parse")
+    print(f"  {start}")
+    print("uv sync installs Python and the project's packages, dbt deps the dbt packages (again after")
+    print("a change to packages.yml) and dbt parse compiles the manifest for Dagster. The last line")
+    print("starts Dagster at http://localhost:3000 and the Crows Nest at http://localhost:8080.")
 
 
 def cmd_new_from(args: argparse.Namespace) -> None:
@@ -246,12 +258,7 @@ def cmd_demo(args: argparse.Namespace) -> None:
     if os.environ.get("DATAVLOOT_INSTALLER"):
         # install-demo.ps1 / install-demo.sh take the next steps themselves.
         return
-    print("Next steps:")
-    print(f"  1. cd {dest}")
-    print(f"  2. pip install -e .   # install the demo's Python package")
-    print(f"  3. dbt deps           # install the dbt packages; again after changing packages.yml")
-    print(f"  4. dbt parse          # compile the manifest for Dagster")
-    print(f"  5. datavloot start    # Dagster at http://localhost:3000, the Crows Nest at http://localhost:8080")
+    _print_next_steps(dest, "uv run datavloot start --run")
     print(f"\nThe first run downloads NOAA's Guam 2025 AIS data into data/ (41 MB, 366 MB unpacked).")
     print(f"\nHand data-instructions.md to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions.")
