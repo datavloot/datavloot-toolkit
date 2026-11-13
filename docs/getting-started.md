@@ -1,4 +1,4 @@
-# Getting started
+# Working in a project
 
 To install Datavloot and create a project, follow [Installing](https://github.com/datavloot/datavloot-toolkit#installing)
 in the README. This page is about what is in a project once it is there.

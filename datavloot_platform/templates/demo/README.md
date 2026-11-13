@@ -147,7 +147,7 @@ uv run marimo run apps/vessel_traffic.py
 
 Build in `notebooks/`, then move what others should read to `apps/`.
 
-On Windows, the first notebook can make Windows Defender Firewall ask whether Python may access public and private networks. Choose **Cancel**: everything runs on `localhost`, which the firewall does not block. Do not allow public networks; [getting-started](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md#windows-asks-whether-python-may-use-public-and-private-networks) explains why and how to undo it.
+On Windows, the first notebook can make Windows Defender Firewall ask whether Python may access public and private networks. Choose **Cancel**: everything runs on `localhost`, which the firewall does not block. Do not allow public networks; [Working in a project](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md#windows-asks-whether-python-may-use-public-and-private-networks) explains why and how to undo it.
 
 ---
 

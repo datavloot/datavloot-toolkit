@@ -662,7 +662,7 @@ dbt deps
 
 ## Documentation
 
-- [Getting started](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md)
+- [Working in a project](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/getting-started.md)
 - [Ingestion layer — loading data with dlt](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md)
 - [Source layer — auto-staging and audit columns](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/source-layer.md) (in the dbt package)
 - [Business layer — dimensions, facts, and surrogate keys](https://github.com/datavloot/dbt-datavloot-optimist/blob/main/docs/business-layer.md) (in the dbt package)
