@@ -1,5 +1,8 @@
 # Getting started
 
+To install Datavloot and create a project, follow [Installing](https://github.com/datavloot/datavloot-toolkit#installing)
+in the README. This page is about what is in a project once it is there.
+
 A project created with `datavloot new` is a dbt project with a Dagster layer around it. Its
 models use the `optimist` dbt package, which provides standardized macros, conventions, and
 model templates; the package has its own repository,
@@ -21,10 +24,10 @@ packages:
     version: [">=0.25.0", "<0.26.0"]
 ```
 
-Then install them:
+Then install them, from the project folder:
 
 ```bash
-dbt deps
+uv run dbt deps
 ```
 
 ---
@@ -66,15 +69,16 @@ your-project/
 
 The toolkit uses [Dagster](https://dagster.io) to orchestrate assets.
 
-Activate the project's virtual environment first so `dbt` and `dagster` are on your PATH
-(`source .venv/bin/activate` on Linux and macOS, `.venv\Scripts\activate` on Windows).
+Run the commands from the project folder with `uv run`, which uses the project's own
+environment. (Or activate it first, with `source .venv/bin/activate` on Linux and macOS or
+`.venv\Scripts\activate` on Windows, and leave out `uv run`.)
 
-Then generate a compiled dbt manifest (Dagster needs this to discover your models) and start the
+Generate a compiled dbt manifest (Dagster needs this to discover your models) and start the
 platform:
 
 ```bash
-dbt parse
-datavloot start      # Dagster and the Crows Nest; or `dagster dev` for Dagster alone
+uv run dbt parse
+uv run datavloot start      # Dagster and the Crows Nest; or `uv run dagster dev` for Dagster alone
 ```
 
 Open [http://localhost:3000](http://localhost:3000) for Dagster, or the Crows Nest at
@@ -119,8 +123,8 @@ the occasion instead, start the Crows Nest on all interfaces with a sign-in toke
 
 ```powershell
 New-NetFirewallRule -DisplayName "Crows Nest demo" -Direction Inbound -Protocol TCP -LocalPort 8080 -Profile Private -Action Allow
-$env:CROWSNEST_AUTH_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(32))"
-datavloot launch --host 0.0.0.0
+$env:CROWSNEST_AUTH_TOKEN = uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
+uv run datavloot launch --host 0.0.0.0
 # afterwards:
 Remove-NetFirewallRule -DisplayName "Crows Nest demo"
 ```
@@ -141,7 +145,7 @@ toolkit holds DuckDB below 2.0 (`duckdb<2` in its own `pyproject.toml`, not your
 the lake has been tried on it, and the latest CLI is 2.0.
 
 ```bash
-V=$(python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
+V=$(uv run python -c "import duckdb; print(duckdb.__version__)")   # a 1.x, e.g. 1.5.6
 curl -fLo /tmp/duckdb.zip https://github.com/duckdb/duckdb/releases/download/v$V/duckdb_cli-linux-amd64.zip
 unzip /tmp/duckdb.zip -d ~/.local/bin/
 chmod +x ~/.local/bin/duckdb
