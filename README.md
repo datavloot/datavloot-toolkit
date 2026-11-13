@@ -79,7 +79,18 @@ uv run dbt parse
 uv run datavloot start --run
 ```
 
-The first run starts by itself (`--run`): it downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
+What each line does:
+
+| Command | What it does |
+|---|---|
+| `uvx … datavloot demo optimist-demo` | Fetches the latest datavloot and creates the demo project in the `optimist-demo` folder |
+| `cd optimist-demo` | Goes into the project |
+| `uv sync --python 3.12` | Installs Python 3.12 and the project's packages (Dagster, dbt, dlt, DuckDB and more) in the project's own `.venv` |
+| `uv run dbt deps` | Installs the dbt packages the project uses |
+| `uv run dbt parse` | Compiles the dbt project, so that Dagster can load it |
+| `uv run datavloot start --run` | Starts Dagster and the Crows Nest, opens [http://localhost:8080](http://localhost:8080) and starts the first run |
+
+The first run downloads the demo's AIS data (41 MB) and builds the models. Follow it in the Pipelines panel.
 
 ### A new, empty project
 
@@ -94,7 +105,7 @@ uv run dbt parse
 uv run datavloot start
 ```
 
-A new project starts empty: no sources or models yet. `data-instructions.md` in the project says how to add them; hand it to your AI assistant at the start of a session.
+The lines do the same as for the demo, with `datavloot new` creating an empty project instead. `datavloot start` has no `--run` here: a new project starts empty, with no sources or models yet, so there is nothing to run. `data-instructions.md` in the project says how to add them; hand it to your AI assistant at the start of a session.
 
 ### A project from its repository
 
@@ -106,7 +117,7 @@ cd harbor
 uv run datavloot start
 ```
 
-`datavloot new --from` installs the repository's latest tag (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asks for a token when the repository is private and for the settings the project needs, and installs its packages and dbt packages itself. No run starts by itself: first put the project's input files in place, then click Materialize all in the Pipelines panel.
+`datavloot new --from` does the work of the first lines of the demo in one command: it installs the repository's latest tag (see [Installing a project on other machines](#installing-a-project-on-other-machines)), asks for a token when the repository is private and for the settings the project needs, and installs its packages and dbt packages itself. No run starts by itself: first put the project's input files in place, then click Materialize all in the Pipelines panel.
 
 ### Settings
 
