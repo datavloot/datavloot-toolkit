@@ -123,27 +123,6 @@ uv run datavloot start
 
 The commands take these directly: a toolkit version as `--from "datavloot[optimist]==0.4.0"`, a tag as `--ref v1.2.0`, and a project's folder in its repository as `--path <folder>`.
 
-### In one command, on macOS and Linux
-
-A script takes all of the steps above, including installing uv, in one command. It puts the project in your home folder rather than in `datavloot`:
-
-```bash
-curl -LsSf https://datavloot.nl/install-demo.sh | bash       # the demo, in ~/optimist-demo
-curl -LsSf https://datavloot.nl/new-project.sh | bash        # asks for the project's name
-curl -LsSf https://datavloot.nl/install-project.sh | bash    # asks for the repository
-```
-
-The scripts read these environment variables. Set them in front of `bash`, as in `curl ... | DATAVLOOT_DIR=~/dev/demo bash`:
-
-| Variable | Script | Meaning |
-|---|---|---|
-| `DATAVLOOT_DIR` | all | Where the project goes. For `new-project`, instead of asking for a name: the folder's name becomes the project's name |
-| `DATAVLOOT_VERSION` | all | A toolkit version, e.g. `0.4.0` (default: the latest release) |
-| `DATAVLOOT_FROM` | all | Install the toolkit from here instead of PyPI, e.g. a checkout |
-| `DATAVLOOT_PROJECT` | `install-project` | The repository, instead of asking for it |
-| `DATAVLOOT_REF` | `install-project` | The tag to install (default: the latest version) |
-| `DATAVLOOT_PATH` | `install-project` | The project's folder in the repository, when it cannot be found by itself |
-
 ### Starting again
 
 Keep the window open: closing it, or pressing Ctrl+C, stops Datavloot. To start it again later, from the project folder, on Windows:
@@ -158,9 +137,7 @@ On macOS and Linux:
 .venv/bin/datavloot start
 ```
 
-`uv run datavloot start` does the same, but only in a terminal opened after uv was installed. On macOS and Linux, running a script again also starts the project: it finds the project and never overwrites it.
-
-A script stops with a message when there is no internet connection, when port 8080 or 3000 is already in use (often by a Datavloot that is still running), or when the folder exists but is not a Datavloot project.
+`uv run datavloot start` does the same, but only in a terminal opened after uv was installed.
 
 ### Upgrading
 
@@ -416,7 +393,7 @@ When one person maintains a project and others only run it and use the Crows Nes
 datavloot new C:\dev\harbor --from https://gitlab.com/<group>/harbor
 ```
 
-This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`; on macOS and Linux the `install-project.sh` script (see [A project from its repository](#a-project-from-its-repository)) installs both and starts the project. The target folder must be new or empty; an existing project is never overwritten.
+This downloads the latest tag as a zip archive (or the one named with `--ref v1.2.0`), installs the project's files into the new folder, asks for the settings the project needs and writes them to `.env`, then runs `uv sync`, `uv run dbt deps` and `uv run dbt parse` there. Start it afterwards with `uv run datavloot start --run`. The machine needs [uv](https://docs.astral.sh/uv/) and `datavloot[optimist]`, for example through `uvx --from "datavloot[optimist]" datavloot new ...`, as in [A project from its repository](#a-project-from-its-repository). The target folder must be new or empty; an existing project is never overwritten.
 
 An installation is a copy of one tag, not a working copy: it is meant to be run, not changed.
 
