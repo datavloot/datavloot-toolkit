@@ -83,6 +83,21 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
+def test_lock_requires_windows_and_linux_wheels(template: str):
+    """
+    A new project only locks versions that install on Windows and Linux.
+
+    uv's lock is universal but does not check that each version installs
+    everywhere: loro 1.19.0 (via marimo) had no Windows wheel, so the lock
+    resolved fine and `uv sync` failed on Windows.
+    """
+    pyproject = (cli.TEMPLATES_DIR / template / "pyproject.toml").read_text(encoding="utf-8")
+    assert "required-environments" in pyproject
+    assert "sys_platform == 'win32' and platform_machine == 'AMD64' and platform_python_implementation == 'CPython'" in pyproject
+    assert "sys_platform == 'linux' and platform_machine == 'x86_64' and platform_python_implementation == 'CPython'" in pyproject
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
 def test_dbt_deps_does_not_need_git(tmp_path: pathlib.Path, template: str):
     """
     No package in a new project is fetched with `git:`.

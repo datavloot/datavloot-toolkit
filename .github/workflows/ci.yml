@@ -5,7 +5,9 @@
 #   lint       - the templates parse and declare nothing that does not exist
 #   crowsnest  - the Crows Nest security/auth tests, which need the web stack
 #   wheels     - every dependency of the optimist extra installs from a wheel
-#   smoke      - a clean install, `datavloot new`, and a fresh project built by
+#   scaffold-lock - a new project's `uv lock` and `uv sync` work, on Windows and
+#                Linux, for every pull request
+#   smoke     - a clean install, `datavloot new`, and a fresh project built by
 #                dbt and by Dagster: on Linux for a pull request, on Linux,
 #                Windows and macOS on `main` and when run by hand
 #   package    - the built wheel contains no build inputs
@@ -120,6 +122,40 @@ jobs:
               --quiet > /dev/null
             echo "::endgroup::"
           done
+
+  # `wheels` checks the toolkit's own extra; this checks the project a user gets.
+  # uv locks for every platform at once but installs only for the current one, so
+  # loro 1.19.0 (via marimo, no Windows wheel) locked fine on Linux and broke
+  # `uv sync` on Windows. The template's `required-environments` guards against
+  # that; this job proves it still does with today's releases. Lock and sync
+  # only, no dbt build, so it stays quick enough for every pull request.
+  # The scaffold pins `datavloot[optimist]~=<version>` from PyPI; the source
+  # override makes the probe use this checkout, so a pull request tests itself.
+  scaffold-lock:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uvx --from . datavloot new "$RUNNER_TEMP/probe"
+      # A literal TOML string ('...'): the Windows path has backslashes.
+      - name: Use this checkout for datavloot
+        run: |
+          printf '\n[tool.uv.sources]\ndatavloot = { path = '"'%s'"' }\n' "$GITHUB_WORKSPACE" \
+            >> "$RUNNER_TEMP/probe/pyproject.toml"
+          tail -n 3 "$RUNNER_TEMP/probe/pyproject.toml"
+      - run: uv lock
+        working-directory: ${{ runner.temp }}/probe
+      - run: uv sync
+        working-directory: ${{ runner.temp }}/probe
 
   smoke:
     strategy:
