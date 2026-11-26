@@ -704,4 +704,4 @@ Versions below are the ones locked in `uv.lock`, which the Falcon image installs
 | dlt | 1.30.0 |
 | duckdb | 1.5.3 |
 | elementary-data | 0.25.1 |
-| marimo | 0.25.2 |
+| marimo | 0.26.0 (0.25.2 on Python 3.10) |

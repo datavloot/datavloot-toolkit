@@ -56,7 +56,10 @@ optimist = [
     # Where `datavloot new --from` keeps the token for a private repository:
     # Windows Credential Manager, the macOS Keychain or the Secret Service.
     "keyring>=25,<26",
-    "marimo>=0.25.2,<0.26",
+    # 0.26 raised its Python floor to 3.11 while we still support 3.10, so the
+    # floor stays at 0.25.2: 3.10 installs keep 0.25.x, 3.11+ get 0.26. From 0.26.0
+    # `marimo edit` no longer triggers the Windows firewall question (marimo#11579).
+    "marimo>=0.25.2,<0.27",
     "pandas>=2.0,<3",
     # dagster-dbt asks for sqlglot[rs], which from 30.0 pulls in sqlglotc: a C
     # extension without wheels for Python 3.10, so pip would compile it there.

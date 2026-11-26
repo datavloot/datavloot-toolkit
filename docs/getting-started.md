@@ -95,21 +95,24 @@ alerts surface here as asset check failures alongside the asset metadata.
 
 ### Windows asks whether Python may use public and private networks
 
-The first time a notebook opens (from the Crows Nest or with `marimo edit`), Windows Defender
-Firewall can ask whether Python may access public and private networks. **Choose Cancel**, or
-leave both boxes unticked. Dagster, the Crows Nest and Marimo listen on `localhost` only, which
-the firewall does not block, so everything keeps working.
+With Marimo 0.26 or newer, which installs on Python 3.11 and up, opening a notebook no longer
+brings up this question: Marimo's language servers now look for free ports on `127.0.0.1` only.
 
-The question comes from Marimo, not from anything the toolkit opens: in edit mode it looks for
-free ports for its language servers on all network interfaces, which is enough for Windows to
-ask. Windows asks once per `python.exe`, so it can come back after installing a new Python
-version.
+With an older Marimo (Python 3.10, or a project installed before 0.26), the first time a notebook
+opens (from the Crows Nest or with `marimo edit`) Windows Defender Firewall can ask whether Python
+may access public and private networks. **Choose Cancel**, or leave both boxes unticked. Dagster,
+the Crows Nest and Marimo listen on `localhost` only, which the firewall does not block, so
+everything keeps working. The question comes from Marimo, not from anything the toolkit opens: in
+edit mode it looks for free ports for its language servers on all network interfaces, which is
+enough for Windows to ask. Windows asks once per `python.exe`, so it can come back after
+installing a new Python version. A project on Python 3.10 stays on Marimo 0.25; move it to
+Python 3.11 or later and it gets Marimo 0.26, so the question no longer comes.
 
-Do not allow **public networks**. The rule would cover that `python.exe` on every port, for good:
-anything it runs later on a network address is then reachable from any Wi-Fi you join. That
-includes `marimo edit --no-token` with another `--host` (a Python shell for anyone on that
-network) and `datavloot launch --host 0.0.0.0`, whose sign-in is off on a laptop. If you
-allowed it, switch the rule off under *Windows Security → Firewall & network protection →
+Whether Marimo asks or not, do not allow **public networks**. The rule would cover that
+`python.exe` on every port, for good: anything it runs later on a network address is then
+reachable from any Wi-Fi you join. That includes `marimo edit --no-token` with another `--host`
+(a Python shell for anyone on that network) and `datavloot launch --host 0.0.0.0`, whose sign-in
+is off on a laptop. If you allowed it, switch the rule off under *Windows Security → Firewall & network protection →
 Allow an app through firewall*, or in an administrator PowerShell:
 
 ```powershell
