@@ -194,7 +194,9 @@ export default function CrowsNestPage() {
         {/* Footer: datavloot, the toolkit the Crows Nest comes with; also under a project's own branding */}
         <div className="mx-3 px-3 py-3 border-t border-white/10">
           <div className="flex items-center gap-2 text-[11px] text-white/50">
-            {branding?.logo && <img src="/datavloot-logo.png" alt="" className="w-5 h-5" />}
+            {/* The mark without its navy circle: under a project's branding the sidebar can be any
+                colour, and a navy disc on, say, a black sidebar reads as a stray blue dot. */}
+            {branding?.logo && <img src="/datavloot-mark.png" alt="" className="w-5 h-5" />}
             <span>datavloot</span>
             {services?.version && <span className="ml-auto font-mono">v{services.version}</span>}
           </div>
