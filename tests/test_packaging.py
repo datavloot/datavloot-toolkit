@@ -177,6 +177,30 @@ def test_the_served_frontend_bundle_is_present(wheel: pathlib.Path):
 
     assert static, "crowsnest/static/ is missing; the Crows Nest would serve nothing"
     assert any(n.endswith(".html") for n in static), "no HTML in crowsnest/static/"
+    # Monaco's icon font only lands in static/ when Monaco is bundled. Without
+    # it the SQL editor falls back to fetching Monaco from cdn.jsdelivr.net,
+    # and stays blank offline.
+    assert any("/codicon" in n and n.endswith(".ttf") for n in static), (
+        "Monaco is not in crowsnest/static/; the SQL editor would load it from a CDN"
+    )
+
+
+# static/ is 6.2 MB with Monaco bundled (#91), and 14.4 MB without the
+# exclusions in next.config.js, which keep Monaco's CSS, HTML, JSON and
+# TypeScript workers out by file path. A later Monaco that moves those files
+# would bring them back without any error.
+MAX_STATIC_MB = 9
+
+
+def test_the_served_frontend_bundle_stays_small(wheel: pathlib.Path):
+    with zipfile.ZipFile(wheel) as z:
+        static_mb = sum(
+            i.file_size for i in z.infolist() if "/crowsnest/static/" in i.filename
+        ) / 1e6
+    assert static_mb < MAX_STATIC_MB, (
+        f"crowsnest/static/ is {static_mb:,.1f} MB (ceiling {MAX_STATIC_MB} MB). "
+        "Check that the Monaco exclusions in crowsnest/frontend/next.config.js still match."
+    )
 
 
 def test_templates_ship(wheel: pathlib.Path):
