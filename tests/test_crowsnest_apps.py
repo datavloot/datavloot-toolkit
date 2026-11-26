@@ -14,11 +14,11 @@ import sys
 import threading
 import time
 
-import httpx
 import pytest
 
 pytest.importorskip("duckdb", reason="duckdb is not installed")
 pytest.importorskip("fastapi", reason="fastapi is not installed")
+httpx = pytest.importorskip("httpx", reason="httpx is not installed")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
