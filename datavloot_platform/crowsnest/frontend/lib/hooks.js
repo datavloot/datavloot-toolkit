@@ -1,15 +1,22 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useApi(fetchFn, deps = [], refreshInterval = null) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Requests can overlap (an interval and a reload); a slow older answer must
+  // not replace a newer one.
+  const sent = useRef(0);
+  const applied = useRef(0);
 
   const load = useCallback(async () => {
+    const request = ++sent.current;
     try {
       setError(null);
       const result = await fetchFn();
+      if (request < applied.current) return;
+      applied.current = request;
       setData(result);
     } catch (err) {
       setError(err.message);
