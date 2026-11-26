@@ -845,6 +845,30 @@ def _python_args(project: pathlib.Path) -> list[str]:
     return ["--python", "3.12"]
 
 
+def _uv(project: pathlib.Path) -> str:
+    uv = shutil.which("uv")
+    if uv is None:
+        raise RemoteError(
+            "uv is not installed, and the project needs it for its own Python and "
+            "packages. Install it (https://docs.astral.sh/uv/getting-started/installation/), "
+            f"then run in {project}:\n  uv sync\n  uv run dbt deps\n  uv run dbt parse"
+        )
+    return uv
+
+
+def prepare_steps(project: pathlib.Path) -> list[tuple[str, list[str]]]:
+    """What `prepare` runs, as (description, command); finish_after_exit runs the same."""
+    uv = _uv(project)
+    sync = [uv, "sync", *_python_args(project)]
+    if (project / "uv.lock").is_file():
+        sync.append("--locked")
+    return [
+        ("Installing Python and the project's packages", sync),
+        ("Installing the dbt packages", [uv, "run", "--no-sync", "dbt", "deps"]),
+        ("Compiling the dbt project", [uv, "run", "--no-sync", "dbt", "parse"]),
+    ]
+
+
 def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> None:
     """
     Give the project its environment and dbt packages, and compile it: the steps
@@ -854,21 +878,8 @@ def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> 
     the versions its maintainer tested, and a lock that does not match
     pyproject.toml is a mistake to fix in the repository, not on each machine.
     """
-    uv = shutil.which("uv")
-    if uv is None:
-        raise RemoteError(
-            "uv is not installed, and the project needs it for its own Python and "
-            "packages. Install it (https://docs.astral.sh/uv/getting-started/installation/), "
-            f"then run in {project}:\n  uv sync\n  uv run dbt deps\n  uv run dbt parse"
-        )
-    sync = [uv, "sync", *_python_args(project)]
-    if (project / "uv.lock").is_file():
-        sync.append("--locked")
-    steps = [
-        ("Installing Python and the project's packages", sync),
-        ("Installing the dbt packages", [uv, "run", "--no-sync", "dbt", "deps"]),
-        ("Compiling the dbt project", [uv, "run", "--no-sync", "dbt", "parse"]),
-    ]
+    steps = prepare_steps(project)
+    sync = steps[0][1]
     # A virtual environment this command happens to run in is not the project's;
     # uv would warn about it on every step.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
@@ -888,6 +899,177 @@ def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> 
                 f"The files are in place: fix the cause, then run `{' '.join(['uv', *cmd[1:]])}` "
                 f"and the steps after it in {project}."
             )
+
+
+# --- Finishing an update after this process exits (Windows) -----------------------
+
+
+def runs_from(project: pathlib.Path) -> bool:
+    """Whether this Python runs from the project's own environment, its .venv."""
+    try:
+        return pathlib.Path(sys.prefix).resolve() == (project / ".venv").resolve()
+    except OSError:
+        return False
+
+
+def must_finish_after_exit(project: pathlib.Path, platform: str = os.name) -> bool:
+    """
+    Whether `update` has to leave `prepare` to a window that runs after it exits.
+
+    Windows does not let the files of a running program be replaced. Run from
+    the project's .venv, `datavloot update` is .venv\\Scripts\\datavloot.exe plus
+    the compiled packages it imported, and `uv sync` has to replace exactly
+    those when the new tag brings another datavloot (#165). `uv run datavloot
+    update` starts the same datavloot.exe. Elsewhere a running file can be
+    replaced, and a datavloot outside the .venv (uvx) holds nothing in it.
+    """
+    return platform == "nt" and runs_from(project)
+
+
+# This process and up to nine above it, as "<pid> <executable>" lines.
+_ANCESTRY = (
+    "$p = {pid}; foreach ($i in 1..10) {{ "
+    "$x = Get-CimInstance Win32_Process -Filter \"ProcessId=$p\"; if (-not $x) {{ break }}; "
+    "\"$($x.ProcessId) $($x.ExecutablePath)\"; $p = $x.ParentProcessId }}"
+)
+
+
+def _ancestry() -> list[tuple[int, str]]:
+    """(pid, executable) of this process and the ones above it, nearest first (Windows)."""
+    out = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", _ANCESTRY.format(pid=os.getpid())],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout
+    chain = []
+    for line in out.splitlines():
+        pid, _, path = line.strip().partition(" ")
+        if pid.isdigit():
+            chain.append((int(pid), path))
+    return chain
+
+
+def holders(
+    project: pathlib.Path, ancestry: Callable[[], list[tuple[int, str]]] = _ancestry
+) -> list[int]:
+    """
+    This process and the ones above it that run from the project's .venv: each
+    keeps a file open there that `uv sync` replaces.
+
+    From .venv\\Scripts\\datavloot.exe that is three: datavloot.exe starts the
+    venv's python.exe, which starts the base interpreter this code runs in. So
+    the parent alone leaves datavloot.exe out, the very file uv has to replace.
+    Above them is the shell, or uv for `uv run`, which holds nothing there and
+    may run for hours, so the walk stops at the first one outside the .venv.
+    """
+    try:
+        chain = ancestry()
+    except (OSError, subprocess.SubprocessError):
+        chain = []
+    if not chain or chain[0][0] != os.getpid():
+        return [os.getpid(), os.getppid()]
+    venv = os.path.normcase(str((project / ".venv").resolve())) + os.sep
+    pids = [chain[0][0]]
+    for pid, path in chain[1:]:
+        if not path or not os.path.normcase(path).startswith(venv):
+            break
+        pids.append(pid)
+    return pids
+
+
+# Run last by that window, with the datavloot the new tag installed. That one
+# may be older than this one (an update can go back), hence the fallback.
+_AFTER_SYNC = """\
+import pathlib
+
+try:
+    from datavloot_platform import remote
+    from datavloot_platform.crowsnest.config import get_config
+
+    print(remote.run_after_update(pathlib.Path.cwd(), get_config().dagster_graphql_url, {start_run}))
+except Exception:  # noqa: BLE001 -- a datavloot without run_after_update
+    print("Start Dagster and the Crows Nest with `uv run datavloot start`, then Materialize all "
+          "in Pipelines, so the tables match the new models.")
+"""
+
+
+def _ps(text: str) -> str:
+    """A PowerShell single-quoted string: nothing in it is expanded."""
+    return "'" + text.replace("'", "''") + "'"
+
+
+def finish_script(
+    project: pathlib.Path,
+    steps: list[tuple[str, list[str]]],
+    wait_for: list[int],
+    after_sync: pathlib.Path,
+) -> str:
+    """
+    The PowerShell that finishes an update: wait until the processes in
+    wait_for have exited, run the steps of `prepare`, then after_sync.
+
+    A failed step stops it, with the commands still to run, and the window stays
+    open until the user has read it.
+    """
+    commands = [" ".join(["uv", *cmd[1:]]) for _, cmd in steps]
+    lines = [
+        f"# Finishes `datavloot update` in {project}; written by that command.",
+        f"$project = {_ps(str(project))}",
+        "Set-Location -LiteralPath $project",
+        # A virtual environment the user's shell had active is not the project's.
+        "Remove-Item Env:VIRTUAL_ENV -ErrorAction SilentlyContinue",
+        "Write-Host \"Finishing the update of ${project}.\"",
+        "Write-Host 'Waiting for datavloot update to exit...'",
+        f"Wait-Process -Id {','.join(str(p) for p in wait_for)} -ErrorAction SilentlyContinue",
+        "function Stop-Update([string]$what, [string]$rest) {",
+        "    Write-Host \"`n$what failed (exit code $LASTEXITCODE); the output above says why.\" -ForegroundColor Red",
+        "    Write-Host \"Fix the cause, then run in ${project}:`n$rest\"",
+        "    Read-Host 'Press Enter to close this window'",
+        "    exit 1",
+        "}",
+    ]
+    for i, (what, cmd) in enumerate(steps):
+        rest = "\n".join(f"  {c}" for c in commands[i:])
+        lines += [
+            f"Write-Host (\"`n==> \" + {_ps(what)})",
+            "& " + " ".join(_ps(part) for part in cmd),
+            f"if ($LASTEXITCODE -ne 0) {{ Stop-Update {_ps(what)} {_ps(rest)} }}",
+        ]
+    uv = steps[0][1][0]
+    lines += [
+        "Write-Host \"`n==> Rebuilding the tables\"",
+        f"& {_ps(uv)} 'run' '--no-sync' 'python' {_ps(str(after_sync))}",
+        "Write-Host \"`nThe update is done.\" -ForegroundColor Green",
+        f"Remove-Item -LiteralPath {_ps(str(after_sync.parent))} -Recurse -Force -ErrorAction SilentlyContinue",
+        "Read-Host 'Press Enter to close this window'",
+    ]
+    return "\r\n".join(lines) + "\r\n"
+
+
+def finish_after_exit(
+    project: pathlib.Path, start_run: bool, *, popen: Callable[..., object] = subprocess.Popen
+) -> pathlib.Path:
+    """
+    Start a new window that runs `prepare` and then the rebuild once this
+    process, and the ones above it in the .venv (see holders), have exited.
+    Return its script.
+    """
+    steps = prepare_steps(project)
+    folder = pathlib.Path(tempfile.mkdtemp(prefix="datavloot-update-"))
+    after_sync = folder / "after_sync.py"
+    after_sync.write_text(_AFTER_SYNC.format(start_run=start_run), encoding="utf-8")
+    script = folder / "finish-update.ps1"
+    # With a BOM, Windows PowerShell 5.1 reads a path with non-ASCII letters right.
+    script.write_text(
+        finish_script(project, steps, holders(project), after_sync), encoding="utf-8-sig"
+    )
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    popen(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+        cwd=project,
+        env=env,
+        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+    )
+    return script
 
 
 # --- The commands --------------------------------------------------------------
@@ -960,12 +1142,14 @@ def update(
     ask=input,
     ask_secret=getpass.getpass,
     runner=None,
+    defer_prepare: bool = False,
 ) -> tuple[str, str] | None:
     """
     `datavloot update`: put the files of another tag in place of the installed ones.
 
     The new tag is downloaded and unpacked first; when that fails, nothing in
     the project has changed. Return (from, to), or None when it is already there.
+    With defer_prepare the environment is left as it is, for finish_after_exit.
     """
     state = read_state(project)
     source = parse_source(state["source"])
@@ -996,7 +1180,8 @@ def update(
         print(f"The token is stored in {store_token(source, fetched.token)}.")
 
     fill_env(project, ask, ask_secret)
-    prepare(project, runner)
+    if not defer_prepare:
+        prepare(project, runner)
     return current, fetched.ref
 
 
