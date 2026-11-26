@@ -40,12 +40,12 @@ dependencies = [
 # after the lake has been tried on it.
 optimist = [
     "altair>=6.0,<7",
-    "dagster>=1.13.6,<1.14",
+    "dagster>=1.13.28,<1.14",
     # 0.29.28: DbtProject(install_deps=False), which the project templates use.
     "dagster-dbt>=0.29.28,<0.30",
-    "dagster-dlt>=0.29.6,<0.30",
-    "dagster-duckdb>=0.29.6,<0.30",
-    "dagster-webserver>=1.13.6,<1.14",
+    "dagster-dlt>=0.29.28,<0.30",
+    "dagster-duckdb>=0.29.28,<0.30",
+    "dagster-webserver>=1.13.28,<1.14",
     "dbt-core>=1.11,<1.12",
     "dbt-duckdb>=1.10,<2",
     "dlt[duckdb,ducklake]>=1.28,<2",  # ducklake: the destination for the project lake, needs pyarrow

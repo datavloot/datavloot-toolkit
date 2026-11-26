@@ -663,11 +663,11 @@ optimist = [
 [package.metadata]
 requires-dist = [
     { name = "altair", marker = "extra == 'optimist'", specifier = ">=6.0,<7" },
-    { name = "dagster", marker = "extra == 'optimist'", specifier = ">=1.13.6,<1.14" },
+    { name = "dagster", marker = "extra == 'optimist'", specifier = ">=1.13.28,<1.14" },
     { name = "dagster-dbt", marker = "extra == 'optimist'", specifier = ">=0.29.28,<0.30" },
-    { name = "dagster-dlt", marker = "extra == 'optimist'", specifier = ">=0.29.6,<0.30" },
-    { name = "dagster-duckdb", marker = "extra == 'optimist'", specifier = ">=0.29.6,<0.30" },
-    { name = "dagster-webserver", marker = "extra == 'optimist'", specifier = ">=1.13.6,<1.14" },
+    { name = "dagster-dlt", marker = "extra == 'optimist'", specifier = ">=0.29.28,<0.30" },
+    { name = "dagster-duckdb", marker = "extra == 'optimist'", specifier = ">=0.29.28,<0.30" },
+    { name = "dagster-webserver", marker = "extra == 'optimist'", specifier = ">=1.13.28,<1.14" },
     { name = "dbt-core", marker = "extra == 'optimist'", specifier = ">=1.11,<1.12" },
     { name = "dbt-duckdb", marker = "extra == 'optimist'", specifier = ">=1.10,<2" },
     { name = "dlt", extras = ["duckdb", "ducklake"], marker = "extra == 'optimist'", specifier = ">=1.28,<2" },
