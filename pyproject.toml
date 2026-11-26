@@ -92,6 +92,9 @@ exclude = [
   # into /usr/local/bin and the build dies with "Invalid tar file"; on Windows it
   # silently produced a 22.78 MB sdist instead of 0.68 MB.
   ".uv-cache",
+  # Claude Code keeps agent worktrees in .claude/worktrees: whole checkouts,
+  # whose node_modules paths also broke the packaging test on Windows.
+  ".claude",
   ".venv",
   ".pytest_cache",
   "dist",
@@ -100,6 +103,8 @@ exclude = [
   "datavloot_platform/templates/*/target",
   "datavloot_platform/templates/*/dbt_packages",
   "datavloot_platform/templates/*/logs",
+  # `datavloot start` run in a checkout leaves its pid file and logs here.
+  "/logs",
   "*.duckdb",
 ]
 
