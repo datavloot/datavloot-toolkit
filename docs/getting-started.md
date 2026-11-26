@@ -129,6 +129,37 @@ uv run datavloot launch --host 0.0.0.0
 Remove-NetFirewallRule -DisplayName "Crows Nest demo"
 ```
 
+### Windows blocks a DuckDB extension (Smart App Control)
+
+On some Windows 11 laptops the platform stops working with a message like this:
+
+> pythonw.exe - Ongeldige installatiekopie (Invalid image)
+> `C:\Users\<you>\.duckdb\extensions\v<version>\windows_amd64\ducklake.duckdb_extension` is niet geschikt voor Windows of het bevat een fout (is not suitable for Windows or contains an error). […] Foutstatus (Error status) 0xc0e90002.
+
+Windows Security can show "Smart App Control heeft een deel van deze app geblokkeerd" (Smart
+App Control blocked part of this app). The lake cannot be attached, so nothing that reads or
+writes it runs.
+
+DuckDB downloads its extensions (such as `ducklake`) as DLLs into `~/.duckdb/extensions/` and
+loads them into the Python process. They are not signed with a certificate Windows trusts, and
+Smart App Control blocks unsigned code that has no cloud reputation. You cannot allow a single
+file.
+
+Smart App Control only exists on clean installs of Windows 11 22H2 and later. It can start in
+evaluation mode, which Windows later switches on or off by itself. That can explain why the
+platform runs fine a few times and then gets blocked.
+
+The only fix is to turn Smart App Control off. Look in the Windows Security app
+(*Windows-beveiliging* in Dutch), under *App & browser control*, at *Smart App Control*. The
+feature keeps that English name in Dutch Windows too. Weigh it first: on older Windows builds it could not be turned
+back on without reinstalling Windows. On an up-to-date Windows it can be turned on again later in
+the same app, see the
+[Microsoft FAQ](https://support.microsoft.com/en-us/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003).
+Defender Antivirus, SmartScreen and the firewall are not affected by this setting.
+
+On a laptop managed by your employer, ask IT first. They may block the setting, or have another
+way to allow DuckDB extensions.
+
 ---
 
 ## Querying results
