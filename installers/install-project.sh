@@ -72,8 +72,12 @@ check_project_dir() {
 }
 
 check_internet() {
-    curl -fsSI --max-time 20 https://pypi.org/simple/datavloot/ >/dev/null 2>&1 \
-        || fail "Cannot reach pypi.org. Check the internet connection. Behind a proxy, set HTTPS_PROXY (for example export HTTPS_PROXY=http://proxy:8080) and run this again."
+    # PyPI for the toolkit; the dbt hub and GitHub for the packages `dbt deps` unpacks.
+    local url
+    for url in https://pypi.org/simple/datavloot/ https://github.com/ https://hub.getdbt.com/; do
+        curl -fsSI --max-time 20 "$url" >/dev/null 2>&1 \
+            || fail "Cannot reach $(printf %s "${url#https://}" | cut -d/ -f1). Check the internet connection. Behind a proxy, set HTTPS_PROXY (for example export HTTPS_PROXY=http://proxy:8080) and run this again."
+    done
 }
 
 install_uv() {
@@ -99,6 +103,23 @@ toolkit_source() {
     fi
 }
 
+install_dbt_packages() {
+    # Always: dbt deps starts from an empty dbt_packages, and a folder an earlier
+    # `dbt deps` left half unpacked must not count as installed. A file another
+    # process holds for a moment fails it, so try again.
+    local attempt code=0
+    for attempt in 1 2 3; do
+        if [ "$attempt" -gt 1 ]; then
+            echo "dbt deps failed; trying again."
+            rm -rf dbt_packages
+            sleep "${DEPS_PAUSE:-3}"
+        fi
+        uv run --no-sync dbt deps && return 0
+        code=$?
+    done
+    return "$code"
+}
+
 install_environment() {
     # In the project folder. Also repairs a project an earlier attempt left
     # halfway, and is quick when nothing is missing. An installed project gets
@@ -107,9 +128,7 @@ install_environment() {
     if [ -f uv.lock ] && [ -f .datavloot/install.json ]; then locked="--locked"; fi
     run_step "Installing Python $PYTHON_VERSION and the project's packages" \
         uv sync --python "$PYTHON_VERSION" $locked
-    if [ ! -d dbt_packages ]; then
-        run_step "Installing the dbt packages" uv run --no-sync dbt deps
-    fi
+    run_step "Installing the dbt packages" install_dbt_packages
     run_step "Compiling the dbt project" uv run --no-sync dbt parse
 }
 
@@ -201,9 +220,10 @@ main() {
     fi
 
     cd "$dir"
+    # Before anything touches the project: a running Datavloot holds its files.
+    assert_ports_free
     # `new --from` has just done this; an existing project may need repairing.
     if $EXISTING; then install_environment; fi
-    assert_ports_free
     start_help "$dir"
     if ! $EXISTING; then
         # No run of its own: a project usually reads files that are not in its
