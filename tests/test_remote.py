@@ -620,6 +620,122 @@ def test_the_token_file_when_there_is_no_credential_store(httpx_available, tmp_p
     assert remote.load_token(remote.parse_source(host.url)) == TOKEN
 
 
+# --- Finishing an update after it exits (Windows, #165) ---------------------------------------
+
+
+def test_update_can_leave_the_environment_for_later(installed):
+    host, dest = installed
+    result = remote.update(dest, transport=host.transport, ask_token=None, ask=lambda p: "",
+                           ask_secret=_answers(), defer_prepare=True,
+                           runner=lambda cmd: pytest.fail(f"ran {cmd}"))
+    assert result == ("v1.0.0", "v2.0.0")
+    assert (dest / "models" / "new.sql").is_file()
+
+
+def test_only_windows_from_the_project_venv_finishes_after_exit(tmp_path, monkeypatch):
+    (tmp_path / ".venv").mkdir()
+    monkeypatch.setattr(remote.sys, "prefix", str(tmp_path / ".venv"))
+    assert remote.must_finish_after_exit(tmp_path, platform="nt")
+    # A running file can be replaced elsewhere.
+    assert not remote.must_finish_after_exit(tmp_path, platform="posix")
+    # A datavloot outside the project's .venv (uvx) holds nothing in it.
+    monkeypatch.setattr(remote.sys, "prefix", str(tmp_path / "elsewhere"))
+    assert not remote.must_finish_after_exit(tmp_path, platform="nt")
+
+
+def test_the_finish_script_waits_then_runs_the_steps(tmp_path):
+    project = tmp_path / "Michiel's project"
+    steps = [
+        ("Installing Python and the project's packages", ["C:/uv/uv.exe", "sync", "--python", "3.12", "--locked"]),
+        ("Installing the dbt packages", ["C:/uv/uv.exe", "run", "--no-sync", "dbt", "deps"]),
+    ]
+    script = remote.finish_script(project, steps, [111, 222], tmp_path / "after_sync.py")
+    lines = script.splitlines()
+
+    # First the wait, so nothing in .venv is replaced while datavloot still runs.
+    wait = lines.index("Wait-Process -Id 111,222 -ErrorAction SilentlyContinue")
+    first_step = lines.index("& 'C:/uv/uv.exe' 'sync' '--python' '3.12' '--locked'")
+    assert wait < first_step
+    # Single quotes in a path are doubled, so PowerShell expands nothing in it.
+    assert "$project = '" + str(project).replace("'", "''") + "'" in lines
+    # A failed step says what is left to run, from that step on.
+    assert ("if ($LASTEXITCODE -ne 0) { Stop-Update 'Installing the dbt packages' "
+            "'  uv run --no-sync dbt deps' }") in lines
+    assert "& 'C:/uv/uv.exe' 'run' '--no-sync' 'python' '" + str(tmp_path / "after_sync.py") + "'" in lines
+    assert lines[-1] == "Read-Host 'Press Enter to close this window'"
+
+
+def test_the_window_waits_for_every_process_in_the_venv(tmp_path):
+    # Resolved, as holders resolves it: a Windows temp folder can be an 8.3 short name.
+    venv = tmp_path.resolve() / ".venv" / "Scripts"
+    me = os.getpid()
+    # Seen on Windows: the base interpreter, started by the venv's python.exe,
+    # started by datavloot.exe, started by uv (`uv run datavloot update`).
+    chain = [
+        (me, "C:/uv/python/cpython-3.12/python.exe"),
+        (502, str(venv / "python.exe")),
+        (503, str(venv / "datavloot.exe")),
+        (504, "C:/Users/me/.local/bin/uv.exe"),
+        (505, "C:/Windows/System32/cmd.exe"),
+    ]
+    assert remote.holders(tmp_path, ancestry=lambda: chain) == [me, 502, 503]
+    # A shell above datavloot.exe holds nothing in the .venv and may run for hours.
+    assert remote.holders(tmp_path, ancestry=lambda: chain[:3] + chain[4:]) == [me, 502, 503]
+
+
+def test_the_window_waits_for_the_parent_when_the_chain_is_unknown(tmp_path):
+    def broken():
+        raise OSError("no powershell")
+
+    expected = [os.getpid(), os.getppid()]
+    assert remote.holders(tmp_path, ancestry=broken) == expected
+    assert remote.holders(tmp_path, ancestry=lambda: []) == expected
+
+
+@pytest.mark.parametrize("start_run", [True, False])
+def test_finish_after_exit_opens_a_window(tmp_path, monkeypatch, start_run):
+    monkeypatch.setattr(remote.shutil, "which", lambda name: "C:/uv/uv.exe")
+    monkeypatch.setenv("VIRTUAL_ENV", "somewhere")
+    # The window would remove its folder when done; here no window runs.
+    monkeypatch.setattr(remote.tempfile, "mkdtemp", lambda prefix: str(tmp_path / "helper"))
+    (tmp_path / "helper").mkdir()
+    monkeypatch.setattr(remote, "holders", lambda project: [111, 222, 333])
+    started = []
+
+    script = remote.finish_after_exit(tmp_path, start_run, popen=lambda cmd, **kw: started.append((cmd, kw)))
+
+    [(cmd, kw)] = started
+    assert cmd[:4] == ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"]
+    assert cmd[-2:] == ["-File", str(script)]
+    assert kw["cwd"] == tmp_path and "VIRTUAL_ENV" not in kw["env"]
+    text = script.read_text(encoding="utf-8-sig")
+    assert "Wait-Process -Id 111,222,333 " in text
+    after_sync = (script.parent / "after_sync.py").read_text(encoding="utf-8")
+    assert f"get_config().dagster_graphql_url, {start_run})" in after_sync
+    compile(after_sync, "after_sync.py", "exec")
+
+
+def test_update_on_windows_from_the_venv_hands_over(installed, monkeypatch, capsys):
+    import argparse
+
+    host, dest = installed
+    monkeypatch.chdir(dest)
+    monkeypatch.setattr(remote, "must_finish_after_exit", lambda project: True)
+    real_update = remote.update
+    monkeypatch.setattr(remote, "update", lambda project, ref, defer_prepare: real_update(
+        project, ref, transport=host.transport, ask_token=None, ask=lambda p: "",
+        ask_secret=_answers(), defer_prepare=defer_prepare,
+        runner=lambda cmd: pytest.fail(f"ran {cmd}")))
+    handed = []
+    monkeypatch.setattr(remote, "finish_after_exit", lambda project, run: handed.append((project, run)))
+    monkeypatch.setattr(remote, "run_after_update", lambda *a: pytest.fail("rebuilt in this process"))
+
+    cli.cmd_update(argparse.Namespace(ref=None, run=False))
+
+    assert handed == [(dest, False)]
+    assert "A new window installs its packages" in capsys.readouterr().out
+
+
 # --- After an update --------------------------------------------------------------------------
 
 

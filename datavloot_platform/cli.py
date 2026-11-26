@@ -232,11 +232,23 @@ def cmd_update(args: argparse.Namespace) -> None:
 
     project = pathlib.Path.cwd()
     _warn_about_location(project, _to_identifier(project.name))
+    # On Windows, uv sync cannot replace this very datavloot while it runs (#165):
+    # place the files here, and leave the rest to a window that waits for us.
+    defer = remote.must_finish_after_exit(project)
     try:
-        result = remote.update(project, args.ref)
+        result = remote.update(project, args.ref, defer_prepare=defer)
+        if result is not None and defer:
+            remote.finish_after_exit(project, args.run)
     except remote.RemoteError as e:
         sys.exit(f"Error: {e}")
     if result is None:
+        return
+    if defer:
+        print(
+            f"\nThe files of {result[1]} are in place. A new window installs its packages, compiles "
+            "the project and rebuilds the tables as soon as this command has exited: keep that "
+            "window open until it says the update is done."
+        )
         return
     print(f"\n{remote.run_after_update(project, get_config().dagster_graphql_url, args.run)}")
     print(f"\nUpdated from {result[0]} to {result[1]}.")

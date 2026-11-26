@@ -376,7 +376,9 @@ uv run datavloot update --ref v1.1.0 # to a given tag, also an older one
 
 `update` downloads and unpacks the tag first; if that fails (no internet, an expired token, an unknown tag) the installation is left as it was. Then it replaces exactly the files the previous tag installed, listed with their hashes in `.datavloot/install.json`: files the new tag no longer has are removed, the others overwritten. Everything else stays: `.env`, `data/`, `lake/`, `.venv`, `logs/`, `target/`, `dbt_packages/` and notebooks someone made. A file of the installation that was changed on the machine is overwritten too, with a warning. It then asks only for settings that `.env.example` gained, and runs `uv sync`, `dbt deps` and `dbt parse` again.
 
-Finally it rebuilds the tables with the new models: when this project's Dagster is running, it reloads the code and starts a run of every asset (leave that out with `--no-run`); when it is not, it says how to start it. Restart Dagster and the Crows Nest afterwards so they run the new version. On Windows, a running Dagster can keep `uv sync` from replacing files in `.venv`; if it fails on that, close Dagster and the Crows Nest and run `uv sync` and the steps after it again.
+Finally it rebuilds the tables with the new models: when this project's Dagster is running, it reloads the code and starts a run of every asset (leave that out with `--no-run`); when it is not, it says how to start it. Restart Dagster and the Crows Nest afterwards so they run the new version.
+
+On Windows, `uv sync` cannot replace the `datavloot` that is running the update. There `update` stops once the files are in place, and a new window runs `uv sync`, `dbt deps`, `dbt parse` and the rebuild as soon as `update` has exited. Keep that window open until it says the update is done. A running Dagster can also keep `uv sync` from replacing files in `.venv`; if the window stops on that, close Dagster and the Crows Nest and run the commands it prints.
 
 ---
 
