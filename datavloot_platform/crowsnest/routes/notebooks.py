@@ -16,10 +16,8 @@ from datavloot_platform.crowsnest.processes import port_in_use, port_taken_messa
 
 router = APIRouter()
 
-MARIMO_PORT = 2718
-
 # The one process the Crows Nest owns: the Marimo it launched itself. Anything
-# else on MARIMO_PORT -- typically the user's own Marimo in another project --
+# else on its port -- typically the user's own Marimo in another project --
 # is left alone.
 _marimo_process: "subprocess.Popen | None" = None
 _marimo_notebook: "str | None" = None
@@ -81,6 +79,8 @@ def launch_notebook(req: LaunchRequest):
     if public_url:
         return {"launched": name, "url": f"{public_url}/?file={name}"}
 
+    # The port of CROWSNEST_MARIMO_URL, so the check and the panel look where we start.
+    port = get_config().marimo_port
     # Replace our own Marimo; refuse rather than stop one we did not start.
     with _marimo_lock:
         if _stop_ours():
@@ -88,16 +88,16 @@ def launch_notebook(req: LaunchRequest):
             # gone. Wait for it, or the relaunch would take our own Marimo for a
             # stranger's.
             deadline = time.monotonic() + 5
-            while port_in_use(MARIMO_PORT) and time.monotonic() < deadline:
+            while port_in_use(port) and time.monotonic() < deadline:
                 time.sleep(0.1)
-        if port_in_use(MARIMO_PORT):
-            raise HTTPException(409, port_taken_message(MARIMO_PORT))
+        if port_in_use(port):
+            raise HTTPException(409, port_taken_message(port))
 
         _marimo_process = start_marimo(
-            ["edit", "--headless", "--no-token", "--port", str(MARIMO_PORT), str(notebook_path)]
+            ["edit", "--headless", "--no-token", "--port", str(port), str(notebook_path)]
         )
         _marimo_notebook = name
-    return {"launched": name, "url": f"http://127.0.0.1:{MARIMO_PORT}"}
+    return {"launched": name, "url": f"http://127.0.0.1:{port}"}
 
 
 @router.post("/stop")

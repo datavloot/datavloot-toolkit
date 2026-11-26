@@ -19,6 +19,7 @@ Elementary schema:
 
 import pathlib
 from typing import Optional
+from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -63,6 +64,14 @@ class CrowsnestConfig:
         # set public URL means a service of its own, linked to, not started.
         self.apps_url = apps_url
         self.apps_public_url = apps_public_url
+
+    @property
+    def marimo_port(self) -> int:
+        return _port_of(self.marimo_url, 2718)
+
+    @property
+    def apps_port(self) -> int:
+        return _port_of(self.apps_url, 2719)
 
     @classmethod
     def discover(cls) -> "CrowsnestConfig":
@@ -153,6 +162,15 @@ def is_loopback(host: Optional[str]) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
+
+
+def _port_of(url: str, default: int) -> int:
+    """The port of a server URL. On a laptop the Crows Nest starts its Marimo there and always
+    binds 127.0.0.1: a host in the URL (as in the compose stack) does not move it."""
+    try:
+        return urlsplit(url).port or default
+    except ValueError:
+        return default
 
 
 def get_config() -> CrowsnestConfig:

@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 
+import httpx
 import pytest
 
 pytest.importorskip("duckdb", reason="duckdb is not installed")
@@ -22,12 +23,14 @@ pytest.importorskip("fastapi", reason="fastapi is not installed")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
+from datavloot_platform.crowsnest import processes  # noqa: E402
 from datavloot_platform.crowsnest.routes import apps, notebooks  # noqa: E402
 
 from .test_crowsnest_notebooks import (  # noqa: E402
     OWN_GROUP,
     SERVE,
     SERVES_FROM_A_CHILD,
+    SlowToReleaseMarimo,
     answered_meanwhile,
     finds_the_listener,
     kill_tree,
@@ -51,13 +54,13 @@ def make_client(tmp_path, monkeypatch):
     duckdb.connect(str(db)).close()
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CROWSNEST_DUCKDB_PATH", str(db))
-    for var in ("CROWSNEST_AUTH_TOKEN", "CROWSNEST_APPS_URL", "CROWSNEST_APPS_PUBLIC_URL"):
+    for var in ("CROWSNEST_AUTH_TOKEN", "CROWSNEST_APPS_PUBLIC_URL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(apps, "_apps_process", None)
     # A free port of its own, so an apps server the developer runs on 2719 is not in the way.
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        monkeypatch.setattr(apps, "APPS_PORT", s.getsockname()[1])
+        monkeypatch.setenv("CROWSNEST_APPS_URL", f"http://127.0.0.1:{s.getsockname()[1]}")
 
     def make(with_apps=True, **env) -> TestClient:
         if with_apps:
@@ -131,14 +134,162 @@ def test_a_laptop_starts_one_server_for_every_app(make_client, monkeypatch):
     monkeypatch.setattr(apps, "start_marimo", start)
     monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
     client = make_client()
+    port = cn_config.get_config().apps_port
 
     first = client.post("/api/apps/open", json={"name": "traffic.py"}).json()
     second = client.post("/api/apps/open", json={"name": "plain.py"}).json()
 
-    assert first["url"] == "http://127.0.0.1:2719/?file=traffic.py"
-    assert second["url"] == "http://127.0.0.1:2719/?file=plain.py"
-    port = str(apps.APPS_PORT)
-    assert calls == [["run", "apps", "--headless", "--no-token", "--port", port]], "one server for every app"
+    assert first["url"] == f"http://127.0.0.1:{port}/?file=traffic.py"
+    assert second["url"] == f"http://127.0.0.1:{port}/?file=plain.py"
+    assert calls == [["run", "apps", "--headless", "--no-token", "--port", str(port)]], "one server for every app"
+
+
+def test_an_app_added_after_the_server_started_restarts_it(make_client, monkeypatch, tmp_path):
+    """marimo run reads apps/ once: a file added later answers 404 until the server restarts."""
+    started, stopped = [], []
+
+    def start(args):
+        started.append((tmp_path / "apps" / "late.py").exists())
+        return _FakeProcess()
+
+    monkeypatch.setattr(apps, "start_marimo", start)
+    monkeypatch.setattr(apps, "stop_process", stopped.append)
+    monkeypatch.setattr(apps.httpx, "AsyncClient", _Client)
+    client = make_client()
+
+    client.post("/api/apps/open", json={"name": "traffic.py"})
+    client.post("/api/apps/open", json={"name": "plain.py"})
+    assert len(started) == 1, "a known app restarted the server"
+
+    (tmp_path / "apps" / "late.py").write_text(DASHBOARD, encoding="utf-8")
+    assert client.post("/api/apps/open", json={"name": "late.py"}).status_code == 200
+    client.post("/api/apps/open", json={"name": "late.py"})
+
+    assert started == [False, True], "the new app did not restart the server, or did so twice"
+    assert len(stopped) == 1
+
+
+class _HoldsThePortForAWhile(SlowToReleaseMarimo):
+    """Keeps the port 1.5 s after it is stopped: longer than a waiting Open takes to look again."""
+
+    def stop(self):
+        self._stopped = True
+        threading.Timer(1.5, self._sock.close).start()
+
+
+def _restart_with_a_slow_port(monkeypatch, client_class, on_stop=lambda: None):
+    """Servers that keep the port a moment after they are stopped, as on Windows."""
+    started = []
+
+    def start(args):
+        started.append(_HoldsThePortForAWhile(cn_config.get_config().apps_port))
+        return started[-1]
+
+    def terminate(proc):
+        proc.stop()
+        on_stop()
+
+    monkeypatch.setattr(apps, "start_marimo", start)
+    monkeypatch.setattr(processes, "terminate_tree", terminate)
+    monkeypatch.setattr(apps.httpx, "AsyncClient", client_class)
+    return started
+
+
+
+def test_a_restart_waits_for_its_own_server_to_release_the_port(make_client, monkeypatch, tmp_path):
+    started = _restart_with_a_slow_port(monkeypatch, _Client)
+    client = make_client()
+
+    try:
+        assert client.post("/api/apps/open", json={"name": "traffic.py"}).status_code == 200
+        (tmp_path / "apps" / "late.py").write_text(DASHBOARD, encoding="utf-8")
+        restart = client.post("/api/apps/open", json={"name": "late.py"})
+        assert restart.status_code == 200, restart.json()
+    finally:
+        for proc in started:
+            proc.stop()
+
+
+def _open_while_another_open_restarts(client, tmp_path, started, restarting, second_status):
+    """The first Open waits for the server; a second one, for a new app, restarts it under the first."""
+    results = []
+    first = threading.Thread(target=lambda: results.append(client.post("/api/apps/open", json={"name": "traffic.py"})))
+    first.start()
+    try:
+        assert wait_until(lambda: started, timeout=5), "the first Open never started a server"
+        (tmp_path / "apps" / "late.py").write_text(DASHBOARD, encoding="utf-8")
+        assert client.post("/api/apps/open", json={"name": "late.py"}).status_code == second_status
+    finally:
+        # Joined before the client closes: a failed assert must not leave it hanging.
+        restarting.set()
+        first.join(timeout=30)
+        for proc in started:
+            proc.stop()
+    assert not first.is_alive(), "the first Open never returned"
+    return results[0]
+
+
+def test_an_open_that_is_waiting_survives_a_restart(make_client, monkeypatch, tmp_path):
+    """The restart stops the process the first Open waits for; that is not a failure."""
+    restarting = threading.Event()
+
+    class _ConnectsOnceTheRestartHasBegun(_Client):
+        async def get(self, url):
+            if not restarting.is_set():
+                while not restarting.is_set():
+                    await asyncio.sleep(0.05)
+                raise httpx.ConnectError("the old server is gone")
+            return _Answers()
+
+    started = _restart_with_a_slow_port(monkeypatch, _ConnectsOnceTheRestartHasBegun, restarting.set)
+
+    with make_client() as client:
+        first = _open_while_another_open_restarts(client, tmp_path, started, restarting, 200)
+
+    assert first.status_code == 200, first.json()
+
+
+def test_a_waiting_open_is_told_when_the_restart_failed(make_client, monkeypatch, tmp_path):
+    restarting = threading.Event()
+
+    class _ConnectsOnceTheRestartHasBegun(_Client):
+        async def get(self, url):
+            while not restarting.is_set():
+                await asyncio.sleep(0.05)
+            raise httpx.ConnectError("the old server is gone")
+
+    started = _restart_with_a_slow_port(monkeypatch, _ConnectsOnceTheRestartHasBegun, restarting.set)
+    starts = apps.start_marimo
+
+    def start_once(args):
+        if started:
+            raise apps.HTTPException(409, "the port is taken")
+        return starts(args)
+
+    monkeypatch.setattr(apps, "start_marimo", start_once)
+
+    with make_client() as client:
+        first = _open_while_another_open_restarts(client, tmp_path, started, restarting, 409)
+
+    assert first.status_code == 500
+    assert "restart" in first.json()["detail"].lower() and "the port is taken" in first.json()["detail"]
+
+
+def test_open_polls_127_0_0_1_whatever_host_the_url_names(make_client, monkeypatch):
+    seen = []
+
+    class _Records(_Client):
+        async def get(self, url):
+            seen.append(url)
+            return _Answers()
+
+    monkeypatch.setattr(apps, "start_marimo", lambda args: _FakeProcess())
+    monkeypatch.setattr(apps.httpx, "AsyncClient", _Records)
+
+    response = make_client(CROWSNEST_APPS_URL="http://apps:2800").post("/api/apps/open", json={"name": "traffic.py"})
+
+    assert seen == ["http://127.0.0.1:2800"]
+    assert response.json()["url"] == "http://127.0.0.1:2800/?file=traffic.py"
 
 
 @pytest.mark.parametrize("step", ["port_in_use", "start_marimo"])
@@ -215,12 +366,12 @@ def test_open_leaves_a_foreign_apps_server_alone(make_client, monkeypatch):
     """Whatever else holds the port -- another project's apps -- is not ours to stop; Open says so."""
     monkeypatch.setattr(apps, "start_marimo", lambda args: pytest.fail("started an apps server next to a foreign one"))
     client = make_client()
-    foreign = subprocess.Popen([sys.executable, "-c", SERVE, str(apps.APPS_PORT)], **OWN_GROUP)
+    foreign = subprocess.Popen([sys.executable, "-c", SERVE, str(cn_config.get_config().apps_port)], **OWN_GROUP)
     try:
-        assert wait_until(lambda: serves(apps.APPS_PORT)), "the foreign server never listened"
+        assert wait_until(lambda: serves(cn_config.get_config().apps_port)), "the foreign server never listened"
         response = client.post("/api/apps/open", json={"name": "traffic.py"})
         assert response.status_code == 409
-        assert finds_the_listener(apps.APPS_PORT) in response.json()["detail"]
+        assert finds_the_listener(cn_config.get_config().apps_port) in response.json()["detail"]
         assert foreign.poll() is None, "the Crows Nest stopped an apps server it did not start"
     finally:
         foreign.kill()
@@ -243,8 +394,9 @@ def test_the_browser_learns_which_project_runs(make_client, tmp_path):
     assert make_client().get("/api/services").json()["project"] == "probe"
 
 
-def test_a_laptop_links_the_local_apps_server(make_client):
-    assert make_client().get("/api/services").json()["apps_url"] == "http://127.0.0.1:2719"
+def test_a_laptop_links_the_local_apps_server(make_client, monkeypatch):
+    monkeypatch.setenv("CROWSNEST_APPS_URL", "http://127.0.0.1:2800")
+    assert make_client().get("/api/services").json()["apps_url"] == "http://127.0.0.1:2800"
 
 
 @pytest.mark.parametrize("route", [apps, notebooks], ids=["apps", "notebooks"])

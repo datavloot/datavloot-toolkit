@@ -467,7 +467,7 @@ Open [http://localhost:2718](http://localhost:2718). To share a read-only view, 
 
 The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/notebooks/explore_noaa.py) in the demo for a fully worked example.
 
-You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click. The panel shows only a Marimo it started itself: one you start with `marimo edit` stays in its own browser tab, and while it holds port 2718 the panel cannot launch another; the panel's error names the command that stops it.
+You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click. The panel shows only a Marimo it started itself: one you start with `marimo edit` stays in its own browser tab, and while it holds port 2718 (or the port of `CROWSNEST_MARIMO_URL`) the panel cannot launch another; the panel's error names the command that stops it.
 
 A notebook that others should read rather than edit becomes an app: move it to an `apps/` folder in the project. The Crows Nest's **Dashboards** panel serves everything in `apps/` with `marimo run`: the output, without the code. Paths in the app such as `css_file` resolve from `apps/`.
 
@@ -489,7 +489,7 @@ Opens [http://localhost:8080](http://localhost:8080) with seven panels:
 |---|---|
 | **Overview** | Before the first run, a welcome with a "Ready to sail" checklist of five setup steps (Dagster running, a first successful run, tables in the lakehouse, tests, a dashboard with data), and a button that opens Pipelines. After it: the latest run, data quality and the number of tables, what needs attention, recent runs and what there is to open. The checklist stays as a card until every step is done, then folds to one line that can be hidden; the page fetches the steps again when a run ends. |
 | **Pipelines** | Recent Dagster run history with status, job name, and duration. A run started with **Materialize** in Dagster has no job of its own and shows the assets it built (`Materialize · 25 assets`). Hover over a failed run's label for the part of its error that says what went wrong. **Materialize all** starts a run of every asset. Auto-refreshes every 15 seconds. |
-| **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 that the Crows Nest starts on first use and stops when it stops. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
+| **Dashboards** | The project's apps: the Marimo notebooks in `apps/`, served with `marimo run` (output only, no code) by one server on :2719 (or the port of `CROWSNEST_APPS_URL`) that the Crows Nest starts on first use and stops when it stops. Opening a dashboard added since it started restarts that server, which ends the sessions of dashboards open in other tabs. Another server on :2719, such as another project's, is left running; the panel's error names the command that stops it. The first app opens straight away; with several, buttons switch between them. |
 | **Data quality** | Elementary test results grouped by model with pass/fail/warn counts and a health bar. Click a model name to drill down into per-test results; click a test name to jump to a filtered view of all individual runs for that test. Includes an anomaly detection tab. |
 | **SQL editor** | SQL editor connected directly to your lake. On a laptop it can also change it: delete rows, drop a table, and so on (see [Changing data in the SQL editor](#changing-data-in-the-sql-editor)); on a shared host it is read-only. Autocomplete suggests schemas, tables and columns, also after an alias (`FROM vessels v WHERE v.`). Ctrl+Enter to run. Results paginate in the browser; no data leaves your machine. |
 | **Catalog** | Every dbt model with its full column list (sourced from the actual warehouse schema, enriched with descriptions from dbt documentation where available), a last-run timestamp from dbt's model run history, and test results grouped by check. Falls back to `information_schema` for models not tracked by Elementary. |
@@ -530,8 +530,8 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_DUCKLAKE_ALIAS` | The dbt project name |
 | `CROWSNEST_DUCKDB_PATH` | Read from `profiles.yml`; for a project still on a single `.duckdb` file, and takes precedence over a lake found in the project |
 | `CROWSNEST_DAGSTER_URL` | `http://localhost:3000/graphql` |
-| `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718` |
-| `CROWSNEST_APPS_URL` | `http://127.0.0.1:2719` |
+| `CROWSNEST_MARIMO_URL` | `http://127.0.0.1:2718`. On a laptop the Crows Nest starts its Marimo on this port (always on 127.0.0.1): set another port when a Marimo of another project holds 2718 |
+| `CROWSNEST_APPS_URL` | `http://127.0.0.1:2719`. The same for the apps server (default port 2719) |
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 | `CROWSNEST_SQL_WRITE` | Unset — the SQL editor can write when the Crows Nest listens on localhost only, and is read-only otherwise. `1` or `0` decides either way |
