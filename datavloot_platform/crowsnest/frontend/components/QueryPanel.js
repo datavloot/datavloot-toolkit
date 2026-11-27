@@ -5,7 +5,11 @@ import { api } from '../lib/api';
 import { useApi } from '../lib/hooks';
 import { indexSchema, sqlCompletions } from '../lib/sqlCompletion';
 
-const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
+// Monaco touches `window` on import, so it loads on the client only.
+const Editor = dynamic(
+  () => import('../lib/monaco').then(() => import('@monaco-editor/react')),
+  { ssr: false },
+);
 
 const DEFAULT_SQL = `-- Write your SQL here
 -- Pick a table on the left, or query the lakehouse directly
