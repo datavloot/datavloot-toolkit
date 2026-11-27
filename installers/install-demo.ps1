@@ -43,13 +43,15 @@ function Invoke-Step([string]$What, [scriptblock]$Command) {
 
 function Test-Internet {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    try {
-        Invoke-WebRequest -Uri 'https://pypi.org/simple/datavloot/' -Method Head `
-            -UseBasicParsing -TimeoutSec 20 | Out-Null
-    } catch {
-        Stop-Install ("Cannot reach pypi.org: $($_.Exception.Message)`n" +
-            "Check the internet connection. Behind a proxy, set HTTPS_PROXY " +
-            "(for example `$env:HTTPS_PROXY = 'http://proxy:8080') and run this again.")
+    # PyPI for the toolkit; the dbt hub and GitHub for the packages `dbt deps` unpacks.
+    foreach ($uri in @('https://pypi.org/simple/datavloot/', 'https://github.com/', 'https://hub.getdbt.com/')) {
+        try {
+            Invoke-WebRequest -Uri $uri -Method Head -UseBasicParsing -TimeoutSec 20 | Out-Null
+        } catch {
+            Stop-Install ("Cannot reach $(([Uri]$uri).Host): $($_.Exception.Message)`n" +
+                "Check the internet connection. Behind a proxy, set HTTPS_PROXY " +
+                "(for example `$env:HTTPS_PROXY = 'http://proxy:8080') and run this again.")
+        }
     }
 }
 
@@ -138,8 +140,19 @@ function Install-Environment {
     Invoke-Step "Installing Python $PythonVersion and the project's packages" {
         if ($locked) { uv sync --python $PythonVersion --locked } else { uv sync --python $PythonVersion }
     }
-    if (-not (Test-Path 'dbt_packages')) {
-        Invoke-Step 'Installing the dbt packages' { uv run --no-sync dbt deps }
+    # Always: dbt deps starts from an empty dbt_packages, and a folder an earlier
+    # `dbt deps` left half unpacked must not count as installed. On Windows
+    # Defender or the search indexer can hold a file for a moment, so try again.
+    Invoke-Step 'Installing the dbt packages' {
+        foreach ($attempt in 1..3) {
+            if ($attempt -gt 1) {
+                Write-Host 'dbt deps failed; trying again.'
+                Remove-Item -Recurse -Force 'dbt_packages' -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 3
+            }
+            uv run --no-sync dbt deps
+            if ($LASTEXITCODE -eq 0) { break }
+        }
     }
     Invoke-Step 'Compiling the dbt project' { uv run --no-sync dbt parse }
 }
@@ -183,8 +196,9 @@ function Install-Datavloot {
 
     Push-Location $dir
     try {
-        Install-Environment
+        # Before anything touches the project: a running Datavloot holds its files.
         Assert-PortsFree
+        Install-Environment
         Write-StartHelp $dir
         if (-not $existing) {
             Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"

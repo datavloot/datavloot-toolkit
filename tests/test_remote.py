@@ -665,6 +665,53 @@ def test_the_finish_script_waits_then_runs_the_steps(tmp_path):
     assert lines[-1] == "Read-Host 'Press Enter to close this window'"
 
 
+def test_prepare_tries_dbt_deps_again_from_an_empty_folder(tmp_path, monkeypatch):
+    # Seen on Windows: another process held a file dbt was renaming, so dbt deps
+    # failed halfway and left dbt_packages behind.
+    monkeypatch.setattr(remote.time, "sleep", lambda s: None)
+    packages = tmp_path / "dbt_packages"
+    commands = []
+
+    def runner(cmd):
+        commands.append(cmd[-2:])
+        if cmd[-2:] != ["dbt", "deps"]:
+            return 0
+        if commands.count(["dbt", "deps"]) == 1:
+            packages.mkdir()
+            (packages / "half").write_text("")
+            return 1
+        assert not packages.exists()
+        return 0
+
+    remote.prepare(tmp_path, runner)
+    assert commands.count(["dbt", "deps"]) == 2
+    assert commands[-1] == ["dbt", "parse"]
+
+
+def test_prepare_gives_up_on_dbt_deps_after_three_attempts(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote.time, "sleep", lambda s: None)
+    commands = []
+
+    def runner(cmd):
+        commands.append(cmd[-2:])
+        return 1 if cmd[-2:] == ["dbt", "deps"] else 0
+
+    with pytest.raises(remote.RemoteError, match="Installing the dbt packages failed"):
+        remote.prepare(tmp_path, runner)
+    assert commands.count(["dbt", "deps"]) == 3
+    assert ["dbt", "parse"] not in commands
+
+
+def test_the_finish_script_tries_dbt_deps_again(tmp_path):
+    steps = [("Installing the dbt packages", ["C:/uv/uv.exe", "run", "--no-sync", "dbt", "deps"])]
+    lines = remote.finish_script(tmp_path, steps, [1], tmp_path / "a.py").splitlines()
+    call = lines.index("    & 'C:/uv/uv.exe' 'run' '--no-sync' 'dbt' 'deps'")
+    assert lines[call - 6] == "foreach ($attempt in 1..3) {"
+    assert "Remove-Item" in lines[call - 3] and "'dbt_packages'" in lines[call - 3]
+    assert lines[call + 1] == "    if ($LASTEXITCODE -eq 0) { break }"
+    assert lines[call + 3].startswith("if ($LASTEXITCODE -ne 0) { Stop-Update")
+
+
 def test_the_window_waits_for_every_process_in_the_venv(tmp_path):
     # Resolved, as holders resolves it: a Windows temp folder can be an 8.3 short name.
     venv = tmp_path.resolve() / ".venv" / "Scripts"

@@ -38,6 +38,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import zipfile
 from typing import Callable, Iterable
@@ -869,6 +870,17 @@ def prepare_steps(project: pathlib.Path) -> list[tuple[str, list[str]]]:
     ]
 
 
+# `dbt deps` unpacks into dbt_packages and fails when another process (Defender, the
+# search indexer) holds a file for a moment, leaving the folder half filled. It starts
+# from an empty folder, so running it again from scratch is safe.
+DEPS_ATTEMPTS = 3
+DEPS_PAUSE = 3
+
+
+def _is_deps(cmd: list[str]) -> bool:
+    return cmd[-2:] == ["dbt", "deps"]
+
+
 def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> None:
     """
     Give the project its environment and dbt packages, and compile it: the steps
@@ -887,6 +899,13 @@ def prepare(project: pathlib.Path, runner: Callable[..., int] | None = None) -> 
     for what, cmd in steps:
         print(f"\n==> {what}", flush=True)
         code = run(cmd)
+        for _ in range(DEPS_ATTEMPTS - 1 if _is_deps(cmd) else 0):
+            if code == 0:
+                break
+            print("dbt deps failed; trying again.", flush=True)
+            shutil.rmtree(project / "dbt_packages", ignore_errors=True)
+            time.sleep(DEPS_PAUSE)
+            code = run(cmd)
         if code != 0:
             # On Windows a running Dagster or Crows Nest holds files in .venv
             # open, and uv cannot replace them.
@@ -997,6 +1016,24 @@ def _ps(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
 
+def _ps_run(cmd: list[str]) -> list[str]:
+    """The PowerShell lines that run cmd; `dbt deps` is tried again like in `prepare`."""
+    call = "& " + " ".join(_ps(part) for part in cmd)
+    if not _is_deps(cmd):
+        return [call]
+    return [
+        f"foreach ($attempt in 1..{DEPS_ATTEMPTS}) {{",
+        "    if ($attempt -gt 1) {",
+        "        Write-Host 'dbt deps failed; trying again.'",
+        "        Remove-Item -LiteralPath (Join-Path $project 'dbt_packages') -Recurse -Force -ErrorAction SilentlyContinue",
+        f"        Start-Sleep -Seconds {DEPS_PAUSE}",
+        "    }",
+        f"    {call}",
+        "    if ($LASTEXITCODE -eq 0) { break }",
+        "}",
+    ]
+
+
 def finish_script(
     project: pathlib.Path,
     steps: list[tuple[str, list[str]]],
@@ -1031,7 +1068,7 @@ def finish_script(
         rest = "\n".join(f"  {c}" for c in commands[i:])
         lines += [
             f"Write-Host (\"`n==> \" + {_ps(what)})",
-            "& " + " ".join(_ps(part) for part in cmd),
+            *_ps_run(cmd),
             f"if ($LASTEXITCODE -ne 0) {{ Stop-Update {_ps(what)} {_ps(rest)} }}",
         ]
     uv = steps[0][1][0]

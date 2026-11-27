@@ -8,6 +8,7 @@ tests keep them parseable and in step with each other and with the toolkit.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -104,6 +105,79 @@ def test_powershell_and_bash_install_the_same_things():
         assert "datavloot[optimist]@latest" in text
         for variable in ("DATAVLOOT_DIR", "DATAVLOOT_VERSION", "DATAVLOOT_FROM"):
             assert variable in text
+
+
+def _run_install_dbt_packages(script, tmp_path, failures):
+    """Run the script's install_dbt_packages with a uv that fails `failures` times, exit code 2."""
+    bash = shutil.which("bash")
+    if not bash:
+        pytest.skip("no bash here")
+    text = _text(script)
+    function = text[text.index("install_dbt_packages() {"):text.index("install_environment() {")]
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    uv = fake / "uv"
+    uv.write_text(
+        "#!/bin/sh\n"
+        "echo x >> \"$CALLS\"\n"
+        f"[ \"$(wc -l < \"$CALLS\")\" -le {failures} ] && exit 2\n"
+        "exit 0\n",
+        encoding="utf-8", newline="\n",
+    )
+    uv.chmod(0o755)
+    project = tmp_path / "project"
+    (project / "dbt_packages").mkdir(parents=True)
+    (project / "dbt_packages" / "half").write_text("")
+    calls = tmp_path / "calls"
+    calls.write_text("")
+    result = subprocess.run(
+        [bash, "-c", function + "\ninstall_dbt_packages; echo \"code=$?\""],
+        cwd=project, capture_output=True, text=True, timeout=60,
+        env={**os.environ, "PATH": f"{fake.as_posix()}{os.pathsep}{os.environ['PATH']}",
+             "CALLS": calls.as_posix(), "DEPS_PAUSE": "0"},
+    )
+    return result, len(calls.read_text().split()), project
+
+
+@pytest.mark.parametrize("script", SH.values(), ids=lambda p: p.name)
+def test_the_shell_scripts_try_dbt_deps_again(script, tmp_path):
+    result, calls, project = _run_install_dbt_packages(script, tmp_path, failures=2)
+    assert "code=0" in result.stdout, result.stdout + result.stderr
+    assert calls == 3
+    assert not (project / "dbt_packages" / "half").exists()
+
+
+@pytest.mark.parametrize("script", SH.values(), ids=lambda p: p.name)
+def test_the_shell_scripts_run_dbt_deps_once_when_it_works(script, tmp_path):
+    result, calls, project = _run_install_dbt_packages(script, tmp_path, failures=0)
+    assert "code=0" in result.stdout, result.stdout + result.stderr
+    assert calls == 1
+    assert (project / "dbt_packages" / "half").exists()
+
+
+@pytest.mark.parametrize("script", SH.values(), ids=lambda p: p.name)
+def test_the_shell_scripts_give_up_on_dbt_deps_with_its_exit_code(script, tmp_path):
+    result, calls, _ = _run_install_dbt_packages(script, tmp_path, failures=99)
+    assert "code=2" in result.stdout, result.stdout + result.stderr
+    assert calls == 3
+
+
+@pytest.mark.parametrize("script", ALL, ids=lambda p: p.name)
+def test_the_ports_are_checked_before_the_environment_is_touched(script):
+    """A running Datavloot holds the project; `dbt deps` would delete dbt_packages under it."""
+    text = _text(script)
+    ports = re.search(r"^\s*(Assert-PortsFree|assert_ports_free)$", text, re.MULTILINE).start()
+    environment = re.search(r"^\s*(if .*)?(Install-Environment|install_environment)(\s*\}|;.*)?$", text, re.MULTILINE)
+    assert ports < environment.start()
+
+
+@pytest.mark.parametrize("script", ALL, ids=lambda p: p.name)
+def test_a_half_finished_dbt_deps_is_not_skipped(script):
+    """A dbt_packages left by a failed `dbt deps` is incomplete: always run it, and try again."""
+    text = _text(script)
+    assert "Test-Path 'dbt_packages'" not in text and "-d dbt_packages" not in text
+    assert "1..3" in text or "1 2 3" in text
+    assert "rm -rf dbt_packages" in text or "Remove-Item -Recurse -Force 'dbt_packages'" in text
 
 
 @pytest.mark.parametrize("scripts", [PS1, SH], ids=["ps1", "sh"])
