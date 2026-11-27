@@ -396,11 +396,14 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 
 Run `datavloot demo` to copy it locally (`datavloot demo --list` shows the other demos), or browse it at [datavloot_platform/templates/demos/noaa/](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demos/noaa). See the [demo README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/noaa/README.md) for details.
 
-Two more demos come with the toolkit, on data people recognise:
+More demos come with the toolkit, on data people recognise:
 
 - `datavloot demo --spotify`: your own Spotify listening history (plays, top artists, Liked Songs,
   playlists), through the Web API with your own login. It runs on made-up sample data until you
   connect an account. See its [README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/spotify/README.md).
+- `datavloot demo --github`: your own GitHub history as a portfolio (contribution calendar,
+  languages, repositories, when you commit), with a read-only token. It runs on a made-up developer
+  until you connect. See its [README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/github/README.md).
 - `datavloot demo --green_energy`: when is electricity cheap in the Netherlands, and is it the
   wind? Day-ahead prices from EnergyZero and weather from Open-Meteo, both without a key. See its
   [README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/green_energy/README.md).

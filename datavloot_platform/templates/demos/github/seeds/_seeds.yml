@@ -1,0 +1,22 @@
+version: 2
+
+seeds:
+
+  - name: language_areas
+    description: >
+      Which area of work each language stands for, so the dashboard can say "mostly backend, some
+      infrastructure" rather than list twenty languages. Yours to change: put a language where
+      your work with it belongs. A language that is not here shows as Other.
+    columns:
+      - name: language
+        description: "Language name exactly as GitHub's linguist gives it (e.g. 'Jupyter Notebook', 'HCL')."
+        data_tests:
+          - not_null
+          - unique
+      - name: area
+        description: "Area of work to show."
+        data_tests:
+          - not_null
+
+  # Add further seeds below following the same pattern.
+  # See how_to.md for guidance on when seeds are appropriate.

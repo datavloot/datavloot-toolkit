@@ -1,0 +1,47 @@
+version: 2
+
+# Staged GitHub tables. Each keeps only the rows of the data the project is on
+# now (macros/stage_github.sql) and adds audit columns. Ephemeral — inlined
+# into downstream models at compile time.
+
+models:
+  - name: stg_github__profile
+    description: "The account the data comes from: the sample, or your own."
+
+  - name: stg_github__repositories
+    description: "Your own repositories."
+    columns:
+      - name: repository_id
+        data_tests:
+          - not_null
+          - unique
+      - name: is_fork
+        description: "True for a fork: listed, but its languages and commits are left out."
+
+  - name: stg_github__repository_languages
+    description: "Bytes of code per language per repository."
+    columns:
+      - name: bytes
+        description: "Size of the code in this language, in bytes, as GitHub's linguist counts it."
+        data_tests:
+          - not_null
+
+  - name: stg_github__commits
+    description: "Your commits to your own repositories."
+    columns:
+      - name: sha
+        data_tests:
+          - not_null
+          - unique
+      - name: authored_at
+        description: "When the commit was written (UTC). Unlike the committer date, it stays the same through a rebase."
+        data_tests:
+          - not_null
+
+  - name: stg_github__contribution_days
+    description: "One row per day with the number of contributions GitHub counts: commits, pull requests, reviews, issues, private work included."
+    columns:
+      - name: contribution_date
+        data_tests:
+          - not_null
+          - unique

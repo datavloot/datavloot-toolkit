@@ -1,0 +1,132 @@
+version: 2
+
+# Fact docs, tests, and build config — one entry per fact model.
+#
+# Source is declared inline in each model's SQL file (so dbt discovers
+# the ref() dependency at parse time). Everything else lives here under
+# config.meta and is read by build_fact() at compile time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  - name: fct_commit
+    description: >
+      One row per commit you wrote in your own repositories. Day and minute are in your own time
+      zone (var github_timezone).
+    columns:
+      - name: fct_commit_key
+        description: "Surrogate key; MD5 hash of sha."
+        data_tests:
+          - not_null
+          - unique
+      - name: repository_key
+        description: "FK to dim_repository. Null for a repository that has since gone: its commits stay."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_repository')
+                field: repository_key
+      - name: authored_date_key
+        description: "FK to dim_date — the local date of the commit."
+        data_tests:
+          - not_null
+      - name: authored_time_key
+        description: "FK to dim_time — the local time of day, to the minute."
+        data_tests:
+          - not_null
+      - name: sha
+        description: "The commit's hash."
+      - name: authored_at
+        description: "When it was written (UTC)."
+      - name: authored_at_local
+        description: "The same moment on your own clock."
+      - name: message_title
+        description: "The first line of the commit message."
+    config:
+      meta:
+        surrogate_key:
+          columns: [sha]
+          alias: fct_commit_key
+        dimensions:
+          - dim: dim_repository
+            fk: repository_id
+          - dim: dim_date
+            fk: authored_at_local
+            dim_fk: date_day
+            fk_cast: date
+            alias: authored_date_key
+          - dim: dim_time
+            fk: authored_time_minute
+            dim_fk: time_of_day
+            alias: authored_time_key
+        columns: [sha, authored_at, authored_at_local, message_title]
+
+  - name: fct_contribution_day
+    description: "One row per day of your contribution calendar, private work included as a count."
+    columns:
+      - name: fct_contribution_day_key
+        description: "Surrogate key; MD5 hash of contribution_date."
+        data_tests:
+          - not_null
+          - unique
+      - name: contribution_date_key
+        description: "FK to dim_date."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: contributions
+        description: "Contributions GitHub counted that day."
+        data_tests:
+          - not_null
+      - name: is_active
+        description: "True on a day with at least one contribution."
+    config:
+      meta:
+        surrogate_key:
+          columns: [contribution_date]
+          alias: fct_contribution_day_key
+        dimensions:
+          - dim: dim_date
+            fk: contribution_date
+            dim_fk: date_day
+            alias: contribution_date_key
+        columns: [contributions, is_active]
+
+  - name: fct_repository_language
+    description: "Code per language per repository. Grain: repository x language."
+    columns:
+      - name: fct_repository_language_key
+        description: "Surrogate key; MD5 hash of repository_id + language."
+        data_tests:
+          - not_null
+          - unique
+      - name: repository_key
+        description: "FK to dim_repository."
+        data_tests:
+          - not_null
+      - name: language_key
+        description: "FK to dim_language."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_language')
+                field: language_key
+      - name: bytes
+        description: "Bytes of code in this language."
+      - name: share_of_repository
+        description: "This language's share of the repository's code (0-1)."
+    config:
+      meta:
+        surrogate_key:
+          columns: [repository_id, language]
+          alias: fct_repository_language_key
+        dimensions:
+          - dim: dim_repository
+            fk: repository_id
+          - dim: dim_language
+            fk: language
+        columns: [bytes, share_of_repository]

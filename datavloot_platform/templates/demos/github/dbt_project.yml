@@ -1,0 +1,35 @@
+name: 'github'
+version: '1.0.0'
+profile: 'github'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # The time zone you work in: the day and hour of each commit in fct_commit
+  # are local to it. GitHub gives every commit in UTC. Any IANA name works,
+  # e.g. 'Europe/London' or 'America/New_York'.
+  github_timezone: 'Europe/Amsterdam'
+
+seeds:
+  github:
+    +schema: seeds
+
+models:
+  elementary:
+    +schema: elementary
+  github:
+    source:
+      +schema: source
+      github:
+        +materialized: ephemeral      # dlt owns incrementality; inline into downstream models at compile time
+    business:
+      +materialized: table
+      +schema: business

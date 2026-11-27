@@ -1,0 +1,38 @@
+language,area
+Python,Data and backend
+SQL,Data and backend
+Jinja,Data and backend
+R,Data and backend
+Jupyter Notebook,Data and backend
+Go,Backend
+Rust,Backend
+Java,Backend
+Kotlin,Backend
+C#,Backend
+Ruby,Backend
+PHP,Backend
+Scala,Backend
+Elixir,Backend
+C,Systems
+C++,Systems
+Zig,Systems
+TypeScript,Frontend
+JavaScript,Frontend
+HTML,Frontend
+CSS,Frontend
+SCSS,Frontend
+Vue,Frontend
+Svelte,Frontend
+Astro,Frontend
+Swift,Mobile
+Dart,Mobile
+Objective-C,Mobile
+HCL,Infrastructure
+Shell,Infrastructure
+PowerShell,Infrastructure
+Dockerfile,Infrastructure
+Nix,Infrastructure
+Makefile,Infrastructure
+Lua,Tooling
+Vim Script,Tooling
+TeX,Writing

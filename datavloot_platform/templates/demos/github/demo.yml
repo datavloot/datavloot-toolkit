@@ -1,0 +1,15 @@
+# How `datavloot demo --github` builds this demo: the scaffold, minus the files
+# under remove, with every other file in this folder laid over it. This file
+# itself is not copied.
+title: Your own GitHub history as a portfolio (runs on a sample developer until you connect)
+# Scaffold files this demo has no use for: placeholders its own files replace.
+remove:
+  - models/source/_sources.yml
+  - models/source/_schema.yml
+  - models/business/datasets/_dataset_configs.yml
+  - notebooks/explore.py
+  - seeds/priority_levels.csv
+first_run: >
+  The first run loads a made-up developer, so there is something to explore straight away.
+  To see your own repositories and contributions: uv run python -m github_platform.connect
+  (README.md, "Use your own GitHub data").
