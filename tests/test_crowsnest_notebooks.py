@@ -97,7 +97,8 @@ def app(tmp_path, monkeypatch):
     # A free port of its own, so a Marimo the developer runs on 2718 is not in the way.
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        monkeypatch.setattr(notebooks, "MARIMO_PORT", s.getsockname()[1], raising=False)
+        monkeypatch.setenv("CROWSNEST_MARIMO_URL", f"http://127.0.0.1:{s.getsockname()[1]}")
+    cn_config.reset_config()
     monkeypatch.setattr(notebooks, "_marimo_process", None)
     monkeypatch.setattr(notebooks, "_marimo_notebook", None, raising=False)
 
@@ -131,7 +132,7 @@ def starts_servers_with_a_child(monkeypatch, started):
     """start_marimo, with a stand-in that serves the Marimo port from a child process."""
     def start(args):
         started.append(subprocess.Popen(
-            [sys.executable, "-c", SERVES_FROM_A_CHILD, str(notebooks.MARIMO_PORT), SERVE],
+            [sys.executable, "-c", SERVES_FROM_A_CHILD, str(cn_config.get_config().marimo_port), SERVE],
             stdout=subprocess.PIPE, **OWN_GROUP,
         ))
         return started[-1]
@@ -142,9 +143,9 @@ def starts_servers_with_a_child(monkeypatch, started):
 @pytest.fixture
 def foreign_marimo(app):
     """Something the Crows Nest did not start, listening on the Marimo port: a process of its own."""
-    proc = subprocess.Popen([sys.executable, "-c", SERVE, str(notebooks.MARIMO_PORT)], **OWN_GROUP)
+    proc = subprocess.Popen([sys.executable, "-c", SERVE, str(cn_config.get_config().marimo_port)], **OWN_GROUP)
     try:
-        assert wait_until(lambda: serves(notebooks.MARIMO_PORT)), "the foreign Marimo never listened"
+        assert wait_until(lambda: serves(cn_config.get_config().marimo_port)), "the foreign Marimo never listened"
         yield proc
     finally:
         proc.kill()
@@ -288,6 +289,24 @@ def test_relaunch_replaces_its_own_marimo(app, monkeypatch, started):
     assert started[1].poll() is None
 
 
+def test_launch_starts_marimo_on_the_port_of_its_url(app, monkeypatch):
+    """A host in CROWSNEST_MARIMO_URL does not decide where the laptop's Marimo listens."""
+    monkeypatch.setenv("CROWSNEST_MARIMO_URL", "http://marimo:2801")
+    cn_config.reset_config()
+    args = []
+
+    class Running:
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(notebooks, "start_marimo", lambda a: args.append(a) or Running())
+
+    response = TestClient(app).post("/api/notebooks/launch", json={"name": "explore.py"})
+
+    assert response.json()["url"] == "http://127.0.0.1:2801"
+    assert args[0][args[0].index("--port") + 1] == "2801"
+
+
 class SlowToReleaseMarimo:
     """
     Holds the Marimo port until shortly after it is stopped.
@@ -315,7 +334,7 @@ def test_relaunch_waits_for_its_own_marimo_to_release_the_port(app, monkeypatch)
     started = []
 
     def start(args):
-        started.append(SlowToReleaseMarimo(notebooks.MARIMO_PORT))
+        started.append(SlowToReleaseMarimo(cn_config.get_config().marimo_port))
         return started[-1]
 
     monkeypatch.setattr(notebooks, "start_marimo", start)
@@ -337,7 +356,7 @@ def test_launch_leaves_a_foreign_marimo_alone(app, monkeypatch, started, foreign
     response = TestClient(app).post("/api/notebooks/launch", json={"name": "explore.py"})
 
     assert response.status_code == 409
-    assert finds_the_listener(notebooks.MARIMO_PORT) in response.json()["detail"], (
+    assert finds_the_listener(cn_config.get_config().marimo_port) in response.json()["detail"], (
         "the refusal does not say how to stop it, or would stop its clients too"
     )
     assert started == [], "the Crows Nest started a Marimo next to one it does not own"
@@ -357,9 +376,9 @@ def test_stop_after_its_marimo_died_says_so_without_waiting(app, monkeypatch, st
     client.post("/api/notebooks/launch", json={"name": "explore.py"})
     started[0].kill()
     started[0].wait(timeout=10)
-    foreign = subprocess.Popen([sys.executable, "-c", SERVE, str(notebooks.MARIMO_PORT)], **OWN_GROUP)
+    foreign = subprocess.Popen([sys.executable, "-c", SERVE, str(cn_config.get_config().marimo_port)], **OWN_GROUP)
     try:
-        assert wait_until(lambda: serves(notebooks.MARIMO_PORT)), "the foreign Marimo never listened"
+        assert wait_until(lambda: serves(cn_config.get_config().marimo_port)), "the foreign Marimo never listened"
         begin = time.monotonic()
         stopped = client.post("/api/notebooks/stop").json()
         took = time.monotonic() - begin
@@ -379,10 +398,10 @@ def test_stop_takes_down_the_whole_process_tree(app, monkeypatch, started):
     client.post("/api/notebooks/launch", json={"name": "explore.py"})
     child = int(started[0].stdout.readline())
     try:
-        assert wait_until(lambda: serves(notebooks.MARIMO_PORT)), "the stand-in never served"
+        assert wait_until(lambda: serves(cn_config.get_config().marimo_port)), "the stand-in never served"
         assert client.post("/api/notebooks/stop").json() == {"stopped": True}
         assert started[0].poll() is not None, "our Marimo itself is still running"
-        assert wait_until(lambda: not serves(notebooks.MARIMO_PORT), timeout=5), "a child of our Marimo still serves the port"
+        assert wait_until(lambda: not serves(cn_config.get_config().marimo_port), timeout=5), "a child of our Marimo still serves the port"
     finally:
         kill_tree(child)
 

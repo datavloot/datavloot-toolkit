@@ -64,3 +64,22 @@ def test_a_lake_created_after_the_start_is_found_without_a_restart(project):
     # Found once, kept: not looked for again on every request.
     assert cn_config.get_config() is cn_config.get_config()
 
+
+
+@pytest.mark.parametrize(
+    "marimo_url, apps_url, ports",
+    [
+        (None, None, (2718, 2719)),
+        ("http://127.0.0.1:2801", "http://127.0.0.1:2800/", (2801, 2800)),
+        ("http://marimo:2900", "http://apps", (2900, 2719)),
+    ],
+)
+def test_the_marimo_servers_take_their_port_from_the_url(project, monkeypatch, marimo_url, apps_url, ports):
+    for var, url in (("CROWSNEST_MARIMO_URL", marimo_url), ("CROWSNEST_APPS_URL", apps_url)):
+        if url:
+            monkeypatch.setenv(var, url)
+    cn_config.reset_config()
+
+    config = cn_config.get_config()
+
+    assert (config.marimo_port, config.apps_port) == ports
