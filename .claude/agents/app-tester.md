@@ -1,6 +1,6 @@
 ---
 name: app-tester
-description: Tests changes in a running datavloot project: builds a fresh project from a checkout, starts it, and walks given scenarios in the browser pane.
+description: Tests changes in a running datavloot project. Builds a fresh project from a checkout, starts it, and walks given scenarios in the browser pane.
 disallowedTools: Edit, Write, NotebookEdit
 model: sonnet
 effort: medium
