@@ -141,6 +141,30 @@ def client(http):
 # --- Rows ---------------------------------------------------------------------
 # Flat rows: dlt would turn the artist lists into child tables of their own.
 
+# Every column of every table, so dlt creates a table even when an account has
+# no rows for it (no followed artists, say), and a column even when it is empty
+# in every row: dbt's staging models need both to exist.
+_TRACK = {
+    "track_id": "text", "track_name": "text", "duration_ms": "bigint", "is_explicit": "bool",
+    "album_id": "text", "album_name": "text", "album_release_date": "text",
+    "artist_id": "text", "artist_name": "text", "artist_names": "text",
+}
+_ARTIST = {"artist_id": "text", "artist_name": "text", "genres": "text"}
+_RANKED = {"snapshot_date": "date", "time_range": "text", "rank": "bigint"}
+TABLES = {
+    "account": {"user_id": "text", "display_name": "text", "origin": "text"},
+    "recently_played": {"played_at": "timestamp", **_TRACK, "context_type": "text", "origin": "text"},
+    "top_tracks": {**_RANKED, **_TRACK, "origin": "text"},
+    "top_artists": {**_RANKED, **_ARTIST, "origin": "text"},
+    "saved_tracks": {"added_at": "timestamp", **_TRACK, "origin": "text"},
+    "playlists": {"playlist_id": "text", "playlist_name": "text", "owner_name": "text", "is_own": "bool",
+                  "is_public": "bool", "is_collaborative": "bool", "track_count": "bigint", "origin": "text"},
+    "playlist_items": {"playlist_id": "text", "position": "bigint", "added_at": "timestamp", **_TRACK,
+                       "origin": "text"},
+    "followed_artists": {**_ARTIST, "origin": "text"},
+}
+
+
 
 def _timestamp(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00")) if value else None

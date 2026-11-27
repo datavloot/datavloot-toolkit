@@ -72,9 +72,19 @@ def _user_id() -> str:
     return spotify.account(_client())[0]["user_id"]
 
 
-def _lazy(rows):
-    """A generator that only calls `rows()` once dlt starts reading it."""
-    yield from rows()
+def _resource(table: str, rows, write_disposition: str, primary_key):
+    """A dlt resource for one table, with all its columns declared, that only calls `rows()` once read."""
+    keys = [primary_key] if isinstance(primary_key, str) else primary_key
+
+    def generate():
+        # Creates the table from the declared columns, also when `rows()` yields nothing.
+        yield dlt.mark.materialize_table_schema()
+        yield from rows()
+
+    columns = {name: {"data_type": data_type, "nullable": name not in keys}
+               for name, data_type in spotify.TABLES[table].items()}
+    return dlt.resource(generate(), name=table, write_disposition=write_disposition,
+                        primary_key=primary_key, columns=columns)
 
 
 @dlt.source(name="spotify")
@@ -88,23 +98,23 @@ def spotify_source():
     keep = "replace" if sample else "merge"
     today = date.today()
     return [
-        dlt.resource(_lazy(lambda: spotify.account(_client())), name="account",
-                     write_disposition="replace", primary_key="user_id"),
-        dlt.resource(_lazy(lambda: spotify.recently_played(_client())), name="recently_played",
-                     write_disposition=keep, primary_key="played_at"),
-        dlt.resource(_lazy(lambda: spotify.top_tracks(_client(), today)), name="top_tracks",
-                     write_disposition=keep, primary_key=["snapshot_date", "time_range", "rank"]),
-        dlt.resource(_lazy(lambda: spotify.top_artists(_client(), today)), name="top_artists",
-                     write_disposition=keep, primary_key=["snapshot_date", "time_range", "rank"]),
+        _resource("account", lambda: spotify.account(_client()),
+                  "replace", "user_id"),
+        _resource("recently_played", lambda: spotify.recently_played(_client()),
+                  keep, "played_at"),
+        _resource("top_tracks", lambda: spotify.top_tracks(_client(), today),
+                  keep, ["snapshot_date", "time_range", "rank"]),
+        _resource("top_artists", lambda: spotify.top_artists(_client(), today),
+                  keep, ["snapshot_date", "time_range", "rank"]),
         # The library and playlists as they are now: replaced on every run.
-        dlt.resource(_lazy(lambda: spotify.saved_tracks(_client())), name="saved_tracks",
-                     write_disposition="replace", primary_key="track_id"),
-        dlt.resource(_lazy(lambda: spotify.playlists(_client(), _user_id())), name="playlists",
-                     write_disposition="replace", primary_key="playlist_id"),
-        dlt.resource(_lazy(lambda: spotify.playlist_items(_client(), _user_id())), name="playlist_items",
-                     write_disposition="replace", primary_key=["playlist_id", "position"]),
-        dlt.resource(_lazy(lambda: spotify.followed_artists(_client())), name="followed_artists",
-                     write_disposition="replace", primary_key="artist_id"),
+        _resource("saved_tracks", lambda: spotify.saved_tracks(_client()),
+                  "replace", "track_id"),
+        _resource("playlists", lambda: spotify.playlists(_client(), _user_id()),
+                  "replace", "playlist_id"),
+        _resource("playlist_items", lambda: spotify.playlist_items(_client(), _user_id()),
+                  "replace", ["playlist_id", "position"]),
+        _resource("followed_artists", lambda: spotify.followed_artists(_client()),
+                  "replace", "artist_id"),
     ]
 
 

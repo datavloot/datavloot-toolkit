@@ -91,7 +91,7 @@ def _(listener, mo, origin, plays):
 
 @app.cell
 def _(days, pd, plays):
-    _since = plays["played_at_local"].max() - pd.Timedelta(days=int(days.value))
+    _since = plays["played_at_local"].max() - pd.to_timedelta(int(days.value), unit="D")
     selection = plays[plays["played_at_local"] > _since]
     return (selection,)
 

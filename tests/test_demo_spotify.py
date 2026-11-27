@@ -143,3 +143,19 @@ def test_the_sample_answers_every_call_the_pipeline_makes(platform):
     for rows in (spotify.top_tracks(sp, today), spotify.top_artists(sp, today), spotify.saved_tracks(sp),
                  spotify.playlists(sp, user), spotify.playlist_items(sp, user), spotify.followed_artists(sp)):
         assert list(rows), "a sample table would be empty"
+
+
+def test_every_row_has_exactly_the_declared_columns(platform):
+    """assets.py creates each table from spotify.TABLES, also an empty one; a column missing there would be dropped."""
+    spotify, sample, _ = platform
+    sp = sample.SampleSpotify()
+    user, today = spotify.account(sp)[0]["user_id"], date.today()
+    tables = {
+        "account": spotify.account(sp), "recently_played": spotify.recently_played(sp),
+        "top_tracks": spotify.top_tracks(sp, today), "top_artists": spotify.top_artists(sp, today),
+        "saved_tracks": spotify.saved_tracks(sp), "playlists": spotify.playlists(sp, user),
+        "playlist_items": spotify.playlist_items(sp, user), "followed_artists": spotify.followed_artists(sp),
+    }
+    assert set(tables) == set(spotify.TABLES)
+    for table, rows in tables.items():
+        assert set(next(iter(rows))) == set(spotify.TABLES[table]), table
