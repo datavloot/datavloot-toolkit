@@ -61,7 +61,7 @@ def _demos() -> dict[str, Demo]:
         demos[name] = Demo(
             name=name,
             title=spec["title"],
-            default_dir=spec.get("default_dir") or f"optimist-{name}",
+            default_dir=spec.get("default_dir") or name,
             first_run=(spec.get("first_run") or "").strip(),
             remove=tuple(spec.get("remove") or ()),
             path=manifest.parent,
@@ -1041,7 +1041,7 @@ def main() -> None:
     demo_parser.add_argument(
         "path",
         nargs="?",
-        help="Path for the demo (default: ./optimist-demo for NOAA, ./optimist-<name> for the others)",
+        help="Path for the demo (default: ./optimist-demo for NOAA, ./<name> for the others)",
     )
     which = demo_parser.add_mutually_exclusive_group()
     for demo in _demos().values():

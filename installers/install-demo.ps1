@@ -4,7 +4,7 @@
 #
 # No Python, git or admin rights needed. The script:
 #   1. installs uv (https://docs.astral.sh/uv/) for the current user, if missing
-#   2. creates the demo project in %USERPROFILE%\optimist-demo with `datavloot demo` (another demo: optimist-<name>)
+#   2. creates the demo project in %USERPROFILE%\optimist-demo with `datavloot demo` (another demo: %USERPROFILE%\<name>)
 #   3. gives it its own Python and packages (`uv sync`), and runs `dbt deps` and `dbt parse`
 #   4. starts Dagster and the Crows Nest, opens http://localhost:8080 and, the
 #      first time, starts the run that downloads the demo data and builds the models
@@ -15,7 +15,7 @@
 #
 # Settings, as environment variables (the one-liner takes no arguments):
 #   DATAVLOOT_DEMO     which demo: noaa (the default), spotify, ... (`datavloot demo --list`)
-#   DATAVLOOT_DIR      where the demo goes (default: %USERPROFILE%\optimist-demo, or optimist-<demo>)
+#   DATAVLOOT_DIR      where the demo goes (default: %USERPROFILE%\optimist-demo, or %USERPROFILE%\<demo>)
 #   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
@@ -181,7 +181,7 @@ function Install-Datavloot {
     }
     Write-Host "Datavloot: installing the toolkit and the $demo demo" -ForegroundColor Cyan
     # NOAA keeps the folder from before there were more demos, where a re-run finds it.
-    $default = if ($demo -eq 'noaa') { 'optimist-demo' } else { "optimist-$demo" }
+    $default = if ($demo -eq 'noaa') { 'optimist-demo' } else { $demo }
     $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME $default }
     $dir = [System.IO.Path]::GetFullPath($dir)
     $existing = Test-ProjectDir $dir

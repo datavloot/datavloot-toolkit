@@ -5,7 +5,7 @@
 #
 # No Python, git or admin rights needed. The script:
 #   1. installs uv (https://docs.astral.sh/uv/) for the current user, if missing
-#   2. creates the demo project in ~/optimist-demo with `datavloot demo` (another demo: ~/optimist-<name>)
+#   2. creates the demo project in ~/optimist-demo with `datavloot demo` (another demo: ~/<name>)
 #   3. gives it its own Python and packages (`uv sync`), and runs `dbt deps` and `dbt parse`
 #   4. starts Dagster and the Crows Nest, opens http://localhost:8080 and, the
 #      first time, starts the run that downloads the demo data and builds the models
@@ -16,7 +16,7 @@
 #
 # Settings, as environment variables (`curl ... | DATAVLOOT_DIR=~/demo bash`):
 #   DATAVLOOT_DEMO     which demo: noaa (the default), spotify, ... (`datavloot demo --list`)
-#   DATAVLOOT_DIR      where the demo goes (default: ~/optimist-demo, or ~/optimist-<demo>)
+#   DATAVLOOT_DIR      where the demo goes (default: ~/optimist-demo, or ~/<demo>)
 #   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
@@ -172,7 +172,7 @@ main() {
     esac
     printf '\033[36mDatavloot: installing the toolkit and the %s demo\033[0m\n' "$demo"
     # NOAA keeps the folder from before there were more demos, where a re-run finds it.
-    if [ "$demo" = noaa ]; then default="$HOME/optimist-demo"; else default="$HOME/optimist-$demo"; fi
+    if [ "$demo" = noaa ]; then default="$HOME/optimist-demo"; else default="$HOME/$demo"; fi
     dir="$(full_path "${DATAVLOOT_DIR:-$default}")"
     check_project_dir "$dir"
 
