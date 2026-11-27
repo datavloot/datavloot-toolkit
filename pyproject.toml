@@ -66,6 +66,11 @@ optimist = [
     "sqlglot<30; python_version < '3.11'",
     "uvicorn[standard]>=0.30,<1",
 ]
+# The Crows Nest's MCP server on /mcp (#67). Its own extra, not in `optimist`, so
+# projects that do not use it do not get the package.
+mcp = [
+    "mcp>=2.3,<3",
+]
 dev = [
     "pytest",
     "pyyaml>=6.0",
