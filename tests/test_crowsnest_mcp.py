@@ -8,11 +8,12 @@ another origin, or under a host name that only resolves to 127.0.0.1 (DNS
 rebinding), is refused.
 """
 
-import asyncio
 import json
 import logging
 import subprocess
 import sys
+import threading
+import time
 
 import pytest
 
@@ -158,8 +159,10 @@ def test_query_refuses_what_the_editor_refuses(client, warehouse, sql):
     "tool, arguments, target",
     [("query", {"sql": "SELECT 1"}, "run_read"), ("catalog", {}, "get_models")],
 )
-def test_the_tools_read_off_the_event_loop(client, monkeypatch, tool, arguments, target):
-    # DuckDB blocks; on the event loop it would hold up every other request.
+def test_the_tools_read_on_a_thread_of_their_own(client, monkeypatch, tool, arguments, target):
+    # DuckDB blocks: on the event loop it would hold up every other request, and
+    # on the default pool a query the agent gave up on would keep a thread that
+    # /api/health and Shut down need.
     from datavloot_platform.crowsnest.routes import catalog, query
 
     module = query if target == "run_read" else catalog
@@ -167,16 +170,53 @@ def test_the_tools_read_off_the_event_loop(client, monkeypatch, tool, arguments,
     seen = []
 
     def spy(*args):
-        try:
-            asyncio.get_running_loop()
-            seen.append("event loop")
-        except RuntimeError:
-            seen.append("worker thread")
+        seen.append(threading.current_thread().name)
         return real(*args)
 
     monkeypatch.setattr(module, target, spy)
     data(call(client, tool, **arguments))
-    assert seen == ["worker thread"]
+    assert len(seen) == 1 and seen[0].startswith("crowsnest-mcp"), seen
+
+
+def test_the_tools_read_one_at_a_time(client, monkeypatch):
+    # On a .duckdb file a second read connection fails while the first is open.
+    from datavloot_platform.crowsnest.routes import query
+
+    real = query.run_read
+    release = threading.Event()
+    lock = threading.Lock()
+    running, most = [0], [0]
+
+    def slow(*args):
+        with lock:
+            running[0] += 1
+            most[0] = max(most[0], running[0])
+        release.wait(10)
+        try:
+            return real(*args)
+        finally:
+            with lock:
+                running[0] -= 1
+
+    monkeypatch.setattr(query, "run_read", slow)
+    results = []
+    calls = [
+        threading.Thread(target=lambda: results.append(call(client, "query", sql="SELECT 1")))
+        for _ in range(4)
+    ]
+    for thread in calls:
+        thread.start()
+    try:
+        deadline = time.monotonic() + 5
+        while most[0] < 1 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        time.sleep(0.5)  # time for a second to start, if it could
+    finally:
+        release.set()
+        for thread in calls:
+            thread.join(10)
+    assert most[0] == 1
+    assert [data(result)["rows"] for result in results] == [[[1]]] * 4
 
 
 def test_query_refuses_writes_where_the_editor_may_write(warehouse, monkeypatch):
@@ -254,6 +294,29 @@ def test_a_rebound_host_name_cannot_call_it_on_a_laptop(client):
 @pytest.mark.parametrize("host", ["localhost:8080", "127.0.0.1:8080", "[::1]:8080", "localhost"])
 def test_the_loopback_names_are_accepted(client, host):
     assert rpc(client, "tools/list", host=host).status_code == 200
+
+
+def test_any_loopback_address_it_listens_on_is_accepted(warehouse):
+    # All of 127.0.0.0/8 is loopback (config.is_loopback), and a client sends the
+    # address it connected to.
+    with _client(host="127.0.0.2", base_url="http://127.0.0.2:8080") as c:
+        assert rpc(c, "tools/list").status_code == 200
+        assert rpc(c, "tools/list", host="evil.example:8080").status_code == 421
+
+
+def test_get_is_refused(client):
+    # Stateless, nothing needs the event stream a GET opens. A page's no-cors GET
+    # sends no Origin, so the checks above would let it hold one open.
+    answer = []
+    thread = threading.Thread(
+        target=lambda: answer.append(client.get("/mcp", headers={"accept": "text/event-stream"})),
+        daemon=True,
+    )
+    thread.start()
+    thread.join(5)
+    assert answer, "GET /mcp is still open after 5 s"
+    assert answer[0].status_code == 405
+    assert answer[0].headers["allow"] == "POST"
 
 
 def test_off_loopback_the_host_name_is_not_checked(warehouse):
@@ -344,6 +407,16 @@ def test_the_crows_nest_imports_without_the_mcp_package(warehouse):
     )
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
     assert result.stdout.strip() == "200", result.stderr
+
+
+def test_it_does_not_rest_on_an_sdk_class_without_docs(warehouse, monkeypatch):
+    # StreamableHTTPASGIApp is in no SDK guide; were a 2.x release to move it,
+    # the Crows Nest must still start, with its MCP server.
+    from mcp.server import streamable_http_manager
+
+    monkeypatch.delattr(streamable_http_manager, "StreamableHTTPASGIApp")
+    with _client() as c:
+        assert tool_names(c) == {"query", "catalog", "runs"}
 
 
 def test_the_server_leaves_the_log_level_alone(warehouse, monkeypatch):

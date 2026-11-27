@@ -13,11 +13,23 @@ them when unset; empty turns the server off.
 
 import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import HTTPException
 
 from datavloot_platform.crowsnest.config import is_loopback
 from datavloot_platform.crowsnest.routes import catalog, pipelines, query
+
+# The tools read here, not on the default pool that /api/health and Shut down
+# use: a query an agent gave up on keeps its thread until DuckDB is done. One at
+# a time, because on a .duckdb file a second read connection opened while the
+# first is open fails.
+_READS = ThreadPoolExecutor(max_workers=1, thread_name_prefix="crowsnest-mcp")
+
+
+async def _read(function, *args):
+    return await asyncio.get_running_loop().run_in_executor(_READS, function, *args)
+
 
 def installed() -> bool:
     try:
@@ -58,7 +70,7 @@ async def query_tool(sql: str, limit: int = 1000) -> dict:
     """
     try:
         statement = query._validate(sql.strip(), read_only="the MCP server only reads.")
-        result = await asyncio.to_thread(query.run_read, statement.query, limit)
+        result = await _read(query.run_read, statement.query, limit)
     except HTTPException as e:
         raise _refused(e) from None
     return result.model_dump(include={"columns", "rows", "row_count", "truncated"})
@@ -72,8 +84,8 @@ async def catalog_tool(table: str | None = None, search: str | None = None) -> d
     """
     try:
         if table:
-            return await asyncio.to_thread(catalog.get_model_detail, table)
-        return await asyncio.to_thread(catalog.get_models, search)
+            return await _read(catalog.get_model_detail, table)
+        return await _read(catalog.get_models, search)
     except HTTPException as e:
         raise _refused(e) from None
 
@@ -99,7 +111,6 @@ def build(host: str | None):
     if not tools or not installed():
         return None
     from mcp.server.mcpserver import MCPServer
-    from mcp.server.streamable_http_manager import StreamableHTTPASGIApp
     from mcp.server.transport_security import TransportSecuritySettings
 
     # The SDK sets up logging for the whole process (logging.basicConfig); at its
@@ -112,13 +123,15 @@ def build(host: str | None):
         # No sign-in on a laptop, so a web page in the user's browser must not
         # reach /mcp: refuse any Origin (agents send none, and the dashboard does
         # not use /mcp), and any Host but a loopback one, which a name rebound to
-        # 127.0.0.1 would send.
+        # 127.0.0.1 would send. Also the address it listens on: all of 127.0.0.0/8
+        # is loopback.
+        bound = host.strip().strip("[]")
+        if ":" in bound:
+            bound = f"[{bound}]"
+        names = ["127.0.0.1", "localhost", "[::1]", bound]
         security = TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
-            allowed_hosts=[
-                "127.0.0.1", "localhost", "[::1]",  # port 80
-                "127.0.0.1:*", "localhost:*", "[::1]:*",
-            ],
+            allowed_hosts=names + [f"{name}:*" for name in names],  # without a port: port 80
             allowed_origins=[],
         )
     else:
@@ -127,8 +140,24 @@ def build(host: str | None):
         # left unset the SDK assumes 127.0.0.1.
         security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
-    # Stateless with plain JSON answers: every tool call stands alone. Called for
-    # the session manager it sets up; its own app is not used, because /mcp is a
-    # route of the Crows Nest itself, which answers there without a redirect to /mcp/.
-    server.streamable_http_app(stateless_http=True, json_response=True, transport_security=security)
-    return server, StreamableHTTPASGIApp(server.session_manager)
+    # Stateless with plain JSON answers: every tool call stands alone. The SDK's
+    # app routes /mcp itself; as a route of the Crows Nest rather than a mount, the
+    # path reaches it unchanged, so it answers there without a redirect to /mcp/.
+    app = server.streamable_http_app(stateless_http=True, json_response=True, transport_security=security)
+    return server, _PostOnly(app)
+
+
+class _PostOnly:
+    """
+    Stateless, nothing needs the event stream a GET opens, and a page's no-cors
+    GET sends no Origin. A class, not a function: Starlette would take a function
+    for a request handler.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["method"] != "POST":
+            raise HTTPException(405, headers={"Allow": "POST"})
+        await self.app(scope, receive, send)
