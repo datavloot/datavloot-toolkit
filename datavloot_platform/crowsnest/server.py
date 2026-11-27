@@ -20,6 +20,7 @@ from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_wri
 from datavloot_platform.crowsnest import startup
 from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.httpclient import async_client
+from datavloot_platform.crowsnest.loopback import LoopbackGuardMiddleware
 from datavloot_platform.crowsnest.processes import terminate_tree
 from datavloot_platform.crowsnest.routes import pipelines, quality, query, catalog, notebooks, apps, branding
 
@@ -163,6 +164,12 @@ def create_app(host: str | None = None) -> FastAPI:
     # covers the API and the static dashboard alike -- serving the UI to anyone
     # who asks while the data behind it needs a token is not a useful boundary.
     app.add_middleware(TokenAuthMiddleware)
+    # Added last, so it runs first, for every route (see loopback.py). Only on
+    # loopback: elsewhere (a VM, the Falcon behind its proxy and sign-in,
+    # `--host 0.0.0.0`) the Host is a public name this app does not know, and
+    # the token or the proxy is what guards it.
+    if is_loopback(host):
+        app.add_middleware(LoopbackGuardMiddleware, bind_host=host)
 
     app.include_router(pipelines.router, prefix="/api/pipelines", tags=["Pipelines"])
     app.include_router(quality.router, prefix="/api/quality", tags=["Data Quality"])

@@ -15,6 +15,10 @@ from fastapi.testclient import TestClient  # noqa: E402
 from datavloot_platform.crowsnest import config as cn_config  # noqa: E402
 from datavloot_platform.crowsnest.server import create_app  # noqa: E402
 
+# On loopback the app refuses a Host that is not a loopback name, such as
+# TestClient's default "testserver".
+LAPTOP = "http://127.0.0.1:8080"
+
 
 class FakeServer:
     """Stands in for the uvicorn.Server cli.cmd_crowsnest runs the app in."""
@@ -65,7 +69,7 @@ def _app(host, server=True):
 
 def test_on_a_laptop_it_cancels_runs_then_asks_the_server_to_exit(cancelled):
     app = _app("127.0.0.1")
-    client = TestClient(app)
+    client = TestClient(app, base_url=LAPTOP)
     assert client.get("/api/services").json()["can_shutdown"] is True
 
     r = client.post("/api/shutdown")
@@ -89,7 +93,7 @@ def test_shut_down_stops_dagster_itself_and_arms_the_backstop(cancelled, monkeyp
     try:
         app = _app("127.0.0.1")
         app.state.after_shutdown = lambda: armed.append(True)
-        assert TestClient(app).post("/api/shutdown").status_code == 200
+        assert TestClient(app, base_url=LAPTOP).post("/api/shutdown").status_code == 200
     finally:
         startup.set_dagster_process(None)
     assert stopped == [dagster]
@@ -174,7 +178,7 @@ def test_the_server_does_not_wait_for_ever_on_open_connections(monkeypatch):
 @pytest.mark.parametrize("host", ["0.0.0.0", None])
 def test_on_a_shared_host_it_is_refused(host, cancelled):
     app = _app(host)
-    client = TestClient(app)
+    client = TestClient(app, base_url=LAPTOP)
     assert client.get("/api/services").json()["can_shutdown"] is False
 
     r = client.post("/api/shutdown")
@@ -185,7 +189,7 @@ def test_on_a_shared_host_it_is_refused(host, cancelled):
 
 def test_without_a_server_of_its_own_there_is_nothing_to_stop(cancelled):
     """An app not run by `datavloot start` or `launch` (another ASGI server, a test)."""
-    client = TestClient(_app("127.0.0.1", server=False))
+    client = TestClient(_app("127.0.0.1", server=False), base_url=LAPTOP)
     assert client.get("/api/services").json()["can_shutdown"] is False
     assert client.post("/api/shutdown").status_code == 409
     assert cancelled == []
@@ -382,7 +386,7 @@ def test_shut_down_while_dagster_loads_does_not_ask_it_anything(cancelled):
 
     startup.set_dagster("starting")
     app = _app("127.0.0.1")
-    r = TestClient(app).post("/api/shutdown")
+    r = TestClient(app, base_url=LAPTOP).post("/api/shutdown")
     assert r.status_code == 200, r.text
     assert r.json()["cancelled_runs"] == []
     assert cancelled == ["notebooks stopped", "apps stopped"]

@@ -31,7 +31,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("CROWSNEST_MARIMO_URL", "http://127.0.0.1:9")
     monkeypatch.delenv("CROWSNEST_AUTH_TOKEN", raising=False)
     cn_config.reset_config()
-    yield TestClient(create_app(host="127.0.0.1"))
+    yield TestClient(create_app(host="127.0.0.1"), base_url="http://127.0.0.1:8080")
     startup.set_dagster(None)
     cn_config.reset_config()
 
