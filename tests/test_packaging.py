@@ -43,14 +43,14 @@ MAX_UNPACKED_MB = 25
 # bug is fully intact. The 0.1.1 wheel that shipped 276 MB to PyPI was built on a
 # developer machine, where they all exist.
 #
-# Every location is covered by a nested .gitignore, so the decoys stay invisible
+# Every location is covered by a nested .gitignore or the root one, so the decoys stay invisible
 # to git even if cleanup is skipped, and real directories are never removed.
 DECOY_DIRS = [
     "datavloot_platform/crowsnest/frontend/node_modules",
     "datavloot_platform/crowsnest/frontend/.next",
     "datavloot_platform/crowsnest/frontend/out",
-    "datavloot_platform/templates/demo/dbt_packages",
-    "datavloot_platform/templates/demo/target",
+    "datavloot_platform/templates/demos/noaa/dbt_packages",
+    "datavloot_platform/templates/demos/noaa/target",
 ]
 
 DECOY_NAME = "__packaging_test_decoy__.txt"
@@ -190,8 +190,8 @@ def test_templates_ship(wheel: pathlib.Path):
         # Without it Dagster runs writers side by side and the lake refuses the
         # second commit.
         "datavloot_platform/templates/scaffold/dagster.yaml",
-        "datavloot_platform/templates/demo/dbt_project.yml",
-        "datavloot_platform/templates/demo/dagster.yaml",
+        "datavloot_platform/templates/demos/noaa/dbt_project.yml",
+        "datavloot_platform/templates/demos/noaa/demo.yml",
     ):
         assert required in names, f"{required} is missing from the wheel"
 

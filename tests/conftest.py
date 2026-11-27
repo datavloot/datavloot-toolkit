@@ -31,6 +31,15 @@ def _scaffold(dest: pathlib.Path, name: str) -> pathlib.Path:
     return dest
 
 
+def _demo(dest: pathlib.Path, name: str) -> pathlib.Path:
+    """Create a demo project exactly as `datavloot demo <dest> --<name>` does, without the downloads."""
+    cli._copy_template(cli.TEMPLATES_DIR / "scaffold", dest)
+    cli._apply_overlay(dest, cli._demos()[name])
+    cli._substitute(dest, name)
+    cli._pin_versions(dest, cli._versions())
+    return dest
+
+
 @pytest.fixture
 def scaffold(tmp_path: pathlib.Path) -> pathlib.Path:
     """A freshly scaffolded project named 'probe'. No dbt commands run."""

@@ -12,7 +12,9 @@ section there when a task touches it.
 - `storage.py`: how dbt, dlt, assets and notebooks attach the lake; `maintenance.py`, `extensions.py`
 - `crowsnest/`: the dashboard. FastAPI server, plus a Next.js source in `crowsnest/frontend/` and
   its committed static export in `crowsnest/static/`, which is what is served and shipped
-- `templates/scaffold/` (`datavloot new`) and `templates/demo/` (`datavloot demo`): kept in step
+- `templates/scaffold/` (`datavloot new`) and `templates/demos/<name>/` (`datavloot demo --<name>`). A
+  demo is an overlay: the scaffold, minus what its `demo.yml` removes, plus the demo's own files. Keep
+  the `remove` lists and overlay files in step with scaffold changes
 - `installers/`: the PowerShell and shell install scripts; `deploy/`: the Falcon (Compose, OpenTofu)
 - The `optimist` dbt package (macros, modelling conventions, `data-instructions.md`) is another
   repository, dbt-datavloot-optimist. This repo only pins it (`DBT_PACKAGE_VERSION`).

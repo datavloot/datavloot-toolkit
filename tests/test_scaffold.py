@@ -16,11 +16,23 @@ import yaml
 
 from datavloot_platform import cli
 
-TEMPLATES = {"scaffold": "probe_platform", "demo": "noaa_platform"}
+from .conftest import _demo, _scaffold
+
+# The scaffold, built as `datavloot new probe`, and every demo, built as
+# `datavloot demo --<name>`, by the module each gets.
+TEMPLATES = {"scaffold": "probe_platform", **{name: f"{name}_platform" for name in cli._demos()}}
 
 
-def test_placeholders_are_substituted(scaffold: pathlib.Path):
-    """No <project_name> or project_platform token survives `datavloot new`."""
+def _build(template: str, tmp_path: pathlib.Path) -> pathlib.Path:
+    if template == "scaffold":
+        return _scaffold(tmp_path / "probe", "probe")
+    return _demo(tmp_path / template, template)
+
+
+@pytest.mark.parametrize("template", TEMPLATES)
+def test_placeholders_are_substituted(tmp_path: pathlib.Path, template: str):
+    """No <project_name> or project_platform token survives `datavloot new` or `demo`."""
+    scaffold = _build(template, tmp_path)
     leftovers = []
     for f in scaffold.rglob("*"):
         if not f.is_file():
@@ -33,7 +45,8 @@ def test_placeholders_are_substituted(scaffold: pathlib.Path):
             leftovers.append(f.relative_to(scaffold).as_posix())
     assert leftovers == [], f"unsubstituted placeholders in: {leftovers}"
 
-    assert (scaffold / "probe_platform").is_dir(), "module dir was not renamed"
+    assert (scaffold / TEMPLATES[template]).is_dir(), "module dir was not renamed"
+    assert not (scaffold / "project_platform").exists()
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
@@ -45,8 +58,7 @@ def test_a_new_project_is_called_optimist(tmp_path: pathlib.Path, template: str)
     crowsnest/routes/branding.py), so a Falcon or a customer's project changes
     one line and nothing else.
     """
-    dest = tmp_path / "project"
-    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    dest = _build(template, tmp_path)
     settings = yaml.safe_load((dest / "branding" / "branding.yml").read_text(encoding="utf-8"))
     assert settings["name"] == "Optimist"
     assert not any((dest / "branding" / logo).exists() for logo in ("logo.svg", "logo.png")), (
@@ -63,9 +75,7 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
     dbt package's `0.1.x` branch, so after a 0.2.0 a new project got the 0.2
     toolkit with the 0.1 macros, and a laptop got whatever was newest on install day.
     """
-    dest = tmp_path / "project"
-    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
-    cli._pin_versions(dest, cli._versions())
+    dest = _build(template, tmp_path)
 
     # No tomllib before Python 3.11, and the project supports 3.10.
     pyproject = (dest / "pyproject.toml").read_text(encoding="utf-8")
@@ -83,7 +93,7 @@ def test_toolkit_and_dbt_package_are_pinned(tmp_path: pathlib.Path, template: st
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_lock_requires_windows_and_linux_wheels(template: str):
+def test_lock_requires_windows_and_linux_wheels(tmp_path: pathlib.Path, template: str):
     """
     A new project only locks versions that install on Windows and Linux.
 
@@ -91,7 +101,7 @@ def test_lock_requires_windows_and_linux_wheels(template: str):
     everywhere: loro 1.19.0 (via marimo) had no Windows wheel, so the lock
     resolved fine and `uv sync` failed on Windows.
     """
-    pyproject = (cli.TEMPLATES_DIR / template / "pyproject.toml").read_text(encoding="utf-8")
+    pyproject = (_build(template, tmp_path) / "pyproject.toml").read_text(encoding="utf-8")
     assert "required-environments" in pyproject
     assert "sys_platform == 'win32' and platform_machine == 'AMD64' and platform_python_implementation == 'CPython'" in pyproject
     assert "sys_platform == 'linux' and platform_machine == 'x86_64' and platform_python_implementation == 'CPython'" in pyproject
@@ -107,8 +117,7 @@ def test_dbt_deps_does_not_need_git(tmp_path: pathlib.Path, template: str):
     first `dbt deps` of a new project failed there. Hub packages and tarballs are
     downloaded over HTTPS by dbt itself.
     """
-    dest = tmp_path / "project"
-    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    dest = _build(template, tmp_path)
     packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
     assert [p for p in packages if "git" in p] == []
 
@@ -126,8 +135,7 @@ def test_projects_install_elementary_in_step_with_its_cli(
     The dbt package and `elementary-data` in pyproject.toml are bounded alike, so
     the CLI never reads tables a different minor of the package wrote.
     """
-    dest = tmp_path / "project"
-    cli._copy_template(cli.TEMPLATES_DIR / template, dest)
+    dest = _build(template, tmp_path)
     packages = yaml.safe_load((dest / "packages.yml").read_text(encoding="utf-8"))["packages"]
     (version,) = [p["version"] for p in packages if p.get("package") == "elementary-data/elementary"]
 
@@ -210,10 +218,8 @@ def test_crowsnest_reports_production_quality(scaffold: pathlib.Path, monkeypatc
     assert config._infer_elementary_schema() == "probe_elementary"
 
 
-def _platform_dir(template: str, scaffold: pathlib.Path) -> pathlib.Path:
-    if template == "scaffold":
-        return scaffold / TEMPLATES[template]
-    return cli.TEMPLATES_DIR / template / TEMPLATES[template]
+def _platform_dir(template: str, tmp_path: pathlib.Path) -> pathlib.Path:
+    return _build(template, tmp_path) / TEMPLATES[template]
 
 
 def _keyword(call: ast.Call, name: str):
@@ -221,9 +227,9 @@ def _keyword(call: ast.Call, name: str):
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_dagster_builds_the_prod_target(scaffold: pathlib.Path, template: str):
+def test_dagster_builds_the_prod_target(tmp_path: pathlib.Path, template: str):
     """Dagster is the production writer, so its dbt project uses prod, not the default dev."""
-    tree = ast.parse((_platform_dir(template, scaffold) / "assets.py").read_text(encoding="utf-8"))
+    tree = ast.parse((_platform_dir(template, tmp_path) / "assets.py").read_text(encoding="utf-8"))
     projects = [
         node for node in ast.walk(tree)
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DbtProject"
@@ -238,7 +244,7 @@ def test_dagster_builds_the_prod_target(scaffold: pathlib.Path, template: str):
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_loading_the_code_does_not_reinstall_the_dbt_packages(scaffold: pathlib.Path, template: str):
+def test_loading_the_code_does_not_reinstall_the_dbt_packages(tmp_path: pathlib.Path, template: str):
     """
     Dagster does not run `dbt deps` when it loads the project's code.
 
@@ -248,7 +254,7 @@ def test_loading_the_code_does_not_reinstall_the_dbt_packages(scaffold: pathlib.
     and every materialization fails with it. The installers, `new --from` and
     `update` run `dbt deps` themselves.
     """
-    tree = ast.parse((_platform_dir(template, scaffold) / "assets.py").read_text(encoding="utf-8"))
+    tree = ast.parse((_platform_dir(template, tmp_path) / "assets.py").read_text(encoding="utf-8"))
     projects = [
         node for node in ast.walk(tree)
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "DbtProject"
@@ -263,7 +269,7 @@ def test_loading_the_code_does_not_reinstall_the_dbt_packages(scaffold: pathlib.
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: str):
+def test_every_writing_asset_waits_its_turn(tmp_path: pathlib.Path, template: str):
     """
     Writers to the lake take turns, enforced by Dagster.
 
@@ -272,7 +278,7 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
     asset, across runs and within a run; that only helps the assets in a pool.
     """
     instance = yaml.safe_load(
-        (cli.TEMPLATES_DIR / template / "dagster.yaml").read_text(encoding="utf-8")
+        (_build(template, tmp_path / "instance") / "dagster.yaml").read_text(encoding="utf-8")
     )
     pools = instance["concurrency"]["pools"]
     assert pools["default_limit"] == 1
@@ -281,7 +287,7 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
     # Ops too: lake maintenance commits to the lake like any asset.
     decorators = [
         dec
-        for module in sorted(_platform_dir(template, scaffold).glob("*.py"))
+        for module in sorted(_platform_dir(template, tmp_path).glob("*.py"))
         for node in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
         if isinstance(node, ast.FunctionDef)
         for dec in node.decorator_list
@@ -299,7 +305,7 @@ def test_every_writing_asset_waits_its_turn(scaffold: pathlib.Path, template: st
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_a_run_loads_the_code_once(scaffold: pathlib.Path, template: str):
+def test_a_run_loads_the_code_once(tmp_path: pathlib.Path, template: str):
     """
     Every run executes its steps in its own process.
 
@@ -308,7 +314,7 @@ def test_a_run_loads_the_code_once(scaffold: pathlib.Path, template: str):
     per step, against 3 to 25 seconds of real work. The lake pool lets one
     writer in at a time, so the extra processes bought no parallelism.
     """
-    tree = ast.parse((_platform_dir(template, scaffold) / "definitions.py").read_text(encoding="utf-8"))
+    tree = ast.parse((_platform_dir(template, tmp_path) / "definitions.py").read_text(encoding="utf-8"))
     definitions = [
         node for node in ast.walk(tree)
         if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "Definitions"
@@ -346,10 +352,10 @@ def test_a_mistyped_switch_is_an_error(monkeypatch):
 
 
 @pytest.mark.parametrize("template", TEMPLATES)
-def test_the_maintenance_schedule_follows_the_switch(scaffold: pathlib.Path, template: str):
+def test_the_maintenance_schedule_follows_the_switch(tmp_path: pathlib.Path, template: str):
     """The schedule's starting state comes from the switch, not a fixed RUNNING."""
     tree = ast.parse(
-        (_platform_dir(template, scaffold) / "lake_maintenance.py").read_text(encoding="utf-8")
+        (_platform_dir(template, tmp_path) / "lake_maintenance.py").read_text(encoding="utf-8")
     )
     schedules = [
         node for node in ast.walk(tree)
@@ -464,11 +470,8 @@ def _translator(assets_py: pathlib.Path, project_name: str):
     return namespace["LayerGroupTranslator"]()
 
 
-@pytest.mark.parametrize(
-    "where, project_name",
-    [("scaffold", "probe"), ("demo", "noaa")],
-)
-def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, project_name: str):
+@pytest.mark.parametrize("where", TEMPLATES)
+def test_a_package_gets_one_dagster_group(tmp_path: pathlib.Path, where: str):
     """
     Elementary's models are grouped as `elementary`, the project's by folder.
 
@@ -476,10 +479,8 @@ def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, pr
     data_monitoring, system, ...) between the project's own source and
     business, looking like part of the project.
     """
-    assets_py = {
-        "scaffold": scaffold / "probe_platform" / "assets.py",
-        "demo": cli.TEMPLATES_DIR / "demo" / "noaa_platform" / "assets.py",
-    }[where]
+    project_name = TEMPLATES[where].removesuffix("_platform")
+    assets_py = _platform_dir(where, tmp_path) / "assets.py"
     translator = _translator(assets_py, project_name)
 
     elementary = {
@@ -490,3 +491,49 @@ def test_a_package_gets_one_dagster_group(scaffold: pathlib.Path, where: str, pr
 
     assert translator.get_group_name(elementary) == "elementary"
     assert translator.get_group_name(own) == "business"
+
+
+def test_every_demo_removes_only_what_the_scaffold_has():
+    """A demo.yml that lists a file the scaffold no longer has would stop `datavloot demo` cold."""
+    scaffold = cli.TEMPLATES_DIR / "scaffold"
+    for demo in cli._demos().values():
+        assert demo.title, f"{demo.name}: demo.yml has no title"
+        missing = [rel for rel in demo.remove if not (scaffold / rel).is_file()]
+        assert missing == [], f"{demo.name}: demo.yml removes files the scaffold lacks: {missing}"
+
+
+def test_a_demo_keeps_its_code_in_project_platform():
+    """
+    The overlay's module folder is project_platform, like the scaffold's.
+
+    `_substitute` renames project_platform to <name>_platform after the overlay
+    is laid on. An overlay with its own noaa_platform/ would leave the project
+    with two packages, the scaffold's placeholder code in one of them.
+    """
+    for demo in cli._demos().values():
+        named = [p.name for p in demo.path.iterdir() if p.is_dir() and p.name.endswith("_platform")]
+        assert named == ["project_platform"], f"{demo.name}: module folders {named}"
+
+
+def _run_demo(monkeypatch, tmp_path: pathlib.Path, *argv: str) -> None:
+    monkeypatch.setattr(cli, "_preinstall_extensions", lambda dest: None)
+    monkeypatch.setenv("DATAVLOOT_INSTALLER", "1")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.sys, "argv", ["datavloot", "demo", *argv])
+    cli.main()
+
+
+def test_plain_demo_is_still_noaa_where_it_always_was(monkeypatch, tmp_path: pathlib.Path):
+    """The installers re-run `datavloot demo` and look for the demo in optimist-demo."""
+    _run_demo(monkeypatch, tmp_path)
+    assert (tmp_path / "optimist-demo" / "noaa_platform" / "assets.py").is_file()
+
+
+@pytest.mark.parametrize("name", cli._demos())
+def test_every_demo_has_its_flag(monkeypatch, tmp_path: pathlib.Path, capsys, name: str):
+    _run_demo(monkeypatch, tmp_path, "--list")
+    assert f"--{name} " in capsys.readouterr().out
+
+    _run_demo(monkeypatch, tmp_path, "here", f"--{name}")
+    assert (tmp_path / "here" / f"{name}_platform" / "definitions.py").is_file()
+    assert not (tmp_path / "here" / cli._DEMO_MANIFEST).exists(), "demo.yml was copied into the project"

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Install Datavloot and open the Crows Nest on the NOAA demo, in one command:
+# Install Datavloot and open the Crows Nest on a demo (NOAA unless you choose another), in one command:
 #
 #   curl -LsSf https://datavloot.nl/install-demo.sh | bash
 #
 # No Python, git or admin rights needed. The script:
 #   1. installs uv (https://docs.astral.sh/uv/) for the current user, if missing
-#   2. creates the demo project in ~/optimist-demo with `datavloot demo`
+#   2. creates the demo project in ~/optimist-demo with `datavloot demo` (another demo: ~/optimist-<name>)
 #   3. gives it its own Python and packages (`uv sync`), and runs `dbt deps` and `dbt parse`
 #   4. starts Dagster and the Crows Nest, opens http://localhost:8080 and, the
 #      first time, starts the run that downloads the demo data and builds the models
@@ -15,7 +15,8 @@
 # repository install-project.sh.
 #
 # Settings, as environment variables (`curl ... | DATAVLOOT_DIR=~/demo bash`):
-#   DATAVLOOT_DIR      where the demo goes (default: ~/optimist-demo)
+#   DATAVLOOT_DEMO     which demo: noaa (the default), spotify, ... (`datavloot demo --list`)
+#   DATAVLOOT_DIR      where the demo goes (default: ~/optimist-demo, or ~/optimist-<demo>)
 #   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
@@ -165,9 +166,14 @@ start_help() {
 # --- End of the shared part -------------------------------------------------------
 
 main() {
-    printf '\033[36mDatavloot: installing the toolkit and the NOAA demo\033[0m\n'
-    local dir
-    dir="$(full_path "${DATAVLOOT_DIR:-$HOME/optimist-demo}")"
+    local demo="${DATAVLOOT_DEMO:-noaa}" dir default
+    case "$demo" in
+        ''|*[!a-z0-9_]*) fail "DATAVLOOT_DEMO='$demo' is not the name of a demo: noaa, spotify, ..." ;;
+    esac
+    printf '\033[36mDatavloot: installing the toolkit and the %s demo\033[0m\n' "$demo"
+    # NOAA keeps the folder from before there were more demos, where a re-run finds it.
+    if [ "$demo" = noaa ]; then default="$HOME/optimist-demo"; else default="$HOME/optimist-$demo"; fi
+    dir="$(full_path "${DATAVLOOT_DIR:-$default}")"
     check_project_dir "$dir"
 
     check_internet
@@ -178,7 +184,7 @@ main() {
     else
         # DATAVLOOT_INSTALLER: `datavloot demo` leaves out the steps this script takes itself.
         run_step "Creating the demo project in $dir" \
-            env DATAVLOOT_INSTALLER=1 uvx --python "$PYTHON_VERSION" --from "$(toolkit_source)" datavloot demo "$dir"
+            env DATAVLOOT_INSTALLER=1 uvx --python "$PYTHON_VERSION" --from "$(toolkit_source)" datavloot demo "$dir" "--$demo"
     fi
 
     cd "$dir"
@@ -187,7 +193,7 @@ main() {
     install_environment
     start_help "$dir"
     if ! $EXISTING; then
-        echo "The first run downloads the demo's AIS data (41 MB) and builds the models;"
+        echo "The first run loads the demo's data and builds the models;"
         echo "follow it in the Crows Nest's Pipelines panel."
     fi
     echo

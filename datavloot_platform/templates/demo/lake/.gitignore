@@ -1,5 +1,0 @@
-# The project's lake: catalog.sqlite and the Parquet files in data/. All of it
-# is ignored except this file, which keeps the directory in a fresh clone --
-# SQLite cannot create the catalog in a directory that does not exist.
-*
-!.gitignore

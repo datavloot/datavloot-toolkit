@@ -1,10 +1,10 @@
-# Install Datavloot and open the Crows Nest on the NOAA demo, in one command:
+# Install Datavloot and open the Crows Nest on a demo (NOAA unless you choose another), in one command:
 #
 #   powershell -ExecutionPolicy ByPass -c "irm https://datavloot.nl/install-demo.ps1 | iex"
 #
 # No Python, git or admin rights needed. The script:
 #   1. installs uv (https://docs.astral.sh/uv/) for the current user, if missing
-#   2. creates the demo project in %USERPROFILE%\optimist-demo with `datavloot demo`
+#   2. creates the demo project in %USERPROFILE%\optimist-demo with `datavloot demo` (another demo: optimist-<name>)
 #   3. gives it its own Python and packages (`uv sync`), and runs `dbt deps` and `dbt parse`
 #   4. starts Dagster and the Crows Nest, opens http://localhost:8080 and, the
 #      first time, starts the run that downloads the demo data and builds the models
@@ -14,7 +14,8 @@
 # repository install-project.ps1.
 #
 # Settings, as environment variables (the one-liner takes no arguments):
-#   DATAVLOOT_DIR      where the demo goes (default: %USERPROFILE%\optimist-demo)
+#   DATAVLOOT_DEMO     which demo: noaa (the default), spotify, ... (`datavloot demo --list`)
+#   DATAVLOOT_DIR      where the demo goes (default: %USERPROFILE%\optimist-demo, or optimist-<demo>)
 #   DATAVLOOT_VERSION  a toolkit version, e.g. 0.4.0 (default: the latest release)
 #   DATAVLOOT_FROM     install the toolkit from here instead of PyPI, e.g. a checkout
 #
@@ -174,8 +175,14 @@ function Write-StartHelp([string]$Dir) {
 # --- End of the shared part -------------------------------------------------------
 
 function Install-Datavloot {
-    Write-Host "Datavloot: installing the toolkit and the NOAA demo" -ForegroundColor Cyan
-    $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME 'optimist-demo' }
+    $demo = if ($env:DATAVLOOT_DEMO) { $env:DATAVLOOT_DEMO } else { 'noaa' }
+    if ($demo -cnotmatch '^[a-z0-9_]+$') {
+        Stop-Install "DATAVLOOT_DEMO='$demo' is not the name of a demo: noaa, spotify, ..."
+    }
+    Write-Host "Datavloot: installing the toolkit and the $demo demo" -ForegroundColor Cyan
+    # NOAA keeps the folder from before there were more demos, where a re-run finds it.
+    $default = if ($demo -eq 'noaa') { 'optimist-demo' } else { "optimist-$demo" }
+    $dir = if ($env:DATAVLOOT_DIR) { $env:DATAVLOOT_DIR } else { Join-Path $HOME $default }
     $dir = [System.IO.Path]::GetFullPath($dir)
     $existing = Test-ProjectDir $dir
 
@@ -190,7 +197,7 @@ function Install-Datavloot {
         # Tells `datavloot demo` not to print the steps this script takes itself.
         $env:DATAVLOOT_INSTALLER = '1'
         Invoke-Step "Creating the demo project in $dir" {
-            uvx --python $PythonVersion --from $from datavloot demo $dir
+            uvx --python $PythonVersion --from $from datavloot demo $dir "--$demo"
         }
     }
 
@@ -201,7 +208,7 @@ function Install-Datavloot {
         Install-Environment
         Write-StartHelp $dir
         if (-not $existing) {
-            Write-Host "The first run downloads the demo's AIS data (41 MB) and builds the models;"
+            Write-Host "The first run loads the demo's data and builds the models;"
             Write-Host "follow it in the Crows Nest's Pipelines panel."
         }
         Write-Host ""

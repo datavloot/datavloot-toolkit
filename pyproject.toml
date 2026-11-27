@@ -106,6 +106,9 @@ exclude = [
   "datavloot_platform/templates/*/target",
   "datavloot_platform/templates/*/dbt_packages",
   "datavloot_platform/templates/*/logs",
+  "datavloot_platform/templates/demos/*/target",
+  "datavloot_platform/templates/demos/*/dbt_packages",
+  "datavloot_platform/templates/demos/*/logs",
   # `datavloot start` run in a checkout leaves its pid file and logs here.
   "/logs",
   "*.duckdb",

@@ -26,7 +26,7 @@
 
 - [ ] No version bump in `pyproject.toml`
 - [ ] No conventions copied into the templates' `data-instructions.md` (they live in the dbt package)
-- [ ] Scaffold and demo templates are kept in step
+- [ ] Scaffold and demo templates are kept in step (the files each demo overlays, its `demo.yml`)
 - [ ] Frontend source change comes with a rebuilt and committed `crowsnest/static/`
 - [ ] Widened dependency bound is explained above
 - [ ] Issues this closes are referenced (`Closes #...`)

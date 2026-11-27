@@ -1,4 +1,5 @@
 import argparse
+import dataclasses
 import importlib.metadata
 import os
 import pathlib
@@ -23,9 +24,62 @@ DBT_PACKAGE_VERSION = "0.1.1"
 # it goes on regardless (cmd_crowsnest).
 SHUTDOWN_GRACE_SECONDS = 5
 
-_IGNORE = shutil.ignore_patterns(
-    "__pycache__", "*.pyc", ".venv", "target", "dbt_packages", "logs"
-)
+_IGNORED = ("__pycache__", "*.pyc", ".venv", "target", "dbt_packages", "logs", "*.duckdb")
+_IGNORE = shutil.ignore_patterns(*_IGNORED)
+
+# `datavloot demo` builds a demo as the scaffold plus that demo's overlay in
+# demos/<name>/: only the files it adds or changes, and a demo.yml that says
+# which scaffold files it does not want. A change to the scaffold then reaches
+# every demo without being copied into each.
+DEMOS_DIR = TEMPLATES_DIR / "demos"
+DEFAULT_DEMO = "noaa"
+_DEMO_MANIFEST = "demo.yml"
+_OVERLAY_IGNORE = shutil.ignore_patterns(*_IGNORED, _DEMO_MANIFEST)
+
+
+@dataclasses.dataclass(frozen=True)
+class Demo:
+    name: str  # the directory, the project and module name, and the --<name> flag
+    title: str
+    default_dir: str
+    first_run: str
+    remove: tuple[str, ...]
+    path: pathlib.Path
+
+
+def _demos() -> dict[str, Demo]:
+    """The demos in DEMOS_DIR, by name, in name order."""
+    import yaml
+
+    demos = {}
+    for manifest in sorted(DEMOS_DIR.glob(f"*/{_DEMO_MANIFEST}")):
+        name = manifest.parent.name
+        # The name becomes a Python package (<name>_platform) and a flag beside --list.
+        if not name.isidentifier() or name != name.lower() or name == "list":
+            raise ValueError(f"demo directory {name!r} is not a lowercase identifier")
+        spec = yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}
+        demos[name] = Demo(
+            name=name,
+            title=spec["title"],
+            default_dir=spec.get("default_dir") or f"optimist-{name}",
+            first_run=(spec.get("first_run") or "").strip(),
+            remove=tuple(spec.get("remove") or ()),
+            path=manifest.parent,
+        )
+    return demos
+
+
+def _apply_overlay(dest: pathlib.Path, demo: Demo) -> None:
+    """Turn a copy of the scaffold into the demo: drop what it does not want, lay its files over."""
+    for rel in demo.remove:
+        path = dest / rel
+        path.unlink()
+        # A folder left empty would show up in the project as if it meant something.
+        parent = path.parent
+        while parent != dest and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
+    shutil.copytree(demo.path, dest, dirs_exist_ok=True, ignore=_OVERLAY_IGNORE)
 
 
 def _copy_template(source: pathlib.Path, dest: pathlib.Path) -> None:
@@ -255,23 +309,33 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 
 def cmd_demo(args: argparse.Namespace) -> None:
+    demos = _demos()
+    if getattr(args, "list", False):
+        print("Demos (default: --noaa):")
+        for demo in demos.values():
+            print(f"  --{demo.name:<12} {demo.title}")
+        return
+    demo = demos[getattr(args, "demo", None) or DEFAULT_DEMO]
     dest = (
         pathlib.Path(args.path).resolve()
         if args.path
-        else pathlib.Path.cwd() / "optimist-demo"
+        else pathlib.Path.cwd() / demo.default_dir
     )
     versions = _versions()
-    _copy_template(TEMPLATES_DIR / "demo", dest)
+    _copy_template(TEMPLATES_DIR / "scaffold", dest)
+    _apply_overlay(dest, demo)
+    # A demo keeps its own name (noaa, spotify, ...), unlike a scaffolded project.
+    _substitute(dest, demo.name)
     _pin_versions(dest, versions)
     _preinstall_extensions(dest)
-    # The demo keeps its own name (noaa), unlike a scaffolded project.
-    _warn_about_location(dest, "noaa")
-    print(f"NOAA demo project created at '{dest}'.\n")
+    _warn_about_location(dest, demo.name)
+    print(f"Demo '{demo.name}' ({demo.title}) created at '{dest}'.\n")
     if os.environ.get("DATAVLOOT_INSTALLER"):
         # install-demo.ps1 / install-demo.sh take the next steps themselves.
         return
     _print_next_steps(dest, "uv run datavloot start --run")
-    print(f"\nThe first run downloads NOAA's Guam 2025 AIS data into data/ (41 MB, 366 MB unpacked).")
+    if demo.first_run:
+        print(f"\n{demo.first_run}")
     print(f"\nHand data-instructions.md to your AI assistant at the start of a session so it")
     print(f"knows the toolkit's conventions.")
 
@@ -972,14 +1036,20 @@ def main() -> None:
     update_parser.set_defaults(func=cmd_update, run=True)
 
     demo_parser = subparsers.add_parser(
-        "demo", help="Copy the NOAA worked example to a local directory"
+        "demo", help="Copy a worked example project to a local directory (default: the NOAA demo)"
     )
     demo_parser.add_argument(
         "path",
         nargs="?",
-        help="Path for the demo (default: ./optimist-demo)",
+        help="Path for the demo (default: ./optimist-demo for NOAA, ./optimist-<name> for the others)",
     )
-    demo_parser.set_defaults(func=cmd_demo)
+    which = demo_parser.add_mutually_exclusive_group()
+    for demo in _demos().values():
+        which.add_argument(
+            f"--{demo.name}", dest="demo", action="store_const", const=demo.name, help=demo.title
+        )
+    which.add_argument("--list", action="store_true", help="List the demos")
+    demo_parser.set_defaults(func=cmd_demo, demo=DEFAULT_DEMO)
 
     crowsnest_parser = subparsers.add_parser(
         "launch", help="Start the Crows Nest unified dashboard"

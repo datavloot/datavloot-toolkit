@@ -19,5 +19,11 @@ data/*.csv
 # Environment
 .env
 
+# dbt output inside a template: the demos are overlays now, built with
+# `datavloot demo`, but an older checkout may still hold some.
+datavloot_platform/templates/**/dbt_packages/
+datavloot_platform/templates/**/target/
+datavloot_platform/templates/**/logs/
+
 # Temp — lokale werkbestanden
 temp/

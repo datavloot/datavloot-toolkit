@@ -1,0 +1,16 @@
+# How `datavloot demo --noaa` builds this demo: the scaffold, minus the files
+# under remove, with every other file in this folder laid over it. This file
+# itself is not copied.
+title: NOAA AIS vessel traffic around Guam, with marine weather
+# The folder from before there were more demos, so the installers find an
+# existing NOAA demo where they left it.
+default_dir: optimist-demo
+# Scaffold files this demo has no use for: placeholders its own files replace.
+remove:
+  - models/source/_sources.yml
+  - models/source/_schema.yml
+  - models/business/datasets/_dataset_configs.yml
+  - notebooks/explore.py
+  - seeds/priority_levels.csv
+first_run: >
+  The first run downloads NOAA's Guam 2025 AIS data into data/ (41 MB, 366 MB unpacked).

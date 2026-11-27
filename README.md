@@ -228,7 +228,7 @@ The **captain and crew** model describes the workflow: you direct the session �
 
 A dedicated agent guide lives at [data-instructions.md](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/scaffold/data-instructions.md) and inside every project created with `datavloot new`. Hand it to your AI assistant at the start of a session so it knows the toolkit's conventions and can work within them.
 
-This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/conversation.md).
+This is also where AI genuinely opens doors. If you have strong domain knowledge and data instincts but haven't spent years writing dbt macros or wiring up Dagster assets, an AI assistant can bridge that gap — not by hiding the stack from you, but by letting you engage with it at the right level before all the implementation details are second nature. The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demos/noaa) demonstrates this: someone with solid data understanding directed an AI through the full workflow, from raw AIS vessel broadcasts to a complete dimensional model. The conversation that produced it is at [conversation.md](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/noaa/conversation.md).
 
 ---
 
@@ -384,7 +384,7 @@ On Windows, `uv sync` cannot replace the `datavloot` that is running the update.
 
 ## Example project
 
-The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo) is a complete consuming project built on this toolkit. It uses
+The [NOAA demo](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demos/noaa) is a complete consuming project built on this toolkit. It uses
 publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.gov/) near Guam
 (2025) combined with global port reference data. It demonstrates the full workflow:
 
@@ -394,7 +394,7 @@ publicly available AIS vessel position broadcasts from [NOAA](https://www.noaa.g
 - Building `dim_vessel`, `dim_port`, and `fct_port_event` with toolkit macros
 - Configuring data quality tests at every layer
 
-Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/templates/demo/](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demo). See the [demo README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/README.md) for details.
+Run `datavloot demo` to copy it locally (`datavloot demo --list` shows the other demos), or browse it at [datavloot_platform/templates/demos/noaa/](https://github.com/datavloot/datavloot-toolkit/tree/main/datavloot_platform/templates/demos/noaa). See the [demo README](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/noaa/README.md) for details.
 
 ---
 
@@ -402,7 +402,7 @@ Run `datavloot demo` to copy it locally, or browse it at [datavloot_platform/tem
 
 ### 1. Ingest raw data
 
-For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/noaa_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
+For loading data from APIs, databases, or files, use [dlt](https://dlthub.com) — it handles pagination, schema inference, incremental loading, and writing directly into DuckDB with no boilerplate. Wrap the dlt pipeline in a Dagster asset so it appears in the UI and can be scheduled alongside your dbt models. See [`noaa_platform/assets.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/noaa/project_platform/assets.py) in the demo for a working example of a dlt pipeline asset, and the [dlt docs](https://dlthub.com/docs) for available sources and connectors.
 
 For simpler cases (reading a local file, calling a small API), a plain Dagster asset that opens the lake with `storage.connect()` is enough; see the [ingestion guide](https://github.com/datavloot/datavloot-toolkit/blob/main/docs/ingestion.md).
 
@@ -465,7 +465,7 @@ marimo edit notebooks/explore.py
 
 Open [http://localhost:2718](http://localhost:2718). To share a read-only view, use `marimo run notebooks/explore.py` instead.
 
-The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demo/notebooks/explore_noaa.py) in the demo for a fully worked example.
+The `datavloot new` scaffold includes a template notebook at `notebooks/explore.py` with placeholder cells to fill in for your own schema. See [`explore_noaa.py`](https://github.com/datavloot/datavloot-toolkit/blob/main/datavloot_platform/templates/demos/noaa/notebooks/explore_noaa.py) in the demo for a fully worked example.
 
 You can also launch notebooks directly from the Crows Nest — the Notebooks panel lists all `.py` files in the `notebooks/` folder and lets you start them with a single click. The panel shows only a Marimo it started itself: one you start with `marimo edit` stays in its own browser tab, and while it holds port 2718 (or the port of `CROWSNEST_MARIMO_URL`) the panel cannot launch another; the panel's error names the command that stops it.
 

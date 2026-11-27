@@ -103,7 +103,7 @@ def test_powershell_and_bash_install_the_same_things():
     assert _setting(ps1, r"^\$DagsterPort = (\d+)") == _setting(sh, r"^DAGSTER_PORT=(\d+)")
     for text in (ps1, sh):
         assert "datavloot[optimist]@latest" in text
-        for variable in ("DATAVLOOT_DIR", "DATAVLOOT_VERSION", "DATAVLOOT_FROM"):
+        for variable in ("DATAVLOOT_DEMO", "DATAVLOOT_DIR", "DATAVLOOT_VERSION", "DATAVLOOT_FROM"):
             assert variable in text
 
 
@@ -254,7 +254,7 @@ def test_new_leaves_the_next_steps_to_the_script(tmp_path, monkeypatch, capsys):
 
 def test_the_python_version_is_one_the_demo_accepts():
     version = _setting(_text(SH["install-demo"]), r"^PYTHON_VERSION=([\d.]+)")
-    demo = (cli.TEMPLATES_DIR / "demo" / "pyproject.toml").read_text(encoding="utf-8")
+    demo = (cli.DEMOS_DIR / "noaa" / "pyproject.toml").read_text(encoding="utf-8")
     low, high = re.search(r'requires-python = ">=([\d.]+),<([\d.]+)"', demo).groups()
     as_tuple = lambda v: tuple(int(p) for p in v.split("."))  # noqa: E731
     assert as_tuple(low) <= as_tuple(version) < as_tuple(high)

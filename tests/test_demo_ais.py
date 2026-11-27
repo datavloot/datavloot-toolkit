@@ -22,7 +22,7 @@ CSV = b"mmsi,base_date_time\n367796180,2025-01-01 00:20:06\n"
 
 def _ais():
     """ais.py from the demo template; it is a module of the demo, not of the toolkit."""
-    path = cli.TEMPLATES_DIR / "demo" / "noaa_platform" / "ais.py"
+    path = cli.DEMOS_DIR / "noaa" / "project_platform" / "ais.py"
     spec = importlib.util.spec_from_file_location("demo_ais", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -129,6 +129,6 @@ def test_a_different_file_is_refused(ais, csv_path):
 
 def test_the_demo_loads_through_the_download():
     """The asset calls ensure_csv before it reads the CSV, instead of failing on a missing file."""
-    source = (cli.TEMPLATES_DIR / "demo" / "noaa_platform" / "assets.py").read_text(encoding="utf-8")
+    source = (cli.DEMOS_DIR / "noaa" / "project_platform" / "assets.py").read_text(encoding="utf-8")
     body = source.split("def noaa_guam_2025_raw", 1)[1]
     assert body.index("ais.ensure_csv(CSV_PATH") < body.index("read_csv(")

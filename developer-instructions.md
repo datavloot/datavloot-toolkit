@@ -19,7 +19,7 @@ datavloot_platform/                         # the datavloot Python package
 ├── crowsnest/                             # the Crows Nest dashboard (FastAPI + a prebuilt frontend)
 └── templates/
     ├── scaffold/                          # new-project template (served via `datavloot new`)
-    └── demo/                              # NOAA worked example (served via `datavloot demo`)
+    └── demos/<name>/                      # worked examples as overlays on the scaffold (`datavloot demo --<name>`)
 deploy/
 ├── compose/                               # the Falcon: the platform on Docker Compose
 └── thalassa/                              # OpenTofu module for a Falcon VM on Thalassa Cloud
@@ -48,8 +48,9 @@ The captain will tell you which of these applies:
   repository, not this one. Once it is released there, move new projects to it by bumping
   `DBT_PACKAGE_VERSION` in `datavloot_platform/cli.py` and running the smoke tier
   (`pytest -m slow`), which installs that release.
-- **Editing project templates** — `datavloot_platform/templates/scaffold/` and `demo/`, kept in
-  step. That includes the blank `_sources.yml`/`_schema.yml` in `models/source/`, and the
+- **Editing project templates** — `datavloot_platform/templates/scaffold/`, and the demos in
+  `demos/<name>/`, which hold only what they add to or replace in the scaffold, plus a `demo.yml`
+  that lists the scaffold files they remove. Kept in step. That includes the blank `_sources.yml`/`_schema.yml` in `models/source/`, and the
   dimension/fact/dataset config templates in `models/business/`: business-layer models are
   entirely project-owned.
 - **Editing `dim_date`/`dim_time`** — the macros are in the dbt package. A change there needs the

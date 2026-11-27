@@ -1,8 +1,0 @@
-data/
-*.duckdb
-.venv/
-target/
-dbt_packages/
-logs/
-.dagster/
-.datavloot/
