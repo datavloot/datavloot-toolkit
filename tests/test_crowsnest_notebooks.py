@@ -101,6 +101,7 @@ def app(tmp_path, monkeypatch):
     cn_config.reset_config()
     monkeypatch.setattr(notebooks, "_marimo_process", None)
     monkeypatch.setattr(notebooks, "_marimo_notebook", None, raising=False)
+    monkeypatch.setattr(notebooks, "_marimo_launch", 0, raising=False)
 
     from datavloot_platform.crowsnest.server import create_app
     yield create_app()
@@ -208,11 +209,16 @@ def test_other_requests_are_answered_during_a_relaunch(app, monkeypatch, step):
     results = {"stop_process": True, "port_in_use": False, "start_marimo": _RunningProcess()}
     monkeypatch.setattr(notebooks, "_marimo_process", _RunningProcess())
 
+    # /list checks the port too: the request made while measuring must not measure again.
+    measuring = threading.Event()
+
     with TestClient(app) as client:
         for name, result in results.items():
             def stand_in(*args, name=name, result=result):
-                if name == step:
+                if name == step and not measuring.is_set():
+                    measuring.set()
                     meanwhile.append(answered_meanwhile(client))
+                    measuring.clear()
                 return result
 
             monkeypatch.setattr(notebooks, name, stand_in)
@@ -417,6 +423,98 @@ def test_list_reports_the_notebook_it_started(app, monkeypatch, started):
     started[0].kill()
     started[0].wait(timeout=10)
     assert client.get("/api/notebooks/list").json()["running"] is None, "a dead Marimo reported as running"
+
+
+def test_list_reports_a_marimo_it_did_not_start(app, foreign_marimo):
+    """The panel tells a stranger on the port from nothing at all with the same answer that says which one is ours."""
+    listed = TestClient(app).get("/api/notebooks/list").json()
+
+    assert listed["running"] is None
+    assert listed["port_in_use"] is True
+
+
+def test_list_reports_a_free_port(app):
+    assert TestClient(app).get("/api/notebooks/list").json()["port_in_use"] is False
+
+
+def test_list_does_not_hold_up_the_server_while_it_checks_the_port(app, monkeypatch):
+    """The port check can take its whole timeout (on Windows a closed port is slow to refuse), and the panel polls /list."""
+    checking = threading.Event()
+    release = threading.Event()
+
+    def slow_port_in_use(port):
+        checking.set()
+        release.wait(timeout=10)
+        return False
+
+    monkeypatch.setattr(notebooks, "port_in_use", slow_port_in_use)
+    answered = threading.Event()
+
+    with TestClient(app) as client:
+        listing = threading.Thread(target=client.get, args=("/api/notebooks/list",))
+        listing.start()
+        try:
+            assert checking.wait(timeout=5), "/list never checked the port"
+            threading.Thread(
+                target=lambda: client.get("/api/services").status_code == 200 and answered.set(), daemon=True
+            ).start()
+            held_up = not answered.wait(timeout=3)
+        finally:
+            release.set()
+            listing.join(timeout=10)
+
+    assert not held_up, "/list held up every other request while it checked the port"
+
+
+def test_a_relaunch_of_the_same_notebook_gets_a_new_launch(app, monkeypatch, started):
+    """The panel keys its iframe on the launch: the same notebook started again must still load the new Marimo."""
+    starts_sleepers(monkeypatch, started)
+    client = TestClient(app)
+
+    client.post("/api/notebooks/launch", json={"name": "explore.py"})
+    first = client.get("/api/notebooks/list").json()["launch"]
+    client.post("/api/notebooks/launch", json={"name": "explore.py"})
+    second = client.get("/api/notebooks/list").json()["launch"]
+
+    assert first is not None and second is not None
+    assert first != second, "a relaunch of the same notebook looks like the same launch"
+
+
+def test_list_never_takes_its_own_closing_marimo_for_a_stranger(app, monkeypatch):
+    """
+    Until the port has gone quiet, the Marimo being closed is still ours.
+
+    On Windows the port can answer for a moment after the whole tree is gone;
+    a poll in that moment must not show "Another Marimo" for our own.
+    """
+    started = []
+
+    def start(args):
+        started.append(SlowToReleaseMarimo(cn_config.get_config().marimo_port))
+        return started[-1]
+
+    monkeypatch.setattr(notebooks, "start_marimo", start)
+    monkeypatch.setattr(processes, "terminate_tree", lambda proc: proc.stop())
+    client = TestClient(app)
+    seen = []
+
+    try:
+        client.post("/api/notebooks/launch", json={"name": "explore.py"})
+        close = threading.Thread(target=client.post, args=("/api/notebooks/stop",))
+        close.start()
+        while close.is_alive():
+            listed = client.get("/api/notebooks/list").json()
+            seen.append((listed["running"], listed["port_in_use"]))
+        close.join()
+    finally:
+        for proc in started:
+            proc.stop()
+
+    assert seen, "no poll landed during the Close"
+    assert (None, True) not in seen, (
+        f"our closing Marimo was reported as a stranger's in {seen.count((None, True))} of {len(seen)} polls"
+    )
+    assert client.get("/api/notebooks/list").json()["port_in_use"] is False, "/stop returned before the port went quiet"
 
 
 # `datavloot launch` with stand-ins for the two Marimo servers it starts: processes

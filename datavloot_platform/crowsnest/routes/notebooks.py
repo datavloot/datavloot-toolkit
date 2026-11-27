@@ -21,40 +21,61 @@ router = APIRouter()
 # is left alone.
 _marimo_process: "subprocess.Popen | None" = None
 _marimo_notebook: "str | None" = None
+# Counts the Marimos this Crows Nest started. The panel keys its iframe on it, so a
+# relaunch of the same notebook reloads it; a pid can come back on Windows.
+_marimo_launch = 0
 # Launch and Close run in worker threads, so the server keeps answering while
 # Marimo starts or stops. One at a time, or two Launches would each start one.
 _marimo_lock = threading.Lock()
 
 
 def _stop_ours() -> bool:
-    """Stop the Marimo this Crows Nest started, if it still runs. Returns whether it did."""
+    """
+    Stop the Marimo this Crows Nest started, if it still runs. Returns whether it did.
+
+    It stays ours until the port has gone quiet: on Windows the port can still
+    answer for a moment after the tree is gone, and /list would report our own
+    Marimo as a stranger's, a relaunch refuse it as one.
+    """
     global _marimo_process, _marimo_notebook
-    process = _marimo_process
+    stopped = stop_process(_marimo_process)
+    if stopped:
+        deadline = time.monotonic() + 5
+        while port_in_use(get_config().marimo_port) and time.monotonic() < deadline:
+            time.sleep(0.1)
     _marimo_process = None
     _marimo_notebook = None
-    return stop_process(process)
+    return stopped
 
 
 @router.get("/list")
-async def list_notebooks():
+def list_notebooks():
     """
     List all .py notebooks in the project's notebooks/ directory.
 
     running is the notebook of the Marimo this Crows Nest started, if it still
     runs: on a laptop the panel embeds only that one, never a Marimo that merely
-    answers on the port.
+    answers on the port. launch tells one start of it from the next, and
+    port_in_use says whether anything answers on the port. One answer, so the
+    panel never combines two taken at different moments.
     """
     process = _marimo_process  # read once: a worker thread can clear it
-    running = _marimo_notebook if process is not None and process.poll() is None else None
+    # Ours while it runs, and while a Launch or Close is still stopping it.
+    ours = process is not None and (process.poll() is None or _marimo_lock.locked())
+    state = {
+        "running": _marimo_notebook if ours else None,
+        "launch": _marimo_launch if ours else None,
+        "port_in_use": port_in_use(get_config().marimo_port),
+    }
     notebooks_dir = pathlib.Path.cwd() / "notebooks"
     if not notebooks_dir.exists():
-        return {"notebooks": [], "available": False, "running": running}
+        return {"notebooks": [], "available": False, **state}
     notebooks = [
         {"name": f.name, "stem": f.stem}
         for f in sorted(notebooks_dir.glob("*.py"))
         if f.is_file()
     ]
-    return {"notebooks": notebooks, "available": True, "running": running}
+    return {"notebooks": notebooks, "available": True, **state}
 
 
 class LaunchRequest(BaseModel):
@@ -64,7 +85,7 @@ class LaunchRequest(BaseModel):
 @router.post("/launch")
 def launch_notebook(req: LaunchRequest):
     """Start a Marimo notebook server for the given notebook file."""
-    global _marimo_process, _marimo_notebook
+    global _marimo_process, _marimo_notebook, _marimo_launch
 
     name = pathlib.Path(req.name).name
     if not name.endswith(".py"):
@@ -83,13 +104,7 @@ def launch_notebook(req: LaunchRequest):
     port = get_config().marimo_port
     # Replace our own Marimo; refuse rather than stop one we did not start.
     with _marimo_lock:
-        if _stop_ours():
-            # On Windows the port can still answer for a moment after the tree is
-            # gone. Wait for it, or the relaunch would take our own Marimo for a
-            # stranger's.
-            deadline = time.monotonic() + 5
-            while port_in_use(port) and time.monotonic() < deadline:
-                time.sleep(0.1)
+        _stop_ours()
         if port_in_use(port):
             raise HTTPException(409, port_taken_message(port))
 
@@ -97,6 +112,7 @@ def launch_notebook(req: LaunchRequest):
             ["edit", "--headless", "--no-token", "--port", str(port), str(notebook_path)]
         )
         _marimo_notebook = name
+        _marimo_launch += 1
     return {"launched": name, "url": f"http://127.0.0.1:{port}"}
 
 

@@ -6,7 +6,10 @@ import { useApi } from '../lib/hooks';
 export default function NotebooksPanel() {
   const { data: healthData, reload: reloadHealth } = useApi(() => api.getHealth(), [], 10000);
   const services = useApi(() => api.getServices(), []);
-  const notebooks = useApi(() => api.getNotebooks(), []);
+  // Which Marimo is ours and whether anything answers on its port, in one
+  // answer: ours can end without Close (a crash, its own Shutdown) and another
+  // take the port, or another tab relaunch it. Polled: nothing tells the panel when it changes.
+  const notebooks = useApi(() => api.getNotebooks(), [], 3000);
 
   const [launching, setLaunching] = useState(null);
   const [launchError, setLaunchError] = useState(null);
@@ -18,28 +21,22 @@ export default function NotebooksPanel() {
   const marimoStatus = healthData?.services?.marimo;
   const marimoUrl = services.data?.marimo_url || 'http://localhost:2718';
   const shared = services.data?.marimo_shared;
+  const ours = !!notebooks.data?.running;
+  const portInUse = !!notebooks.data?.port_in_use;
   // On a laptop only the Marimo this Crows Nest started is shown, never
   // whatever else answers on the port; a shared one shows a notebook only once
   // one is picked here.
-  const showNotebook = marimoStatus === 'ok' && (shared ? !!notebookUrl : !!notebooks.data?.running);
-  // Wait for the notebook list before calling the port taken: health can
-  // answer first, and our own Marimo would briefly look like someone else's.
-  const portTaken = services.data && !shared && marimoStatus === 'ok' && notebooks.data && !showNotebook;
+  const showNotebook = shared ? marimoStatus === 'ok' && !!notebookUrl : ours && portInUse;
+  const portTaken = services.data && !shared && portInUse && !ours;
   const frameUrl = notebookUrl || marimoUrl;
 
-  // Ask again which Marimo is ours whenever health sees one come or go: ours
-  // can end without Close (a crash, its own Shutdown), and the next one to take
-  // the port would be embedded as ours; another tab can have launched it.
+  // A shared Marimo is seen only through health: while it answers,
+  // poll every 3s so we detect disconnect quickly.
   useEffect(() => {
-    if (marimoStatus) notebooks.reload();
-  }, [marimoStatus]);
-
-  // While the iframe is visible, poll health every 3s so we detect disconnect quickly.
-  useEffect(() => {
-    if (marimoStatus !== 'ok') return;
+    if (!shared || marimoStatus !== 'ok') return;
     const id = setInterval(reloadHealth, 3000);
     return () => clearInterval(id);
-  }, [marimoStatus]);
+  }, [shared, marimoStatus]);
 
   const handleLaunch = async (name) => {
     setLaunching(name);
@@ -75,10 +72,8 @@ export default function NotebooksPanel() {
       // process may already be dead
     }
     setNotebookUrl(null);
-    // Health first: until it has seen the port go quiet, the notebook list
-    // alone would make our closed Marimo look like someone else's.
-    await reloadHealth();
     notebooks.reload();
+    reloadHealth();
   };
 
   return (
@@ -148,6 +143,7 @@ export default function NotebooksPanel() {
             </button>
           </div>
           <iframe
+            key={notebooks.data?.launch}
             src={frameUrl}
             className="w-full border-0"
             style={{ height: 'calc(100vh - 230px)', minHeight: '560px' }}
@@ -159,7 +155,7 @@ export default function NotebooksPanel() {
       ) : (
         <NotRunning
           marimoUrl={marimoUrl}
-          running={marimoStatus === 'ok'}
+          running={shared && marimoStatus === 'ok'}
           portTaken={portTaken}
           notebooks={notebooks.data?.notebooks || []}
           notebooksAvailable={notebooks.data?.available}
