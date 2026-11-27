@@ -1,0 +1,33 @@
+name: 'green_energy'
+version: '1.0.0'
+profile: 'green_energy'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+seeds:
+  green_energy:
+    +schema: seeds
+
+models:
+  elementary:
+    +schema: elementary
+  green_energy:
+    source:
+      +schema: source
+      +materialized: incremental  # only new rows per run; pair with incremental_column in stage_source and unique_key per model
+      # dlt already loads incrementally and merges on the primary key; a view on its
+      # table is always in step with it, and still queryable (ephemeral is not).
+      energyzero:
+        +materialized: view
+      open_meteo:
+        +materialized: view
+    business:
+      +materialized: table
+      +schema: business

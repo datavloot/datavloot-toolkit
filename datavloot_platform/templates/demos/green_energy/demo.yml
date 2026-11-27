@@ -1,0 +1,11 @@
+# How `datavloot demo --green_energy` builds this demo: the scaffold, minus the
+# files under remove, with every other file in this folder laid over it. This
+# file itself is not copied.
+title: When is electricity cheap in the Netherlands, and is it the wind? (EnergyZero + Open-Meteo)
+# Scaffold files this demo has no use for.
+remove:
+  - seeds/priority_levels.csv
+first_run: >
+  The first run loads the Dutch day-ahead power prices (EnergyZero) and the weather at three
+  places (Open-Meteo) from 2025-01-01 up to yesterday: public APIs, no key needed. After that a
+  schedule adds the new day every morning at 07:00.

@@ -1,0 +1,133 @@
+version: 2
+
+# Fact docs, tests, and build config — one entry per fact model.
+#
+# Source is declared inline in each model's SQL file (so dbt discovers
+# the ref() dependency at parse time). Everything else lives here under
+# config.meta and is read by build_fact() at compile time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  - name: fct_hourly_price
+    description: >
+      The Dutch day-ahead electricity price per hour. Grain: one row per hour (UTC).
+      date_key and time_key point at the local (Europe/Amsterdam) date and hour of day.
+    columns:
+      - name: fct_hourly_price_key
+        description: "Surrogate key; MD5 hash of hour_utc."
+        data_tests:
+          - not_null
+          - unique
+      - name: date_key
+        description: "FK to dim_date: the local date (Europe/Amsterdam) as YYYYMMDD."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: time_key
+        description: "FK to dim_time: the local hour of the day, as seconds since midnight (13:00 = 46800)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+      - name: hour_utc
+        description: "Start of the hour, UTC."
+        data_tests:
+          - not_null
+          - unique
+      - name: hour_local
+        description: "Start of the hour in Dutch local time."
+      - name: price_eur_kwh
+        description: "Day-ahead price in €/kWh, excluding VAT."
+        data_tests:
+          - not_null
+      - name: is_negative_price
+        description: "True when the price is below zero: producers pay to deliver."
+      - name: _loaded_at
+        description: "When dbt built this row."
+
+    config:
+      meta:
+        surrogate_key:
+          columns: [hour_utc]
+          alias: fct_hourly_price_key
+        columns:
+          - date_key
+          - time_key
+          - hour_utc
+          - hour_local
+          - price_eur_kwh
+          - is_negative_price
+
+  - name: fct_hourly_weather
+    description: >
+      Hourly weather per location: wind, sun and temperature. Grain: one row per hour (UTC)
+      per location. date_key and time_key point at the local (Europe/Amsterdam) date and hour of day,
+      the same as in fct_hourly_price, so the two facts line up.
+    columns:
+      - name: fct_hourly_weather_key
+        description: "Surrogate key; MD5 hash of location_code + hour_utc."
+        data_tests:
+          - not_null
+          - unique
+      - name: location_key
+        description: "FK to dim_location."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_key
+      - name: date_key
+        description: "FK to dim_date: the local date (Europe/Amsterdam) as YYYYMMDD."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: time_key
+        description: "FK to dim_time: the local hour of the day, as seconds since midnight (13:00 = 46800)."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+      - name: hour_utc
+        description: "The hour, UTC."
+        data_tests:
+          - not_null
+      - name: hour_local
+        description: "The hour in Dutch local time."
+      - name: wind_speed_10m_ms
+        description: "Wind speed at 10 m, m/s (value at the hour)."
+      - name: shortwave_radiation_wm2
+        description: "Shortwave solar radiation on a horizontal surface, W/m², mean over the preceding hour."
+      - name: temperature_2m_c
+        description: "Air temperature at 2 m, °C."
+      - name: _loaded_at
+        description: "When dbt built this row."
+
+    config:
+      meta:
+        surrogate_key:
+          columns: [location_code, hour_utc]
+          alias: fct_hourly_weather_key
+        dimensions:
+          - dim: dim_location
+            fk: location_code
+            # key/alias omitted -> defaults to location_key
+        columns:
+          - date_key
+          - time_key
+          - hour_utc
+          - hour_local
+          - wind_speed_10m_ms
+          - shortwave_radiation_wm2
+          - temperature_2m_c

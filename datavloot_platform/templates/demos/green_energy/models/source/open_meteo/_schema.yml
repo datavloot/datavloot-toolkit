@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: stg_open_meteo__hourly_weather
+    description: "Hourly weather per location, with the hour in UTC and in Dutch local time (Europe/Amsterdam). A view on dlt's table."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [location_code, hour_utc]
+    columns:
+      - name: location_code
+        description: "Location, as in seeds/locations.csv."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('locations')
+                field: location_code
+      - name: hour_utc
+        description: "The hour, UTC."
+        data_tests:
+          - not_null
+      - name: hour_local
+        description: "The hour in Dutch local time (CET/CEST)."
+        data_tests:
+          - not_null
+      - name: wind_speed_10m_ms
+        description: "Wind speed at 10 m, m/s (value at the hour)."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 50
+      - name: shortwave_radiation_wm2
+        description: "Shortwave solar radiation on a horizontal surface, W/m², mean over the preceding hour."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1100
+      - name: temperature_2m_c
+        description: "Air temperature at 2 m, °C."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -30
+                max_value: 45
+      - name: _loaded_at
+        description: "Timestamp of the dbt run that staged this record."
+      - name: _source_name
+        description: "Logical source name as declared in sources.yml."
+      - name: _source_table
+        description: "Table name as declared in sources.yml."

@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: stg_energyzero__day_ahead_prices
+    description: "Day-ahead electricity prices, one row per hour, with the hour in UTC and in Dutch local time (Europe/Amsterdam). A view on dlt's table."
+    columns:
+      - name: hour_utc
+        description: "Start of the hour, UTC. Unique: the grain of this model."
+        data_tests:
+          - not_null
+          - unique
+      - name: hour_local
+        description: "Start of the hour in Dutch local time (CET/CEST). Not unique: on the last Sunday of October 02:00 occurs twice."
+        data_tests:
+          - not_null
+      - name: price_eur_kwh
+        description: "Day-ahead price in €/kWh, excluding VAT. The market's limits are -0.50 and +4.00 €/kWh."
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -0.5
+                max_value: 4.0
+      - name: _loaded_at
+        description: "Timestamp of the dbt run that staged this record."
+      - name: _source_name
+        description: "Logical source name as declared in sources.yml."
+      - name: _source_table
+        description: "Table name as declared in sources.yml."

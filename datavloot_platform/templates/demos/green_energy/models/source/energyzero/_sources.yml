@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: energyzero
+    description: "Day-ahead electricity prices for the Netherlands from the EnergyZero API, loaded incrementally by the energyzero dlt asset (green_energy_platform/assets.py)."
+    schema: source    # dlt's dataset_name
+    # Closed days only: the newest hour is yesterday 23:00 UTC. Checked with `dbt source freshness`.
+    loaded_at_field: reading_date
+    freshness:
+      warn_after: {count: 48, period: hour}
+      error_after: {count: 96, period: hour}
+
+    tables:
+      - name: day_ahead_prices
+        description: "One row per hour (UTC) with the day-ahead price in €/kWh, excluding VAT. Merged on reading_date."
+        columns:
+          - name: reading_date
+            description: "Start of the hour, UTC."
+            data_tests:
+              - not_null
+              - unique
+          - name: price_eur_kwh
+            description: "Day-ahead price in €/kWh, excluding VAT."

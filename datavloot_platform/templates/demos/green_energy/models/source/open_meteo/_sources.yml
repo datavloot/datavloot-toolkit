@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: open_meteo
+    description: "Hourly weather from the Open-Meteo ERA5 archive for the locations in seeds/locations.csv, loaded incrementally by the open_meteo dlt asset (green_energy_platform/assets.py)."
+    schema: source    # dlt's dataset_name
+    loaded_at_field: observed_at
+    freshness:
+      warn_after: {count: 48, period: hour}
+      error_after: {count: 96, period: hour}
+
+    tables:
+      - name: hourly_weather
+        description: "One row per hour (UTC) per location. Merged on location_code + observed_at."
+        columns:
+          - name: location_code
+            description: "Location, as in seeds/locations.csv."
+            data_tests:
+              - not_null
+          - name: observed_at
+            description: "The hour, UTC."
+            data_tests:
+              - not_null
+          - name: wind_speed_10m_ms
+            description: "Wind speed at 10 m, m/s."
+          - name: shortwave_radiation_wm2
+            description: "Shortwave solar radiation, W/m², mean over the preceding hour."
+          - name: temperature_2m_c
+            description: "Air temperature at 2 m, °C."
