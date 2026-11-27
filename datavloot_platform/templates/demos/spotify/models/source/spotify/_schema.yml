@@ -1,0 +1,85 @@
+version: 2
+
+# Staged Spotify tables. Each keeps only the rows of the data the project is on
+# now (macros/stage_spotify.sql) and adds audit columns. Ephemeral — inlined
+# into downstream models at compile time.
+
+models:
+  - name: stg_spotify__account
+    description: "The account the data comes from: the sample, or your own."
+
+  - name: stg_spotify__recently_played
+    description: "One row per play, with the track, its album and artists, and where it was played from."
+    columns:
+      - name: played_at
+        description: "When the track finished playing (UTC)."
+        data_tests:
+          - not_null
+          - unique
+      - name: track_id
+        description: "Spotify track ID."
+        data_tests:
+          - not_null
+      - name: duration_ms
+        description: "Length of the track in milliseconds. Spotify does not say how much of it was heard."
+      - name: artist_id
+        description: "The track's first (main) artist."
+      - name: artist_names
+        description: "All artists of the track, comma-separated."
+      - name: context_type
+        description: "What the play started from: playlist, album, artist, collection; null when unknown."
+
+  - name: stg_spotify__top_tracks
+    description: "Daily snapshots of your top tracks per time range."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [snapshot_date, time_range, rank]
+    columns:
+      - name: rank
+        description: "1 = most played in this time range."
+      - name: time_range
+        description: "short_term (~4 weeks), medium_term (~6 months) or long_term (~1 year)."
+
+  - name: stg_spotify__top_artists
+    description: "Daily snapshots of your top artists per time range, with their genres."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [snapshot_date, time_range, rank]
+    columns:
+      - name: genres
+        description: "The artist's genres, comma-separated; often empty."
+
+  - name: stg_spotify__saved_tracks
+    description: "Your Liked Songs, with when each was added."
+    columns:
+      - name: track_id
+        data_tests:
+          - not_null
+          - unique
+
+  - name: stg_spotify__playlists
+    description: "Your playlists."
+    columns:
+      - name: playlist_id
+        data_tests:
+          - not_null
+          - unique
+      - name: is_own
+        description: "True for playlists you own or collaborate on: only those come with their tracks."
+
+  - name: stg_spotify__playlist_items
+    description: "The tracks on the playlists you own or collaborate on, in playlist order."
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [playlist_id, position]
+
+  - name: stg_spotify__followed_artists
+    description: "The artists you follow."
+    columns:
+      - name: artist_id
+        data_tests:
+          - not_null
+          - unique

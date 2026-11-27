@@ -1,0 +1,82 @@
+version: 2
+
+sources:
+  - name: spotify
+    description: >
+      Your Spotify account through the Web API, loaded by the spotify Dagster asset via dlt
+      (spotify_platform/spotify.py). Until an account is connected, the same tables hold
+      made-up sample data (spotify_platform/sample.py); `origin` on every row says which.
+    schema: source    # dlt dataset_name
+
+    # No freshness config — dlt and the 30-minute schedule decide when data arrives.
+
+    tables:
+      - name: account
+        description: "One row: the account the data comes from, replaced on every run. origin = 'sample' or 'spotify'."
+        columns:
+          - name: user_id
+            description: "Spotify user ID ('sample' for the sample)."
+            data_tests:
+              - not_null
+              - unique
+          - name: origin
+            description: "sample or spotify: which data the project is on now."
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ['sample', 'spotify']
+
+      - name: recently_played
+        description: >
+          One row per play. Spotify only returns the last 50, so history builds up from the
+          day you connect, run by run; rows are merged on played_at.
+        columns:
+          - name: played_at
+            description: "When the track finished playing (UTC)."
+            data_tests:
+              - not_null
+              - unique
+
+      - name: top_tracks
+        description: "Your top 50 tracks per time range (short_term ~4 weeks, medium_term ~6 months, long_term ~1 year), one snapshot per day."
+        columns:
+          - name: track_id
+            data_tests:
+              - not_null
+
+      - name: top_artists
+        description: "Your top 50 artists per time range, one snapshot per day."
+        columns:
+          - name: artist_id
+            data_tests:
+              - not_null
+
+      - name: saved_tracks
+        description: "Your Liked Songs as they are now; replaced on every run."
+        columns:
+          - name: track_id
+            data_tests:
+              - not_null
+
+      - name: playlists
+        description: "Your playlists, including followed ones; replaced on every run."
+        columns:
+          - name: playlist_id
+            data_tests:
+              - not_null
+              - unique
+
+      - name: playlist_items
+        description: "The tracks of the playlists you own or collaborate on (Spotify shows no others); replaced on every run."
+        columns:
+          - name: playlist_id
+            data_tests:
+              - not_null
+
+      - name: followed_artists
+        description: "The artists you follow; replaced on every run."
+        columns:
+          - name: artist_id
+            data_tests:
+              - not_null

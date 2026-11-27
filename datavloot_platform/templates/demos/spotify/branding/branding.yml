@@ -1,0 +1,17 @@
+# How the Crows Nest presents this project. Every key is optional.
+#
+# name: shown at the top left of the Crows Nest and in the browser tab. Optimist
+#   is datavloot on a laptop; change it to Falcon on a VM, or to your
+#   organisation's own name.
+# colors: this demo dresses the Crows Nest in a music-app look: a near-black
+#   sidebar, a bright green marker and a deeper green for buttons and links
+#   (white text on the bright green would be hard to read).
+# A logo.svg or logo.png next to this file replaces the mark and the name in
+# the sidebar.
+name: Optimist
+colors:
+  accent: "#168d40"      # buttons, links, spinner
+  text: "#191414"        # text; muted text is derived from it
+  background: "#f6f6f6"  # page background; hover and borders are derived from it
+  sidebar: "#121212"     # the sidebar
+  highlight: "#1ed760"   # the active tab's marker, focus rings, notes

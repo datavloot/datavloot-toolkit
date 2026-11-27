@@ -1,0 +1,6 @@
+moment_code,label,start_hour,end_hour,description
+NIGHT,Night,0,6,After midnight and before six: night owls and long drives.
+MORNING,Morning,6,9,Waking up and the commute.
+DAYTIME,Daytime,9,17,Working hours: focus music and background listening.
+EVENING,Evening,17,21,"Cooking, sports and going out."
+LATE,Late evening,21,24,Winding down before bed.

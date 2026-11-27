@@ -1,0 +1,92 @@
+version: 2
+
+# Fact docs, tests, and build config — one entry per fact model.
+#
+# Source is declared inline in each model's SQL file (so dbt discovers
+# the ref() dependency at parse time). Everything else lives here under
+# config.meta and is read by build_fact() at compile time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  - name: fct_play
+    description: >
+      One row per play of a track. Spotify gives the last 50 plays only, so for your own account
+      the history starts on the day you connect and grows with every run; the sample has 90 days.
+      Day, minute and listening moment are in your own time zone (var spotify_timezone).
+
+    columns:
+      - name: fct_play_key
+        description: "Surrogate key; MD5 hash of played_at."
+        data_tests:
+          - not_null
+          - unique
+      - name: track_key
+        description: "FK to dim_track."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_track')
+                field: track_key
+      - name: artist_key
+        description: "FK to dim_artist — the track's main artist."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_artist')
+                field: artist_key
+      - name: played_date_key
+        description: "FK to dim_date — the local date of the play."
+        data_tests:
+          - not_null
+      - name: played_time_key
+        description: "FK to dim_time — the local time of day, to the minute."
+        data_tests:
+          - not_null
+      - name: listening_moment_key
+        description: "FK to dim_listening_moment — night, morning, daytime, evening or late evening."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_listening_moment')
+                field: listening_moment_key
+      - name: played_at
+        description: "When the track finished playing (UTC)."
+        data_tests:
+          - not_null
+      - name: played_at_local
+        description: "The same moment on your own clock."
+      - name: track_minutes
+        description: "Length of the track in minutes: Spotify does not say how much of it you heard."
+      - name: context_type
+        description: "What the play started from: playlist, album, artist or collection."
+
+    config:
+      meta:
+        surrogate_key:
+          columns: [played_at]
+          alias: fct_play_key
+        dimensions:
+          - dim: dim_track
+            fk: track_id
+          - dim: dim_artist
+            fk: artist_id
+          - dim: dim_date
+            fk: played_at_local
+            dim_fk: date_day
+            fk_cast: date
+            alias: played_date_key
+          - dim: dim_time
+            fk: played_time_minute
+            dim_fk: time_of_day
+            alias: played_time_key
+          - dim: dim_listening_moment
+            fk: moment_code
+            dim_fk: moment_code
+        columns:
+          - played_at
+          - played_at_local
+          - track_minutes
+          - context_type

@@ -1,0 +1,196 @@
+version: 2
+
+# Dimension docs and tests — one entry per dimension model.
+#
+# Build config (source, surrogate_key, columns) lives inline in each model's
+# SQL file, passed directly to optimist.build_dimension(). See Step 4 in
+# dbt_packages/optimist/data-instructions.md for the full workflow.
+#
+# This file is for column descriptions and data_tests only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+models:
+
+  - name: dim_date
+    description: "Calendar date dimension. One row per day from dim_date_start to dim_date_end."
+    columns:
+      - name: date_key
+        description: "Surrogate key; calendar date as a YYYYMMDD integer (no hash)."
+        data_tests:
+          - not_null
+          - unique
+      - name: date_day
+        description: "Calendar date (YYYY-MM-DD); natural key for this dimension."
+      - name: year
+        description: "Calendar year (e.g. 2024)."
+      - name: quarter
+        description: "Quarter of the year (1-4)."
+      - name: month_num
+        description: "Month number (1-12)."
+      - name: month_name
+        description: "Full month name (e.g. January)."
+      - name: quarter_start_date
+        description: "First day of the quarter."
+      - name: month_start_date
+        description: "First day of the month."
+      - name: week_of_year
+        description: "Week number within the year (1-53)."
+      - name: week_start_date
+        description: "First day of the week (Monday)."
+      - name: day_of_year
+        description: "Day number within the year (1-366)."
+      - name: day_of_month
+        description: "Day number within the month (1-31)."
+      - name: day_of_week
+        description: "Day number within the week (0 = Sunday, 6 = Saturday)."
+      - name: day_name
+        description: "Full day name (e.g. Monday)."
+      - name: is_weekend
+        description: "True if the day falls on a Saturday or Sunday."
+      - name: is_weekday
+        description: "True if the day falls on a Monday through Friday."
+
+  - name: dim_time
+    description: "Time-of-day dimension. Grain defaults to minute (1 440 rows); set the dim_time_grain var to 'second' for second-level granularity (86 400 rows)."
+    columns:
+      - name: time_key
+        description: "Surrogate key; seconds elapsed since midnight as an integer (no hash)."
+        data_tests:
+          - not_null
+          - unique
+      - name: time_of_day
+        description: "Time of day at the configured grain; natural key for this dimension."
+      - name: hour
+        description: "Hour of the day (0-23)."
+      - name: minute
+        description: "Minute of the hour (0-59)."
+      - name: second
+        description: "Second of the minute (0-59). Always 0 at minute grain."
+      - name: time_hhmmss
+        description: "Time formatted as HH:MM:SS."
+      - name: period_of_day
+        description: "Named time period: night (00-05h), morning (06-11h), afternoon (12-16h), evening (17-20h)."
+      - name: is_business_hours
+        description: "True if the hour falls between 09:00 and 17:59."
+
+  - name: dim_track
+    description: "One row per track seen anywhere: played, liked, in a top list or on a playlist."
+    columns:
+      - name: track_key
+        description: "Surrogate key; MD5 hash of track_id."
+        data_tests:
+          - not_null
+          - unique
+      - name: track_id
+        description: "Spotify track ID."
+        data_tests:
+          - not_null
+          - unique
+      - name: track_name
+        description: "Track title."
+      - name: duration_ms
+        description: "Length of the track in milliseconds."
+      - name: is_explicit
+        description: "True if Spotify marks the track explicit."
+      - name: album_name
+        description: "The album the track is on."
+      - name: album_release_date
+        description: "Release date as Spotify gives it: a year, a month or a day (YYYY, YYYY-MM or YYYY-MM-DD)."
+      - name: artist_id
+        description: "The track's main artist; joins to dim_artist."
+      - name: artist_name
+        description: "The track's main artist."
+      - name: artist_names
+        description: "All artists of the track, comma-separated."
+      - name: is_saved
+        description: "True if the track is in your Liked Songs."
+        data_tests:
+          - not_null
+      - name: saved_at
+        description: "When you liked it (UTC); null when it is not liked."
+    config:
+      meta:
+        surrogate_key:
+          columns: [track_id]
+        deduplicate:
+          partition_by: [track_id]
+          order_by: seen_at desc
+        columns: [track_id, track_name, duration_ms, is_explicit, album_id, album_name, album_release_date,
+                  artist_id, artist_name, artist_names, is_saved, saved_at]
+
+  - name: dim_artist
+    description: "One row per artist seen as a track's main artist, in your top artists or among those you follow."
+    columns:
+      - name: artist_key
+        description: "Surrogate key; MD5 hash of artist_id."
+        data_tests:
+          - not_null
+          - unique
+      - name: artist_id
+        description: "Spotify artist ID."
+        data_tests:
+          - not_null
+          - unique
+      - name: artist_name
+        description: "Artist name."
+      - name: genres
+        description: "Genres, comma-separated; empty for artists seen only on a track, and for many others."
+      - name: is_followed
+        description: "True if you follow the artist."
+        data_tests:
+          - not_null
+    config:
+      meta:
+        surrogate_key:
+          columns: [artist_id]
+        deduplicate:
+          partition_by: [artist_id]
+          # Prefer a row that has genres.
+          order_by: genres is null, artist_name
+        columns: [artist_id, artist_name, genres, is_followed]
+
+  - name: dim_playlist
+    description: "One row per playlist in your library."
+    columns:
+      - name: playlist_key
+        description: "Surrogate key; MD5 hash of playlist_id."
+        data_tests:
+          - not_null
+          - unique
+      - name: playlist_id
+        description: "Spotify playlist ID."
+      - name: playlist_name
+        description: "Playlist name."
+      - name: owner_name
+        description: "Who made it."
+      - name: is_own
+        description: "True for playlists you own or collaborate on; only those come with their tracks."
+      - name: track_count
+        description: "Number of items on the playlist, as Spotify counts them."
+    config:
+      meta:
+        surrogate_key:
+          columns: [playlist_id]
+        columns: [playlist_id, playlist_name, owner_name, is_own, is_public, is_collaborative, track_count]
+
+  - name: dim_listening_moment
+    description: "The parts of the day plays are grouped by, from seeds/listening_moments.csv."
+    columns:
+      - name: listening_moment_key
+        description: "Surrogate key; MD5 hash of moment_code."
+        data_tests:
+          - not_null
+          - unique
+      - name: moment_code
+        description: "Short code (NIGHT, MORNING, DAYTIME, EVENING, LATE)."
+      - name: label
+        description: "Name to show."
+      - name: start_hour
+        description: "First local hour of the moment (inclusive)."
+      - name: end_hour
+        description: "Local hour the moment ends (exclusive)."
+    config:
+      meta:
+        surrogate_key:
+          columns: [moment_code]
+        columns: [moment_code, label, start_hour, end_hour, description]

@@ -1,0 +1,15 @@
+# How `datavloot demo --spotify` builds this demo: the scaffold, minus the files
+# under remove, with every other file in this folder laid over it. This file
+# itself is not copied.
+title: Your own Spotify listening history (runs on sample data until you connect)
+# Scaffold files this demo has no use for: placeholders its own files replace.
+remove:
+  - models/source/_sources.yml
+  - models/source/_schema.yml
+  - models/business/datasets/_dataset_configs.yml
+  - notebooks/explore.py
+  - seeds/priority_levels.csv
+first_run: >
+  The first run loads made-up sample listening history, so there is something to explore
+  straight away. To see your own: uv run python -m spotify_platform.connect (README.md,
+  "Use your own Spotify data").

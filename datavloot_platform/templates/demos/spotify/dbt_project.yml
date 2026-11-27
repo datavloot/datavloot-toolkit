@@ -1,0 +1,35 @@
+name: 'spotify'
+version: '1.0.0'
+profile: 'spotify'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+vars:
+  # The time zone you listen in: hours, days and listening moments in fct_play
+  # are local to it. Spotify gives every play in UTC. Any IANA name works,
+  # e.g. 'Europe/London' or 'America/New_York'.
+  spotify_timezone: 'Europe/Amsterdam'
+
+seeds:
+  spotify:
+    +schema: seeds
+
+models:
+  elementary:
+    +schema: elementary
+  spotify:
+    source:
+      +schema: source
+      spotify:
+        +materialized: ephemeral      # dlt owns incrementality; inline into downstream models at compile time
+    business:
+      +materialized: table
+      +schema: business

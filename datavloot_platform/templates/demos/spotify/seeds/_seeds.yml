@@ -1,0 +1,31 @@
+version: 2
+
+seeds:
+
+  - name: listening_moments
+    description: >
+      The parts of the day plays are grouped by, in local hours. One row per moment; the hours
+      cover 0-24 without gaps or overlap. Change them to match your own days: they are yours.
+    columns:
+      - name: moment_code
+        description: "Short uppercase code (e.g. MORNING)."
+        data_tests:
+          - not_null
+          - unique
+      - name: label
+        description: "Name to show."
+        data_tests:
+          - not_null
+      - name: start_hour
+        description: "First local hour of the moment (inclusive, 0-23)."
+        data_tests:
+          - not_null
+      - name: end_hour
+        description: "Local hour the moment ends (exclusive, 1-24)."
+        data_tests:
+          - not_null
+      - name: description
+        description: "What the moment is."
+
+  # Add further seeds below following the same pattern.
+  # See how_to.md for guidance on when seeds are appropriate.
