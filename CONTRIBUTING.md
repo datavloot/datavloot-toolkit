@@ -43,7 +43,7 @@ Without uv, plain pip works too. It installs the newest versions the bounds in `
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[optimist,dev]"
+pip install -e ".[optimist,mcp,dev]"
 ```
 
 If you only want to run the fast tests and touch nothing else, the `[dev]` extra alone is enough (`uv sync --extra dev`, or `pip install -e ".[dev]"`); everything below assumes the full install.

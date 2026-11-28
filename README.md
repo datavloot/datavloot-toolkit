@@ -535,6 +535,7 @@ The Crows Nest finds your project's lake (`lake/catalog.sqlite`) when started fr
 | `CROWSNEST_ELEMENTARY_SCHEMA` | Inferred from the `prod` target in `profiles.yml` as `<target_schema>_elementary` (e.g. `noaa_elementary`) |
 | `CROWSNEST_AUTH_TOKEN` | Unset — no authentication |
 | `CROWSNEST_SQL_WRITE` | Unset — the SQL editor can write when the Crows Nest listens on localhost only, and is read-only otherwise. `1` or `0` decides either way |
+| `CROWSNEST_MCP_TOOLS` | Unset — with the `mcp` extra installed, every tool of the [MCP server](#an-mcp-server-for-agents) is on: `query`, `catalog`, `runs`. A comma-separated list keeps only those; empty turns the server off |
 
 Options: `datavloot launch --port 8080 --host 127.0.0.1 --no-open`
 
@@ -579,6 +580,31 @@ next to the editor's title says which it is, and `datavloot launch` prints it.
   or a dropped table, again by itself. To load a source from scratch, reset its
   dlt state (`dlt pipeline <name> drop`, see the
   [dlt docs](https://dlthub.com/docs/reference/command-line-interface)).
+
+### An MCP server for agents
+
+The Crows Nest can serve an MCP server on `/mcp`, so an agent such as Claude Code
+can ask questions of the lake. It needs the `mcp` extra: in a project, change
+`datavloot[optimist]` to `datavloot[optimist,mcp]` in `pyproject.toml` and run
+`uv sync`. Then, with the Crows Nest running:
+
+```bash
+claude mcp add --transport http crowsnest http://127.0.0.1:8080/mcp
+```
+
+Its three tools only read. `query` runs one SQL statement under the read-only
+editor's checks, also where `CROWSNEST_SQL_WRITE` lets the editor write, and
+returns at most 10,000 rows. `catalog` lists the tables dbt knows of with their
+descriptions, or one table's columns. `runs` lists recent pipeline runs and, for a
+failed one, what went wrong.
+
+- **Where the data goes.** The server calls no model; the agent's model reads what
+  the tools return. With a model behind an external API, query results leave the
+  machine.
+- **Who can call it.** On a laptop `/mcp` answers agents on the same machine only:
+  a request from a web page (one with an `Origin` header) or under a host name other
+  than localhost is refused. On a shared host it takes the same token as the rest:
+  add `--header "Authorization: Bearer <token>"` to `claude mcp add`.
 
 ### Putting the Crows Nest on a shared host
 

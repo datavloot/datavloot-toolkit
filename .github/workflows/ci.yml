@@ -63,6 +63,8 @@ jobs:
   # MockTransports, so `lint` skips those tests. The same goes for the fake
   # Dagster in test_install_scripts.py (`start --run`) and the "Run everything"
   # route in test_crowsnest_materialize.py.
+  # mcp: the `mcp` extra, for the MCP server in test_crowsnest_mcp.py. pandas: its
+  # `catalog` tool reads Elementary's tables as the catalog routes do (fetchdf).
   crowsnest:
     runs-on: ubuntu-latest
     steps:
@@ -73,8 +75,8 @@ jobs:
           enable-cache: true
       - run: >
           uv run --with pytest --with pyyaml --with "duckdb>=1.5,<2"
-          --with fastapi --with httpx --with pytz --with uvicorn
-          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
+          --with fastapi --with httpx --with pytz --with uvicorn --with "mcp>=2.3,<3" --with "pandas>=2.0,<3"
+          python -m pytest tests/test_crowsnest_security.py tests/test_crowsnest_mcp.py tests/test_crowsnest_auth.py tests/test_crowsnest_vm_mode.py
           tests/test_crowsnest_config.py tests/test_crowsnest_notebooks.py tests/test_crowsnest_apps.py tests/test_extensions.py tests/test_storage.py tests/test_maintenance.py tests/test_remote.py
           tests/test_install_scripts.py tests/test_crowsnest_materialize.py tests/test_crowsnest_status.py tests/test_crowsnest_shutdown.py tests/test_crowsnest_startup.py -v
 

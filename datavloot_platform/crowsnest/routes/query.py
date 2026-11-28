@@ -142,12 +142,19 @@ class QueryResponse(BaseModel):
     confirmation_required: str | None = None
 
 
-def _validate(sql: str, allow_write: bool = False):
+_EDITOR_READ_ONLY = (
+    "the query editor is read-only on this installation. Set CROWSNEST_SQL_WRITE=1 "
+    "to let it change the lake."
+)
+
+
+def _validate(sql: str, allow_write: bool = False, read_only: str = _EDITOR_READ_ONLY):
     """
     Return the single statement to run, or raise.
 
     Parsing is the check: one statement, and its type must be in the allowlist --
-    the read one, plus the write one when the editor may write.
+    the read one, plus the write one when the editor may write. `read_only` says
+    why a write is refused.
     """
     try:
         statements = duckdb.extract_statements(sql)
@@ -167,12 +174,7 @@ def _validate(sql: str, allow_write: bool = False):
     kind = statement.type.name.replace("_", " ")
     if statement.type in _WRITE_STATEMENTS:
         if not allow_write:
-            raise HTTPException(
-                403,
-                f"{kind} statements are not allowed: the query editor is read-only "
-                "on this installation. Set CROWSNEST_SQL_WRITE=1 to let it change "
-                "the lake.",
-            )
+            raise HTTPException(403, f"{kind} statements are not allowed: {read_only}")
     elif statement.type not in _ALLOWED_STATEMENTS:
         raise HTTPException(
             403,
@@ -213,9 +215,16 @@ async def execute_query(req: QueryRequest, request: Request):
     statement = _validate(req.sql.strip(), allow_write=_write_allowed(request))
     if statement.type in _WRITE_STATEMENTS:
         return await _execute_write(statement, req.confirm)
+    return run_read(statement.query, req.limit)
 
-    sql = statement.query
-    effective_limit = max(1, min(req.limit, MAX_ROWS))
+
+def run_read(sql: str, limit: int) -> QueryResponse:
+    """
+    Run one statement that _validate passed as a read, on a read-only connection.
+
+    The SQL editor and the MCP server's `query` tool both read through here.
+    """
+    effective_limit = max(1, min(limit, MAX_ROWS))
 
     conn = None
     try:

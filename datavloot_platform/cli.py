@@ -285,11 +285,13 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
             "Install it with: pip install datavloot[optimist]"
         )
 
+    from datavloot_platform.crowsnest import mcp_server
     from datavloot_platform.crowsnest.config import get_config, sql_write_enabled
     from datavloot_platform.crowsnest.server import create_app
 
     try:
         sql_write = sql_write_enabled(args.host)
+        mcp_tools = mcp_server.enabled_tools()
     except ValueError as e:
         sys.exit(f"Error: {e}")
 
@@ -307,6 +309,12 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         print("  SQL:     read-write (set CROWSNEST_SQL_WRITE=0 to make the editor read-only)")
     else:
         print("  SQL:     read-only (set CROWSNEST_SQL_WRITE=1 to let the editor change the lake)")
+    if not mcp_tools:
+        print("  MCP:     off (CROWSNEST_MCP_TOOLS is empty)")
+    elif not mcp_server.installed():
+        print("  MCP:     off (needs the mcp extra)")
+    else:
+        print(f"  MCP:     {', '.join(mcp_tools)} on /mcp")
     print()
 
     if args.open:

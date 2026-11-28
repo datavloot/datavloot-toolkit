@@ -6,6 +6,7 @@ Both run on the same port so no CORS configuration is needed.
 """
 
 import asyncio
+import contextlib
 import pathlib
 from importlib.metadata import PackageNotFoundError, version
 
@@ -17,7 +18,7 @@ from datavloot_platform import storage
 
 from datavloot_platform.crowsnest.auth import TokenAuthMiddleware, get_auth_token
 from datavloot_platform.crowsnest.config import get_config, is_loopback, sql_write_enabled
-from datavloot_platform.crowsnest import startup
+from datavloot_platform.crowsnest import mcp_server, startup
 from datavloot_platform.crowsnest.db import get_conn
 from datavloot_platform.crowsnest.httpclient import async_client
 from datavloot_platform.crowsnest.processes import terminate_tree
@@ -146,10 +147,21 @@ def create_app(host: str | None = None) -> FastAPI:
     whether the SQL editor may write when CROWSNEST_SQL_WRITE is unset (see
     config.sql_write_enabled). Without it, the editor stays read-only.
     """
+    mcp = mcp_server.build(host)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        if mcp is None:
+            yield
+            return
+        async with mcp[0].session_manager.run():
+            yield
+
     app = FastAPI(
         title="Crows Nest",
         description="Unified dashboard for the Optimist data platform",
         version=VERSION,
+        lifespan=lifespan,
     )
     app.state.sql_write = sql_write_enabled(host)
     # The Shut down button: only on a laptop, where the Crows Nest listens on
@@ -171,6 +183,8 @@ def create_app(host: str | None = None) -> FastAPI:
     app.include_router(notebooks.router, prefix="/api/notebooks", tags=["Notebooks"])
     app.include_router(apps.router, prefix="/api/apps", tags=["Apps"])
     app.include_router(branding.router, prefix="/api/branding", tags=["Branding"])
+    if mcp is not None:
+        app.add_route("/mcp", mcp[1], include_in_schema=False)
 
     @app.get("/api/health")
     async def health_check():
