@@ -351,6 +351,8 @@ def test_the_dev_server_origin_is_allowed_only_when_set(make_laptop):
     # Exact: another name or port on the same machine is not let in with it.
     assert post(dev, "http://127.0.0.1:3001") == 403
     assert post(dev, "http://localhost:3002") == 403
+    # Nor is another host on the dev server's port.
+    assert post(dev, "http://evil.example:3001") == 403
 
 
 @pytest.mark.parametrize("value", [
@@ -371,8 +373,17 @@ def test_a_dev_origin_off_this_machine_is_an_error(monkeypatch, value):
 def test_the_cli_stops_on_a_bad_dev_origin(monkeypatch):
     import argparse
 
+    import uvicorn
+
     from datavloot_platform import cli
 
+    class Server:
+        """Without the check the CLI would get here and serve: fail instead of hanging."""
+        def __init__(self, config):
+            pytest.fail("the CLI started a server")
+
+    monkeypatch.setattr(uvicorn, "Server", Server)
+    monkeypatch.delenv("CROWSNEST_SQL_WRITE", raising=False)
     monkeypatch.setenv("CROWSNEST_DEV_ORIGIN", "http://evil.example:3001")
     with pytest.raises(SystemExit, match="^Error: CROWSNEST_DEV_ORIGIN"):
         cli.cmd_crowsnest(argparse.Namespace(host="127.0.0.1", port=8099, open=False))
@@ -417,9 +428,10 @@ def _call(guard, scope_type, headers):
 
 @pytest.mark.parametrize("headers", [
     [],
+    [("host", "")],
     [("host", "evil.example"), ("host", "localhost:8080")],
     [("host", "localhost:8080"), ("host", "evil.example")],
-], ids=["no Host", "foreign Host first", "foreign Host second"])
+], ids=["no Host", "empty Host", "foreign Host first", "foreign Host second"])
 def test_a_missing_or_repeated_host_is_misdirected(headers, monkeypatch):
     monkeypatch.delenv("CROWSNEST_DEV_ORIGIN", raising=False)
     guard, reached = _guard()
@@ -462,3 +474,46 @@ def test_a_non_loopback_bind_is_unaffected(client):
         headers={"Host": "crowsnest.example.nl", "Origin": "https://crowsnest.example.nl"},
     )
     assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("bind, works, not_named", [
+    ("127.0.0.1", ["http://localhost:8080", "http://127.0.0.1:8080"], []),
+    ("localhost", ["http://localhost:8080", "http://127.0.0.1:8080"], []),
+    ("::1", ["http://localhost:8080", "http://[::1]:8080"], ["127.0.0.1"]),
+    ("127.0.0.2", ["http://127.0.0.2:8080"], ["localhost", "127.0.0.1"]),
+])
+def test_a_misdirected_request_names_the_addresses_that_work(client, monkeypatch, bind, works, not_named):
+    """Only addresses that reach this bind: 127.0.0.1 does not answer on ::1, nor localhost on 127.0.0.2."""
+    from datavloot_platform.crowsnest.server import create_app
+
+    monkeypatch.delenv("CROWSNEST_DEV_ORIGIN", raising=False)
+    # The port in the text is the one the server listens on (TestClient: base_url's).
+    detail = TestClient(create_app(host=bind), base_url=LAPTOP).get(
+        "/api/health", headers={"Host": "other.example:8080"}
+    ).json()["detail"]
+    for address in works:
+        assert address in detail, detail
+    for name in not_named:
+        assert name not in detail, detail
+
+
+def test_another_loopback_bind_answers_on_its_own_address(client, monkeypatch):
+    """`--host 127.0.0.2`: its own address is a loopback name too, for Host and Origin."""
+    from datavloot_platform.crowsnest.server import create_app
+
+    monkeypatch.delenv("CROWSNEST_DEV_ORIGIN", raising=False)
+    other = TestClient(create_app(host="127.0.0.2"), base_url="http://127.0.0.2:8080")
+    r = other.post(
+        "/api/query/execute", json={"sql": "SELECT 1"}, headers={"Origin": "http://127.0.0.2:8080"}
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_the_host_check_comes_before_the_token(laptop, monkeypatch):
+    """With a token set, a foreign name gets 421, not a 401 that makes the browser ask for a password."""
+    monkeypatch.setenv("CROWSNEST_AUTH_TOKEN", "s3cret-token")
+    r = laptop.get("/api/query/tables", headers={"Host": "other.example:8080"})
+    assert r.status_code == 421, r.text
+    assert "www-authenticate" not in r.headers
+    # The token itself still applies on the loopback name.
+    assert laptop.get("/api/query/tables").status_code == 401

@@ -75,7 +75,16 @@ class LoopbackGuardMiddleware:
 
     def __init__(self, app, bind_host: str):
         self.app = app
-        self.names = _LOOPBACK_NAMES | {bind_host.strip().strip("[]").lower()}
+        bind = bind_host.strip().strip("[]").lower()
+        self.names = _LOOPBACK_NAMES | {bind}
+        # What the 421 tells the user to open: only names that reach this bind.
+        # localhost finds 127.0.0.1 and ::1, but not another address in 127/8.
+        if bind in ("localhost", "127.0.0.1"):
+            self.addresses = ["localhost", "127.0.0.1"]
+        elif bind == "::1":
+            self.addresses = ["localhost", "[::1]"]
+        else:
+            self.addresses = [f"[{bind}]" if ":" in bind else bind]
         self.dev_origins = dev_origins()
 
     async def __call__(self, scope, receive, send):
@@ -95,7 +104,7 @@ class LoopbackGuardMiddleware:
             return await self._refuse(
                 scope, receive, send, 421,
                 "This address does not reach the Crows Nest. Open it at "
-                f"http://localhost:{port} or http://127.0.0.1:{port}.",
+                + " or ".join(f"http://{a}:{port}" for a in self.addresses) + ".",
             )
 
         origins = headers.get("origin")
