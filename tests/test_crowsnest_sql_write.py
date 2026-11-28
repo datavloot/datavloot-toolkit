@@ -60,7 +60,8 @@ def warehouse(tmp_path, request, monkeypatch):
 
 def _client(host: str | None) -> TestClient:
     from datavloot_platform.crowsnest.server import create_app
-    return TestClient(create_app(host=host))
+    # A loopback Host, which the app requires when it binds loopback.
+    return TestClient(create_app(host=host), base_url="http://127.0.0.1:8080")
 
 
 async def _no_active_run():

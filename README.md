@@ -582,7 +582,11 @@ next to the editor's title says which it is, and `datavloot launch` prints it.
 
 ### Putting the Crows Nest on a shared host
 
-On a laptop it binds to localhost and needs no password. Anywhere else, set
+On a laptop it binds to localhost and needs no password. There it answers only
+requests addressed to localhost or the address it listens on, and browser requests
+only from its own pages. A hosts-file name or a reverse proxy in front of it gets
+`421 Misdirected Request`, or, when the proxy rewrites the Host, `403` on the
+dashboard's actions. Anywhere else, set
 `CROWSNEST_AUTH_TOKEN` and every request must present it:
 
 ```bash

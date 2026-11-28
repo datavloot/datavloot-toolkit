@@ -103,6 +103,18 @@ rm -rf ../static/* && cp -r out/* ../static/
 
 Commit the regenerated `static/` together with the source change, in the same commit. The server prints a warning at startup when `static/` is older than the source, so if you see it, you skipped this step. A pull request that changes frontend source without an updated `static/` will be sent back, and one that changes `static/` without a corresponding source change will be rejected.
 
+While you work on the source, `npm run dev` serves it with hot reload at http://127.0.0.1:3001 and passes `/api` on to a Crows Nest on port 8080. That Crows Nest only answers pages it served itself, so start it with the dev page's origin in `CROWSNEST_DEV_ORIGIN`:
+
+```bash
+# terminal 1, in a project (PowerShell: $env:CROWSNEST_DEV_ORIGIN = "http://127.0.0.1:3001")
+CROWSNEST_DEV_ORIGIN=http://127.0.0.1:3001 uv run datavloot launch --no-open
+# terminal 2
+cd datavloot_platform/crowsnest/frontend
+npm run dev
+```
+
+`CROWSNEST_DEV_ORIGIN` takes the exact origin you open in the browser, comma-separated for more than one (`http://127.0.0.1:3001,http://localhost:3001`), and only loopback addresses: anything else stops the Crows Nest at startup. Leave it unset outside frontend work, because every page served on that port gets the API while it is set.
+
 ## Where things live and what to update together
 
 Read `developer-instructions.md` for the repo layout and `toolkit-developer-standards.md` for the structural rules and the checklists. The short version of what reviewers check:

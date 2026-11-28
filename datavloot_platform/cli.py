@@ -286,10 +286,12 @@ def cmd_crowsnest(args: argparse.Namespace) -> None:
         )
 
     from datavloot_platform.crowsnest.config import get_config, sql_write_enabled
+    from datavloot_platform.crowsnest.loopback import dev_origins
     from datavloot_platform.crowsnest.server import create_app
 
     try:
         sql_write = sql_write_enabled(args.host)
+        dev_origins()
     except ValueError as e:
         sys.exit(f"Error: {e}")
 
